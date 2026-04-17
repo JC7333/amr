@@ -22,6 +22,24 @@ Modern AI agent infrastructure covers many concerns — but the legal mandate la
 
 ---
 
+## Vision: from registry to enforcement
+
+AMR v0.1 is a **mandate registry** — it stores, verifies, and audits mandates. This is necessary but not sufficient.
+
+The problem: if the mandate check is a voluntary call, agents skip it. The system degrades to advisory compliance within weeks of real-world deployment.
+
+The roadmap leads to **structural enforcement**: AMR becomes the layer that issues execution authorizations. No valid mandate → no authorization → no action possible. The system refuses to work without the mandate — not because someone recommends checking, but because the architecture makes it impossible to bypass.
+
+| Layer | What it does | Status |
+|---|---|---|
+| **Registry** (v0.1) | Store, verify, audit mandates. SHA-256 chain. MCP native. | ✅ Live |
+| **Enforcement** (planned) | Mandate-gated execution authorization. No mandate = no action. | 🔜 In design |
+| **Ecosystem** | AMR authorizes *before* the action. Certification proxies prove what happened *during*. | Compatible today |
+
+The open-source registry stays free. The enforcement layer is the commercial product.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -243,6 +261,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
 | **v0.3** | PostgreSQL backend · Multi-tenant support · REST API alongside MCP |
 | **v0.4** | eIDAS 2.0 qualified electronic signature integration · Cross-border mandate recognition |
 | **v0.5** | Managed Agents registry · Sub-delegation chains · Webhook notifications on mandate events |
+| **v0.6** | **Enforcement layer** — mandate-gated execution authorization · No valid mandate = no action · Dashboard + alerting |
 
 ---
 
