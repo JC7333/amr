@@ -22,6 +22,22 @@ Modern AI agent infrastructure covers many concerns — but the legal mandate la
 
 ---
 
+### Structural hard-stop enforcement
+
+AMR does not only record mandates — it enforces them. Agent runtimes must obtain
+a signed action token from AMR before performing any action. The token is issued
+if and only if a valid, non-expired, non-revoked mandate authorizes that specific
+action for that specific agent. No mandate → no token → no action.
+
+Tokens are JWS (RFC 7515) signed with Ed25519 (EdDSA), include replay prevention
+via the `jti` claim and the `issued_tokens` audit table, and carry the exact
+action hash and scope digest they authorize. Consumers verify offline with the
+AMR public key and MUST check `aud`, `exp`, and `amr_action_hash`.
+
+See `docs/token-issuance-spec.md` for the full specification.
+
+---
+
 ## Vision: from registry to enforcement
 
 AMR v0.1 is a **mandate registry** — it stores, verifies, and audits mandates. This is necessary but not sufficient.

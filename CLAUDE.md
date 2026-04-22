@@ -62,6 +62,7 @@ tests/
 5. **No network calls** — AMR is a local MCP server. Zero outbound HTTP from tools.
 6. **Chain hash linking** — Every mandate and action log entry is linked via SHA-256 to the previous entry.
 7. **ruff S rules** — Security linting enforced. `ruff check src/` must pass before any commit.
+8. **Algorithm confusion prevention** — EdDSA is hardcoded in both encode and decode. Never accept algorithm=None or RS256 substitution.
 
 ---
 
@@ -105,3 +106,26 @@ uv run python -c "from amr.config import settings; print(settings.server_name)"
 | `verify_mandate` | Check if an agent has an active, non-expired mandate |
 | `log_action` | Log an agent action under an active mandate (append-only, chained) |
 | `get_proof` | Generate a full Proof Pack JSON for a mandate (mandate + actions + integrity) |
+| `issue_action_token` | Issue a signed action token if and only if a valid mandate authorizes the action (hard-stop enforcement) |
+
+---
+
+## Token Issuance Architecture
+
+AMR v1 adds a structural enforcement layer on top of the mandate registry.
+
+**Format:** JWS Compact Serialization (RFC 7515) with Ed25519 signature (EdDSA).
+
+**Key claims:** `jti` (replay prevention), `amr_mandate_id` (which mandate authorized),
+`amr_action_hash` (SHA-256 of canonical action — prevents token reuse for other actions),
+`aud` (audience — consumers must verify this to prevent confusion attacks).
+
+**Replay prevention:** The `issued_tokens` table stores every issued `jti` with its
+expiration. A token for the same `(mandate_id, action_hash)` pair cannot be issued twice
+within the active window. After expiry, re-issuance is allowed.
+
+**Consumer verification contract:** Consumers MUST verify signature, `iss`, `aud`, `exp`,
+`nbf`, and `amr_action_hash`. See `docs/token-issuance-spec.md` for the full specification.
+
+**Key management:** Ed25519 keypair generated on first use, stored at `signing_key_path`
+(default: `amr_signing_key.pem`). Private key excluded from git via `.gitignore`.
