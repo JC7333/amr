@@ -5,6 +5,8 @@ dist/
 build/
 .venv/
 .env
+amr_signing_key.pem
+amr_signing_key.pub
 *.db
 *.db-wal
 *.db-shm
