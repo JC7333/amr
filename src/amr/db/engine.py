@@ -51,6 +51,22 @@ CREATE TABLE IF NOT EXISTS mandate_events (
     reason      TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS issued_tokens (
+    jti              TEXT PRIMARY KEY,
+    mandate_id       TEXT NOT NULL REFERENCES mandates(id),
+    agent_id         TEXT NOT NULL,
+    action_hash      TEXT NOT NULL,
+    scope_digest     TEXT NOT NULL,
+    audience         TEXT NOT NULL,
+    issued_at        TEXT NOT NULL,
+    expires_at       TEXT NOT NULL,
+    key_id           TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_issued_tokens_mandate  ON issued_tokens(mandate_id);
+CREATE INDEX IF NOT EXISTS idx_issued_tokens_expires  ON issued_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_issued_tokens_action   ON issued_tokens(mandate_id, action_hash);
+
 CREATE INDEX IF NOT EXISTS idx_mandates_agent_id     ON mandates(agent_id);
 CREATE INDEX IF NOT EXISTS idx_mandates_principal_id ON mandates(principal_id);
 CREATE INDEX IF NOT EXISTS idx_mandates_status       ON mandates(status);
@@ -101,10 +117,11 @@ async def init_db(db_path: Path | str | None = None) -> None:
     async with aiosqlite.connect(str(path)) as db:
         db.row_factory = aiosqlite.Row
         await db.executescript(_SCHEMA_SQL)
-        # Insert schema version if not present
+        # Schema v2: adds issued_tokens table for structural hard-stop enforcement.
+        # Existing v1 DBs are upgraded transparently (CREATE IF NOT EXISTS is idempotent).
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
-            (1,),
+            (2,),
         )
         await db.commit()
 
@@ -158,3 +175,70 @@ async def get_last_action_hash(db: aiosqlite.Connection, mandate_id: str) -> str
     if row2 is None:
         return ""
     return row2["chain_hash"]
+
+
+async def record_issued_token(
+    db: aiosqlite.Connection, token_row: dict[str, str]
+) -> None:
+    """Insert a newly issued token into issued_tokens. Does NOT commit.
+
+    The caller is responsible for committing the transaction.
+    Expected keys in token_row: jti, mandate_id, agent_id, action_hash,
+    scope_digest, audience, issued_at, expires_at, key_id.
+    """
+    await db.execute(
+        """
+        INSERT INTO issued_tokens (
+            jti, mandate_id, agent_id, action_hash, scope_digest,
+            audience, issued_at, expires_at, key_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            token_row["jti"],
+            token_row["mandate_id"],
+            token_row["agent_id"],
+            token_row["action_hash"],
+            token_row["scope_digest"],
+            token_row["audience"],
+            token_row["issued_at"],
+            token_row["expires_at"],
+            token_row["key_id"],
+        ),
+    )
+
+
+async def is_token_replay(
+    db: aiosqlite.Connection,
+    mandate_id: str,
+    action_hash: str,
+    now_iso: str,
+) -> bool:
+    """Return True if an active (non-expired) token already exists
+    for the given (mandate_id, action_hash) pair.
+    """
+    cursor = await db.execute(
+        """
+        SELECT 1 FROM issued_tokens
+        WHERE mandate_id = ?
+          AND action_hash = ?
+          AND expires_at > ?
+        LIMIT 1
+        """,
+        (mandate_id, action_hash, now_iso),
+    )
+    row = await cursor.fetchone()
+    return row is not None
+
+
+async def get_issued_token(
+    db: aiosqlite.Connection, jti: str
+) -> dict[str, str] | None:
+    """Return the full row of an issued token by its jti, or None if absent."""
+    cursor = await db.execute(
+        "SELECT * FROM issued_tokens WHERE jti = ?",
+        (jti,),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return None
+    return dict(row)
