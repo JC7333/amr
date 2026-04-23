@@ -23,7 +23,7 @@ Ce fichier est la mémoire centrale. Avant chaque session de sourcing: lire ce f
 
 | Date contact | Prénom Nom | Entreprise | Secteur | Canal utilisé | Statut | Dernier échange | Notes |
 |---|---|---|---|---|---|---|---|
-| 2026-04-15 | Adnan Khan | Equinix | Infra / Datacenter | LinkedIn | EN COURS HUMAIN | 2026-04-17 (réponse positive) | Candidat #1 Design Partner. Londres. Audric gère suite directe. |
+| 2026-04-15 | Adnan Khan | Equinix | Infra / Datacenter | LinkedIn | EN COURS HUMAIN | 2026-04-17 (réponse positive) | Candidat #1 Design Partner. Londres. Audric gère suite directe. ⚠️ Tracker 2026-04-23: 6j sans MAJ visible, vérifier si échange en cours ou relance nécessaire. |
 | 2026-04-21 (proposé W17) | Juliette Mattioli | Thales | Défense / tech souveraine (CAC40) | Email probable + InMail backup | PROPOSÉ W17 | — | Trigger: Margaret 2026 IA de confiance (9 avril). Cible DP #1 à envoyer lundi. Draft: `drafts/2026-04-21_mattioli.md`. |
 | 2026-04-21 (proposé W17) | Pierre Houlès | Kering | Luxe (CAC40) | Email probable + InMail backup | PROPOSÉ W17 (BORDERLINE) | — | Trigger: nomination CDAIO 17 mars (35j, hors fenêtre stricte). Audric arbitre. Draft: `drafts/2026-04-21_houles.md`. |
 | 2026-04-21 (proposé W17) | Rémi Stefanini | CNIL | Régulateur (public) | Formulaire CNIL + LinkedIn InMail | PROPOSÉ W17 (NON-DP, STRATÉGIQUE) | — | Trigger: prise poste DTIA CNIL 15 avril (6j). Contact régulateur, PAS un slot DP. Draft: `drafts/2026-04-21_stefanini.md`. |
