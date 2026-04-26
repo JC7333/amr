@@ -86,8 +86,8 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 | Date | Événement |
 |---|---|
-| 2026-04-24 (aujourd'hui) | Email Stefanini envoyé, autoreply reçu (absent jusqu'au 30/04). Adnan continuité post-pivot à envoyer dans la journée. |
-| 2026-04-26 | Fenêtre 72h post-email Erdem → évaluation silence/réponse |
+| 2026-04-24 | Email Stefanini envoyé, autoreply reçu (absent jusqu'au 30/04). Adnan continuité post-pivot à envoyer dans la journée. |
+| 2026-04-26 (aujourd'hui) | Fenêtre 72h post-email Erdem → évaluation silence/réponse. Tracker run : alerte EN COURS HUMAIN Adnan (4j sans MAJ visible). |
 | 2026-04-28 | Gauthier atteint 14j silence LinkedIn → canal email Chift possible |
 | 2026-05-04 | Retour effectif Stefanini (lundi après congés) |
 | 2026-05-05 | Mattioli, Rogers, Zappellini, Rice atteignent 14j silence → canal email possible |
@@ -127,6 +127,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-04-26 (tracker run)** : run quotidien tracker. Aucun changement de statut automatique (max ENVOYÉ = Gauthier 12j, < 14j et < 35j). 1 alerte EN COURS HUMAIN signalée : Adnan Khan, 4j sans MAJ visible depuis le 22/04 — vérifier fil de discussion (brouillon Gmail continuité post-pivot 24/04 a-t-il été envoyé ?). Stefanini EN COURS HUMAIN à 2j seulement, attente légitime (congés jusqu'au 30/04). Aucun PROPOSÉ, aucun canal alt à signaler (Gauthier à 12j < 14j), aucun SLOT LIBÉRÉ.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu (congés jusqu'au 30/04, retour 04/05). Fenêtre réponse recadrée à 04/05-18/05. Backups Toubiana/Della-Valle notés mais NE PAS solliciter. Ajout section "Contacts CNIL backup" pour formaliser la règle.
 - **2026-04-24 matin (v4)** : réponse Stefanini LinkedIn 08:39 → bascule email institutionnel. Audric envoie email 24/04 matin depuis audric@mandatia.eu à rstefanini@cnil.fr (157 mots, 13 règles voix respectées, terme "mandant" remplacé par "la personne qui autorise" suite à relecture Audric). Statut Stefanini passe de ENVOYÉ (LU non répondu) à EN COURS HUMAIN.
 - **2026-04-23 21h (v3)** : identification Erdem = Remedi Finance + Gauthier = Chift. Email pro audric@mandatia.eu activé (Zimbra Starter OVH, 10/10 mail-tester). Email Erdem envoyé 23/04. Gauthier identifié Chift, email Chift préparé pour 28/04.
