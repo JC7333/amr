@@ -86,8 +86,9 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 | Date | Événement |
 |---|---|
-| 2026-04-24 (aujourd'hui) | Email Stefanini envoyé, autoreply reçu (absent jusqu'au 30/04). Adnan continuité post-pivot à envoyer dans la journée. |
+| 2026-04-24 | Email Stefanini envoyé, autoreply reçu (absent jusqu'au 30/04). Adnan continuité post-pivot à envoyer dans la journée. |
 | 2026-04-26 | Fenêtre 72h post-email Erdem → évaluation silence/réponse |
+| 2026-04-27 (aujourd'hui) | Tracker run : Adnan stagne 5j EN COURS HUMAIN (vérifier envoi continuité 24/04). Stefanini stagne 3j (attente retour congés documentée). |
 | 2026-04-28 | Gauthier atteint 14j silence LinkedIn → canal email Chift possible |
 | 2026-05-04 | Retour effectif Stefanini (lundi après congés) |
 | 2026-05-05 | Mattioli, Rogers, Zappellini, Rice atteignent 14j silence → canal email possible |
@@ -97,10 +98,10 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 | 2026-06-01 | Si Stefanini silence total → fin de la tentative canal CNIL (pas de 2e email) |
 
 **Actions Audric cette semaine** :
-- **Priorité #1** : envoyer continuité Adnan Khan aujourd'hui 24/04 (brouillon Gmail prêt)
+- **Priorité #1** : confirmer envoi continuité Adnan (prévu 24/04, dernier échange visible 22/04 = 5j)
 - **Priorité #2** : attendre retour Stefanini 04/05 (régulateur, cycle long, ne pas relancer, ne pas contacter backups)
-- **Priorité #3** : surveiller boîte Zimbra pour réponse Erdem (fenêtre jusqu'au 26/04)
-- **Priorité #4** : envoi email Gauthier Chift le 28/04 si silence LinkedIn persiste
+- **Priorité #3** : surveiller boîte Zimbra pour réponse Erdem (fenêtre échue 26/04, silence à acter)
+- **Priorité #4** : envoi email Gauthier Chift le 28/04 si silence LinkedIn persiste (déclencheur demain)
 - **Priorité #5** : laisser respirer les 4 autres contacts (interdiction relance)
 
 ---
@@ -127,6 +128,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-04-27 (tracker run)** : 0 SLOT LIBÉRÉ, 0 canal alt signalé. Gauthier Chift à 13j — déclencheur canal email demain 28/04 comme prévu. 2 alertes EN COURS HUMAIN : Adnan Khan 5j (vérifier envoi continuité du 24/04) + Stefanini 3j (attente retour congés 04/05, RAS opérationnel). 4 autres ENVOYÉ (22/04) à 5j, sous seuils. Erdem fenêtre 72h échue 26/04 (à acter mais pas SLOT LIBÉRÉ avant 18/05).
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu (congés jusqu'au 30/04, retour 04/05). Fenêtre réponse recadrée à 04/05-18/05. Backups Toubiana/Della-Valle notés mais NE PAS solliciter. Ajout section "Contacts CNIL backup" pour formaliser la règle.
 - **2026-04-24 matin (v4)** : réponse Stefanini LinkedIn 08:39 → bascule email institutionnel. Audric envoie email 24/04 matin depuis audric@mandatia.eu à rstefanini@cnil.fr (157 mots, 13 règles voix respectées, terme "mandant" remplacé par "la personne qui autorise" suite à relecture Audric). Statut Stefanini passe de ENVOYÉ (LU non répondu) à EN COURS HUMAIN.
 - **2026-04-23 21h (v3)** : identification Erdem = Remedi Finance + Gauthier = Chift. Email pro audric@mandatia.eu activé (Zimbra Starter OVH, 10/10 mail-tester). Email Erdem envoyé 23/04. Gauthier identifié Chift, email Chift préparé pour 28/04.
