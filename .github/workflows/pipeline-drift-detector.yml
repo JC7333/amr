@@ -1,0 +1,122 @@
+name: Pipeline Drift Detector
+
+# Déclenche :
+# - À chaque ouverture de PR (capture les nouvelles PR Reply Tracker dès leur création)
+# - Tous les jours à 06:30 UTC (08:30 heure FR), juste après le run quotidien du Reply Tracker
+# - Manuellement via workflow_dispatch
+on:
+  pull_request:
+    types: [opened, closed]
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Count open Reply Tracker PRs and manage drift issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const THRESHOLD = 2;
+
+            // 1. Récupérer toutes les PR ouvertes
+            const { data: openPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            // 2. Filtrer les PR Reply Tracker (titre commence par "[Tracker" OU branche commence par "claude/reply-tracker-")
+            const trackerPRs = openPRs.filter(pr =>
+              pr.title.startsWith('[Tracker') ||
+              (pr.head && pr.head.ref && pr.head.ref.startsWith('claude/reply-tracker-'))
+            );
+            const count = trackerPRs.length;
+
+            console.log(`Open Reply Tracker PRs: ${count}`);
+            console.log(trackerPRs.map(p => `- #${p.number}: ${p.title}`).join('\n'));
+
+            // 3. Récupérer issues drift existantes
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'pipeline-drift',
+              per_page: 100
+            });
+
+            if (count > THRESHOLD) {
+              // Dérive détectée : créer issue si pas déjà présente
+              if (existingIssues.length === 0) {
+                const today = new Date().toISOString().slice(0, 10);
+                const prList = trackerPRs
+                  .map(p => `- [#${p.number}](${p.html_url}) : ${p.title} (créée le ${p.created_at.slice(0,10)})`)
+                  .join('\n');
+
+                const body = [
+                  `**Détecté le ${today}** : ${count} PR Reply Tracker ouvertes et non mergées.`,
+                  ``,
+                  `## PR en attente`,
+                  prList,
+                  ``,
+                  `## Pourquoi c'est un problème`,
+                  ``,
+                  `Le Reply Tracker lit \`outreach/pipeline.md\` sur \`main\`. Si \`pipeline.md\` n'est pas à jour avec les envois récents, le tracker génère des alertes basées sur des données stales (faux positifs Adnan, contacts manquants, délais 14j/35j non suivis).`,
+                  ``,
+                  `Plus la pile de PR est haute, plus le pipeline est désynchronisé.`,
+                  ``,
+                  `## Action recommandée`,
+                  ``,
+                  `1. Synchroniser \`outreach/pipeline.md\` sur \`main\` avec l'état réel des envois (toutes plateformes : LinkedIn, email, etc.)`,
+                  `2. Fermer les PR Reply Tracker ouvertes (informatives uniquement, ne contiennent que des descriptions de runs passés)`,
+                  `3. Le tracker du lendemain repartira sur des données fraîches`,
+                  ``,
+                  `## Auto-fermeture`,
+                  ``,
+                  `Cette issue se ferme automatiquement quand le nombre de PR Reply Tracker ouvertes redescend ≤ ${THRESHOLD}.`,
+                  ``,
+                  `---`,
+                  `*Issue créée par le workflow [pipeline-drift-detector](.github/workflows/pipeline-drift-detector.yml)*`
+                ].join('\n');
+
+                await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `⚠️ Pipeline drift — ${count} PR Reply Tracker en attente`,
+                  body: body,
+                  labels: ['pipeline-drift', 'priority']
+                });
+
+                console.log(`Created drift issue (count=${count})`);
+              } else {
+                console.log(`Drift issue already exists (#${existingIssues[0].number}), skipping creation`);
+              }
+            } else {
+              // Pas de dérive : fermer les issues drift existantes
+              for (const issue of existingIssues) {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `✅ Dérive résolue : ${count} PR Reply Tracker en attente (≤ ${THRESHOLD}). Auto-fermeture.`
+                });
+
+                console.log(`Closed drift issue #${issue.number}`);
+              }
+            }
