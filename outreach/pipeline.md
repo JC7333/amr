@@ -86,8 +86,9 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 | Date | Événement |
 |---|---|
-| 2026-04-24 (aujourd'hui) | Email Stefanini envoyé, autoreply reçu (absent jusqu'au 30/04). Adnan continuité post-pivot à envoyer dans la journée. |
-| 2026-04-26 | Fenêtre 72h post-email Erdem → évaluation silence/réponse |
+| 2026-04-24 | Email Stefanini envoyé, autoreply reçu (absent jusqu'au 30/04). Adnan continuité post-pivot à envoyer dans la journée. |
+| 2026-04-26 | Fenêtre 72h post-email Erdem fermée (silence) |
+| 2026-04-27 (aujourd'hui) | Radar W18 livré vide (charge atteinte + 0 trigger vérifié). Action unique : continuité Adnan. |
 | 2026-04-28 | Gauthier atteint 14j silence LinkedIn → canal email Chift possible |
 | 2026-05-04 | Retour effectif Stefanini (lundi après congés) |
 | 2026-05-05 | Mattioli, Rogers, Zappellini, Rice atteignent 14j silence → canal email possible |
@@ -96,16 +97,33 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 | 2026-05-26 | Mattioli, Rogers, Zappellini, Rice atteignent 35j silence → SLOT LIBÉRÉ |
 | 2026-06-01 | Si Stefanini silence total → fin de la tentative canal CNIL (pas de 2e email) |
 
-**Actions Audric cette semaine** :
-- **Priorité #1** : envoyer continuité Adnan Khan aujourd'hui 24/04 (brouillon Gmail prêt)
-- **Priorité #2** : attendre retour Stefanini 04/05 (régulateur, cycle long, ne pas relancer, ne pas contacter backups)
-- **Priorité #3** : surveiller boîte Zimbra pour réponse Erdem (fenêtre jusqu'au 26/04)
-- **Priorité #4** : envoi email Gauthier Chift le 28/04 si silence LinkedIn persiste
-- **Priorité #5** : laisser respirer les 4 autres contacts (interdiction relance)
+**Actions Audric W18 (semaine du 27/04)** :
+- **Priorité #1** : confirmer/envoyer continuité Adnan Khan (brouillon Gmail prêt depuis 24/04)
+- **Priorité #2** : envoi email Gauthier Chift le 28/04 si silence LinkedIn persiste (`gauthier.henroz@chift.eu`, valider Hunter.io avant)
+- **Priorité #3** : attendre retour Stefanini 04/05 (régulateur, cycle long, ne pas relancer, ne pas contacter backups)
+- **Priorité #4** : Erdem fenêtre 72h fermée 26/04 sans retour → ne plus relancer, slot effectif libéré 18/05 si silence total
+- **Priorité #5** : laisser respirer Mattioli, Rogers, Zappellini, Rice (interdiction relance, fenêtre canal email à partir 05/05)
 
 ---
 
 ## Journal hebdomadaire
+
+### W18 (2026-04-27 → 2026-05-03)
+
+**Outreach Radar lundi 27/04** : **0 nouvelle cible livrée**, décision assumée.
+
+Trois raisons cumulatives :
+1. Charge W17 saturée (8 contacts touchés, seuil >3/sem largement dépassé).
+2. Règle fondatrice "pas de relance froide" → 5 ENVOYÉ encore en silence à 5j, rien à faire d'ici la fenêtre 14j (28/04 Gauthier, 05/05 les 4 autres).
+3. Aucun trigger event <30j vérifié sur cible non-cooldownée. Pistes santé / assurance / RH / secteur public investiguées : soit consultants hors profil (Accenture, Deloitte), soit cooldown actif (Thales), soit triggers hors fenêtre (ETSI 9-11/02). Inventer = violer "0 invention de contact".
+
+**Action unique d'Audric cette semaine** : envoyer (ou confirmer envoi) la continuité post-pivot à Adnan Khan, brouillon Gmail prêt depuis 24/04 matin.
+
+**Watchlist W19** : santé/mutuelle (MGEN, Harmonie, Malakoff), RH/SIRH (Cegid, Cornerstone), secteur public hors régulateurs. À creuser à partir d'un trigger événementiel précis, pas d'un titre de poste.
+
+Note hebdo détaillée : `outreach/radar/2026-04-27_W18.md`.
+
+---
 
 ### W17 (2026-04-20 → 2026-04-26)
 
@@ -127,6 +145,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-04-27 (v4.2)** : ouverture journal W18. Radar volontairement vide cette semaine (charge W17 saturée + règle fondatrice + 0 trigger <30j vérifié). Création `outreach/radar/2026-04-27_W18.md`. Action unique pour Audric : continuité Adnan.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu (congés jusqu'au 30/04, retour 04/05). Fenêtre réponse recadrée à 04/05-18/05. Backups Toubiana/Della-Valle notés mais NE PAS solliciter. Ajout section "Contacts CNIL backup" pour formaliser la règle.
 - **2026-04-24 matin (v4)** : réponse Stefanini LinkedIn 08:39 → bascule email institutionnel. Audric envoie email 24/04 matin depuis audric@mandatia.eu à rstefanini@cnil.fr (157 mots, 13 règles voix respectées, terme "mandant" remplacé par "la personne qui autorise" suite à relecture Audric). Statut Stefanini passe de ENVOYÉ (LU non répondu) à EN COURS HUMAIN.
 - **2026-04-23 21h (v3)** : identification Erdem = Remedi Finance + Gauthier = Chift. Email pro audric@mandatia.eu activé (Zimbra Starter OVH, 10/10 mail-tester). Email Erdem envoyé 23/04. Gauthier identifié Chift, email Chift préparé pour 28/04.
