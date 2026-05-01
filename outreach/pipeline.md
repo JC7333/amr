@@ -177,12 +177,15 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Outreach Radar W18** : **N'A PAS TOURNÉ ce matin** (anomalie cron à investiguer dans repo amr).
 
-**Reply Tracker W18** : tourné chaque matin (PR #15 du 27/04). Mais alertes basées sur pipeline.md gelé au 24/04 → désynchro corrigée par cette mise à jour.
+**Reply Tracker W18** : tourné chaque matin (PR #15 du 27/04). Mais alertes basées sur pipeline.md gelé au 24/04 → désynchro corrigée par mise à jour v5.0.
+
+**Tracker run 2026-05-01** : 0 slot libéré, 1 canal alt signalé (Chift/Henroz, silence LinkedIn 17j), 1 alerte EN COURS HUMAIN (Adnan Khan, 4j sans MAJ post-pivot). Stefanini exclu (autoreply documenté retour 04/05). Aucun changement de statut appliqué. Désynchro pipeline >48h détectée (dernier commit 27/04 20:37 UTC).
 
 ---
 
 ## Changelog pipeline
 
+- **2026-05-01 (Tracker run quotidien)** : note de run — 0 slot libéré, 1 canal alt signalé (Chift/Henroz silence LinkedIn 17j), 1 alerte EN COURS HUMAIN (Adnan 4j sans MAJ post-pivot). Pas de changement de statut appliqué. Avertissement désynchro pipeline (>48h sans commit) émis.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 (Polu, G'sell, Salathé, Balagué, Iteanu, Strubel, Bouverot, Cédric O, d'Agrain, Krim, Distinguin, Hubert, Sportisse) intégrés. Adnan passé à dernier échange = 27/04 (continuité post-pivot envoyée). Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector. Auteur : Audric via session Claude Opus du 27/04 19h45.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu (congés jusqu'au 30/04, retour 04/05). Backups Toubiana/Della-Valle notés mais NE PAS solliciter.
 - **2026-04-24 matin (v4)** : réponse Stefanini LinkedIn 08:39 → bascule email institutionnel.
