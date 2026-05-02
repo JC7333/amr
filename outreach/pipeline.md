@@ -183,6 +183,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-05-02 matin (tracker run)** : Reply Tracker — 0 slot libéré, 1 canal alt signalé (Gauthier Henroz, 18j silence LinkedIn → email Chift à valider Hunter), 2 alertes EN COURS HUMAIN (Adnan Khan J+5 sans MAJ visible, Stefanini J+8 dans la fenêtre normale jusqu'au retour de congés 04/05). ⚠️ Désynchro pipeline 108h, sync requise.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 (Polu, G'sell, Salathé, Balagué, Iteanu, Strubel, Bouverot, Cédric O, d'Agrain, Krim, Distinguin, Hubert, Sportisse) intégrés. Adnan passé à dernier échange = 27/04 (continuité post-pivot envoyée). Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector. Auteur : Audric via session Claude Opus du 27/04 19h45.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu (congés jusqu'au 30/04, retour 04/05). Backups Toubiana/Della-Valle notés mais NE PAS solliciter.
 - **2026-04-24 matin (v4)** : réponse Stefanini LinkedIn 08:39 → bascule email institutionnel.
