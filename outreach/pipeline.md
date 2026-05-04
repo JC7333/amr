@@ -179,10 +179,19 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Reply Tracker W18** : tourné chaque matin (PR #15 du 27/04). Mais alertes basées sur pipeline.md gelé au 24/04 → désynchro corrigée par cette mise à jour.
 
+### W19 (2026-05-04 → 2026-05-10)
+
+**Lundi 04/05 — Outreach Radar en mode vigilance.** Aucune nouvelle cible proposée. Justification : funnel saturé (21 contacts actifs / plafond viable 15) + instruction pipeline du 27/04 ("aucun nouveau contact avant 18/05").
+
+Livrable W19 : `outreach/2026-W19_radar.md`. Contenu = surveillance des jalons de la semaine (retour Stefanini, J+14 cohorte W17 fintech le 06/05) + préparation vague de remplacement pour 18/05 (slots Erdem + Gauthier potentiels).
+
+Verdict action #1 W19 : surveiller le retour de Stefanini (CNIL) sur `audric@mandatia.eu` lundi-mardi. Priorité absolue.
+
 ---
 
 ## Changelog pipeline
 
+- **2026-05-04 matin (v5.1)** : Outreach Radar W19 livré en mode vigilance. 0 nouvelle cible. Document `outreach/2026-W19_radar.md` ajouté. Aucun changement de statut sur les 21 contacts actifs.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 (Polu, G'sell, Salathé, Balagué, Iteanu, Strubel, Bouverot, Cédric O, d'Agrain, Krim, Distinguin, Hubert, Sportisse) intégrés. Adnan passé à dernier échange = 27/04 (continuité post-pivot envoyée). Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector. Auteur : Audric via session Claude Opus du 27/04 19h45.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu (congés jusqu'au 30/04, retour 04/05). Backups Toubiana/Della-Valle notés mais NE PAS solliciter.
 - **2026-04-24 matin (v4)** : réponse Stefanini LinkedIn 08:39 → bascule email institutionnel.
