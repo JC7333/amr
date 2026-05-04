@@ -179,6 +179,8 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Reply Tracker W18** : tourné chaque matin (PR #15 du 27/04). Mais alertes basées sur pipeline.md gelé au 24/04 → désynchro corrigée par cette mise à jour.
 
+**Reply Tracker W18 — run 2026-05-04** : 0 SLOT LIBÉRÉ, 1 canal alt signalé (Gauthier Henroz/Chift, 20j silence LinkedIn — edge fenêtre 14-20j), 2 alertes EN COURS HUMAIN (Adnan +7j post-pivot, Stefanini +10j mais retour congés aujourd'hui = jour 1 fenêtre normale), 0 rappel PROPOSÉ. Désynchro pipeline détectée (~155h depuis dernier commit) → avertissement émis dans la PR.
+
 ---
 
 ## Changelog pipeline
