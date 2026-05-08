@@ -1,5 +1,7 @@
 # AMR Outreach Pipeline — Design Partners
 
+<!-- Reply tracker last run: 2026-05-08 — voir PR pour alertes -->
+
 Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés, 4 conversations actives (Alexandra Iteanu — appel calé 5 ou 6/5 ; Gabriel Hubert/Dust — échange en cours ; Rémi Stefanini/CNIL — fenêtre réponse ouverte ; Adnan Khan/Equinix — reclassé partner LT)**.
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
