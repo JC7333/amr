@@ -201,6 +201,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-05-14 (v6.1)** : Reply Tracker daily run. Aucun SLOT LIBÉRÉ (aucun contact à 35j cumulés). 4 canaux alt signalés en fenêtre 14-20j (G'sell SciencesPo 18j, Salathé EPFL 18j, d'Agrain Cigref 17j, Distinguin Fabernovel 17j). 3 alertes EN COURS HUMAIN stagnants >14j (Stefanini 20j depuis autoreply, Iteanu 16j sans confirmation appel, Hubert 15j sans retour). ⚠️ DÉSYNCHRO pipeline.md détectée : ~232h depuis dernier commit main (>48h). Avertissement en tête de PR. Auteur : Reply Tracker auto.
 - **2026-05-04 (v6.0)** : SYNCHRO POST-S18. Adnan SORTI FUNNEL (Centurian.ai, reclassé partner LT). Iteanu : nom corrigé en Alexandra Iteanu (associée, pas Olivier), passage EN COURS HUMAIN, appel calé 5 ou 6/5. Hubert : passage EN COURS HUMAIN (échanges en cours). Gauthier : SLOT LIBÉRÉ anticipé (canal email jamais activé, anti-dilution). Compteur funnel actif passé de 21 à 17 contacts en suivi. Auteur : Audric via session Claude Opus du 4/05 matin.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 intégrés. Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu.
