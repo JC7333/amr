@@ -197,6 +197,17 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Drift detector v2** : déployé 29/04. Aucune issue créée à ce jour malgré 6 PR Reply Tracker open ; bug de robustesse à investiguer mais non bloquant (la couche 3 prompt Reply Tracker fait le job en parallèle).
 
+### W20 (2026-05-11 → 2026-05-17)
+
+**Tracker run 2026-05-15 (couche 3 anti-dérive activée)** :
+- Désynchro pipeline.md détectée : ≈249h depuis dernier commit (04/05 19:04 UTC). Avertissement en tête de PR.
+- Aucun statut SLOT LIBÉRÉ auto à passer (Erdem à 31j sur LinkedIn — fenêtre 35j atteinte 18/05).
+- 4 canaux alt 14-20j signalés en PR : G'sell (19j), Salathé (19j, sous condition connexion non acceptée), d'Agrain (18j), Distinguin (18j).
+- 3 alertes EN COURS HUMAIN stagnants signalées : Stefanini (21j depuis dernier échange — mais fenêtre réponse ouverte jusqu'au 18/05), Iteanu (17j — appel calé 5 ou 6/5 dont issue non visible dans pipeline), Hubert (16j — en attente retour 2e question).
+- Aucun contact en PROPOSÉ → 0 rappel.
+- Aucune mise à jour de statut auto effectuée.
+- **Action prioritaire pour Audric** : re-synchroniser pipeline.md avec l'état réel S19+S20 avant d'agir sur les alertes ci-dessus.
+
 ---
 
 ## Changelog pipeline
