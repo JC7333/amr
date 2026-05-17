@@ -197,6 +197,15 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Drift detector v2** : déployé 29/04. Aucune issue créée à ce jour malgré 6 PR Reply Tracker open ; bug de robustesse à investiguer mais non bloquant (la couche 3 prompt Reply Tracker fait le job en parallèle).
 
+### W20 (2026-05-11 → 2026-05-17)
+
+**Reply Tracker 2026-05-17** : pipeline.md désynchronisé depuis ~301h (dernier commit v6.0 du 2026-05-04 19:04 UTC). Aucun changement de statut automatique (aucun ENVOYÉ >35j sur les données 04/05 ; Erdem atteint 35j demain 18/05). Alertes dans la PR de ce run :
+- 💡 Canaux alt en fin de fenêtre 14-20j (jour 20) : Henri d'Agrain (Cigref), Stéphane Distinguin (Fabernovel).
+- ⚠️ EN COURS HUMAIN stagnants >3j : Alexandra Iteanu (19j depuis 28/04, appel 5-6/5 — CR ?), Gabriel Hubert (18j depuis 29/04), Rémi Stefanini (23j depuis 24/04, fenêtre attendue 04→18/05 expire demain).
+- Aucun rappel PROPOSÉ (aucune cible en attente d'envoi).
+
+**Verdict** : avant toute action sur les alertes, resynchroniser pipeline.md avec l'état réel (issue Iteanu post-appel notamment), puis re-déclencher le tracker.
+
 ---
 
 ## Changelog pipeline
