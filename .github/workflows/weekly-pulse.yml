@@ -1,0 +1,57 @@
+name: weekly-pulse
+
+# Routine 5 d'Audric â€” revue hebdomadaire automatique tous les dimanches 19h Paris.
+# Compile l'Ã©tat des 5 fronts (AMR, KORVEX, Ã‰tuve, immo, fenÃªtre bancaire)
+# et upload le rÃ©sultat en artifact GitHub (tÃ©lÃ©chargeable depuis l'onglet Actions).
+#
+# Pas de commit sur main = pas de problÃ¨me de branch protection.
+#
+# Pour activer : merger la PR sur main, la routine se dÃ©clenche au prochain dimanche
+# 18h UTC (19h Paris hiver, 20h Paris Ã©tÃ©). Pulse aussi consultable directement
+# dans l'onglet Actions > weekly-pulse > Summary.
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'  # dimanche 18h UTC
+  workflow_dispatch:  # dÃ©clenchement manuel possible depuis Actions
+
+jobs:
+  weekly-pulse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 30
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install anthropic requests
+
+      - name: Generate weekly pulse
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python .github/scripts/weekly_pulse.py
+
+      - name: Upload pulse as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-pulse-${{ github.run_id }}
+          path: weekly-pulse/*.md
+          retention-days: 90
+
+      - name: Show pulse in summary
+        run: |
+          PULSE_FILE=$(ls -t weekly-pulse/*.md 2>/dev/null | head -1)
+          if [ -n "$PULSE_FILE" ]; then
+            echo "## Weekly Pulse $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat "$PULSE_FILE" >> $GITHUB_STEP_SUMMARY
+          fi
