@@ -1,6 +1,13 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés, 4 conversations actives (Alexandra Iteanu — appel calé 5 ou 6/5 ; Gabriel Hubert/Dust — échange en cours ; Rémi Stefanini/CNIL — fenêtre réponse ouverte ; Adnan Khan/Equinix — reclassé partner LT)**.
+> ⚠️ **PIPELINE DÉSYNCHRONISÉ DEPUIS 04/05 (14 jours)** — dernière mise à jour humaine v6.0
+> au 04/05/2026. L'état réel des conversations (appel Iteanu 5 ou 6/5, retour Hubert,
+> fenêtre Stefanini 04→18/05, premiers retours des contacts du 27/04 qui ont atteint
+> 14j+) n'a PAS été reporté. **Une sync v6.2 par Audric est requise avant tout nouvel
+> envoi** (W21 ouvre la fin du plafond "STOP nouveaux contacts jusqu'au 18/05" mais
+> seulement si la capacité de cadrage est encore disponible côté humain).
+
+Objectif: 5 Design Partners signés. Statut au 04/05 (non resynchronisé) : **0/5 signés, 4 conversations actives (Alexandra Iteanu — appel calé 5 ou 6/5 ; Gabriel Hubert/Dust — échange en cours ; Rémi Stefanini/CNIL — fenêtre réponse ouverte ; Adnan Khan/Equinix — reclassé partner LT)**.
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
@@ -54,7 +61,7 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 |---|---|---|---|---|---|---|---|
 | 2026-04-15 | Adnan Khan | Equinix → Centurian.ai | Infra / Datacenter → Plateforme runtime gouvernance agents | LinkedIn | **SORTI FUNNEL** | 2026-04-27 (Audric continuité post-pivot, pas de retour) | **Reclassé partner LT le 04/05/2026.** Adnan a quitté Equinix et a lancé Centurian.ai (post LinkedIn ~13/04) : plateforme de découverte/gouvernance/observabilité d'agents en entreprise (compliance EU AI Act 02/08/2026). Couche **runtime + reporting**, différente de la couche **autorisation prospective** d'AMR. Pas concurrent direct mais plus DP candidat. Potentiel partner intégration LT (Centurian = futur consommateur du registre AMR). Pas de relance froide. |
 | 2026-04-22 | Rémi Stefanini | CNIL (DTIA) | Régulateur | LinkedIn 22/04 → Email institutionnel 24/04 | **EN COURS HUMAIN (fenêtre réponse ouverte)** | 2026-04-24 (email envoyé, autoreply reçu : absent jusqu'au 30/04 ; **retour effectif 04/05 = aujourd'hui**) | Directeur DTIA CNIL. Fenêtre réponse réaliste : 04/05 → 18/05. Surveillance passive. Backups Toubiana / Della-Valle nommés mais NE PAS contacter. Confidentialité absolue. |
-| 2026-04-14 | Erdem Yağan | Remedi Finance | Fintech healthcare BNPL (UK/TR) | LinkedIn (EN) puis email 23/04 | CANAL ALT TENTÉ | 2026-04-23 (email depuis audric@mandatia.eu) | CEO Remedi = BNPL cliniques + e-KYC + credit scoring = AI Act Annex III pt 5. Email public vérifié erdem@remedifinance.com. Si silence total 18/05 : SLOT LIBÉRÉ. |
+| 2026-04-14 | Erdem Yağan | Remedi Finance | Fintech healthcare BNPL (UK/TR) | LinkedIn (EN) puis email 23/04 | **SLOT LIBÉRÉ — 2026-05-18** | 2026-04-23 (email depuis audric@mandatia.eu) | CEO Remedi = BNPL cliniques + e-KYC + credit scoring = AI Act Annex III pt 5. Email public vérifié erdem@remedifinance.com. Échéance 35j atteinte ce jour. **À confirmer par Audric : si réponse reçue entre-temps non reportée, repasser EN COURS HUMAIN — sinon slot libéré actif, cooldown 90j jusqu'au 22/07.** |
 | 2026-04-14 | Gauthier Henroz | Chift | API finance pour agents IA (Belgique) | LinkedIn direct (FR) | **SLOT LIBÉRÉ anticipé** | 2026-04-14 | **Décision 04/05** : canal email Chift prévu 28/04 jamais activé (anti-dilution face à 2 conversations chaudes Iteanu + Hubert). 20j silence LinkedIn ce jour. Slot libéré explicitement plutôt que de tenter un 2e canal en retard sur prospect tiède. Cooldown 90j maintenu jusqu'au 13/07. |
 | 2026-04-22 | Juliette Mattioli | Thales | Défense / tech souveraine (CAC40) | LinkedIn direct | ENVOYÉ | 2026-04-22 | Atteint 12j silence aujourd'hui. Fenêtre canal alt s'ouvre 06/05 (14j). Email probable juliette.mattioli@thalesgroup.com (94,5%). Valider Hunter avant tout envoi. SLOT LIBÉRÉ 27/05 si silence total. |
 | 2026-04-22 | Ian Rogers | Ledger | Fintech sécurité hardware | LinkedIn note connexion 193c | ENVOYÉ | 2026-04-22 | Profil fermé. 12j silence. Fenêtre canal alt 06/05. Email probable ian.rogers@ledger.com (72,9%) ou @ledger.fr (51,2%). Valider Hunter. SLOT LIBÉRÉ 27/05. |
@@ -74,6 +81,7 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | 2026-04-27 | **Gabriel Hubert** | Dust.tt | CEO Dust | LinkedIn message direct → échanges LinkedIn | **EN COURS HUMAIN** | 2026-04-29 (Audric 2e message : question seuil clients juristes vs métier) | Hubert a répondu 28/04 sur 1er message d'Audric : "ça dépend des tâches/de l'impact". Audric a contre-questionné 29/04 sur où il voit le seuil entre clients juristes vs métier dans l'usage agent. **En attente retour Hubert.** Cooldown 90j maintenu. |
 | 2026-04-27 | Bruno Sportisse | Inria | PDG Inria (3000 personnes) | LinkedIn note connexion | ENVOYÉ | 2026-04-27 | PDG institution publique. Note seulement. Email pattern probable bruno.sportisse@inria.fr mais filtré par secrétariat. Pas de canal alt envisagé. SLOT LIBÉRÉ 01/06. |
 | 2026-04-21 (proposé W17) | Pierre Houlès | Kering | Luxe (CAC40) | — | SKIP | — | Trigger 35j hors fenêtre. Audric a arbitré NON. |
+| 2026-05-18 (proposé W21) | Chafika Chettaoui | AXA en France | Assurance CAC40 | — | **PROPOSÉ W21** | — | Chief Data & AI Officer AXA France. Trigger sectoriel : accord Digital Omnibus 7/5 (11j). Trigger personnel : Top 100 Women in AI 2026 (date publication AI Magazine non confirmée). Email PROBABLE chafika.chettaoui@axa.fr (pattern AXA France 98,6 %). Draft : `outreach/drafts/2026-05-18_chettaoui.md`. **À envoyer uniquement si Audric confirme visuellement profil LinkedIn ouvert ET post Chettaoui <30j ; sinon attendre W22.** Premier secteur assurance dans le funnel. |
 
 ---
 
@@ -86,7 +94,9 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 - Canal alt email tenté : 1 (Erdem) → silence
 - SLOT LIBÉRÉ anticipé : 1 (Gauthier Henroz / Chift)
 
-**FUNNEL RÉEL** : 17 contacts en suivi actif (21 envoyés - Adnan SORTI - Gauthier libéré - Houlès SKIP). 3 conversations chaudes dont 1 RDV calé. **STOP nouveaux contacts jusqu'au 18/05** (priorité = cadrer correctement Iteanu + Hubert + Stefanini si elle répond).
+**FUNNEL RÉEL au 04/05 (non resynchronisé)** : 17 contacts en suivi actif (21 envoyés - Adnan SORTI - Gauthier libéré - Houlès SKIP). 3 conversations chaudes dont 1 RDV calé. **Plafond "STOP nouveaux contacts jusqu'au 18/05" expire aujourd'hui** — la reprise dépend de l'état réel des 3 chaudes + capacité de cadrage humain restante (à confirmer par Audric).
+
+**Évolution mécanique 18/05** : Erdem SLOT LIBÉRÉ (35j atteint). Funnel passe à 16 (sous réserve sync v6.2).
 
 ---
 
@@ -151,6 +161,13 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 - **Priorité #3** : si retour Hubert sur la question seuil juristes/métier, répondre dans la même journée (conversation chaude).
 - **Priorité #4** : NE PAS envoyer de nouveau message d'outreach. Capacité de cadrage saturée. Plafond strict jusqu'au 18/05.
 
+## Actions Audric cette semaine (S21 — 18→24/05)
+
+- **Priorité #1 — SYNC PIPELINE v6.2 avant tout** : reporter dans ce fichier l'état réel des 14 derniers jours (appel Iteanu fait/pas fait ? retour Hubert ? réponse Stefanini ? réponses des contacts du 27/04 atteignant 14j+ silence ce week-end ?). Tant que la sync n'est pas faite, le Radar W21 navigue à l'aveugle.
+- **Priorité #2 — décision Erdem** : confirmer ou infirmer le SLOT LIBÉRÉ mécanique du jour. Si réponse Erdem reçue entre-temps non reportée → repasser EN COURS HUMAIN.
+- **Priorité #3 — Chettaoui (cible W21 proposée)** : NE PAS envoyer tant que (a) la sync v6.2 n'est pas faite ET (b) le statut LinkedIn ouvert + post Chettaoui <30j ne sont pas vérifiés visuellement. Si les deux conditions tombent, envoyer le LinkedIn direct en premier (l'email est un fallback J+14). Voir `outreach/drafts/2026-05-18_chettaoui.md`.
+- **Priorité #4 — capacité** : si 3 conversations chaudes encore actives (Iteanu, Hubert, Stefanini), continuer à privilégier qualité de cadrage sur volume d'outreach. Le Radar W21 livre **1 cible seulement** délibérément, pour ne pas saturer.
+
 ---
 
 ## Journal hebdomadaire
@@ -197,10 +214,40 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Drift detector v2** : déployé 29/04. Aucune issue créée à ce jour malgré 6 PR Reply Tracker open ; bug de robustesse à investiguer mais non bloquant (la couche 3 prompt Reply Tracker fait le job en parallèle).
 
+### W19 et W20 (2026-05-04 → 2026-05-17)
+
+**État Claude** : aucune sync pipeline reportée pendant ces deux semaines. Les
+événements suivants étaient attendus selon le calendrier v6.0 mais leur résultat
+réel n'est pas connu côté Claude :
+
+- 5 ou 6/5 : appel Alexandra Iteanu (Iteanu Avocats) — préparation prévue 04 ou 05/05
+- 04 → 18/05 : fenêtre réponse Stefanini (CNIL DTIA), retour de congés effectif 04/05
+- 06/05 : Mattioli, Rogers, Zappellini, Rice atteignent 14j silence — fenêtre canal alt ouverte
+- 10/05 : Polu, G'sell, Salathé atteignent 14j silence — Salathé éligible email si connexion non acceptée
+- 11/05 : 9 contacts du 27/04 atteignent 14j silence — canal alt UNIQUEMENT pour Balagué, Bouverot, d'Agrain, Krim, Distinguin (pas Sportisse / Cédric / Strubel / Iteanu)
+- attendre la sync v6.2 d'Audric pour acter les décisions effectivement prises
+
+**Outreach Radar W19 et W20** : N'A PAS TOURNÉ (anomalie cron déjà signalée W18, non
+résolue). Non bloquant pendant le plafond STOP, devient bloquant à partir de W21.
+
+### W21 (2026-05-18 → 2026-05-24)
+
+**Lundi 18/05** :
+- Plafond "STOP nouveaux contacts" prend fin (à 14h après-midi côté humain, théoriquement).
+- Erdem Yağan atteint 35j silence : statut basculé SLOT LIBÉRÉ par règle mécanique.
+  À reconfirmer ou infirmer par Audric (cas possible d'une réponse non reportée).
+- **Radar Claude W21 livre 1 cible nouvelle** (Chettaoui / AXA France) sous condition
+  de sync préalable + vérification visuelle du profil LinkedIn et d'un post <30j.
+  Décision délibérée de plafonner à 1 cible : la qualité du sourcing était dégradée
+  cette semaine (LinkedIn 403 sur tous les WebFetch, peu de trigger personnel <30j
+  vérifiable dans les secteurs sous-touchés du funnel — santé, assurance, énergie,
+  RH-tech). Mieux vaut 1 cible bien cadrée que 5 cibles avec triggers fabriqués.
+
 ---
 
 ## Changelog pipeline
 
+- **2026-05-18 (v6.1)** : Radar Claude W21 — bandeau ⚠️ sync requise, Erdem SLOT LIBÉRÉ mécanique 35j, Chettaoui PROPOSÉ W21 (1 cible, condition sync + vérif LinkedIn), Journal hebdo W19+W20+W21, Actions S21 ajoutées. Aucun statut existant modifié au-delà d'Erdem. Auteur : Claude Opus 4.7 (session Outreach Radar W21).
 - **2026-05-04 (v6.0)** : SYNCHRO POST-S18. Adnan SORTI FUNNEL (Centurian.ai, reclassé partner LT). Iteanu : nom corrigé en Alexandra Iteanu (associée, pas Olivier), passage EN COURS HUMAIN, appel calé 5 ou 6/5. Hubert : passage EN COURS HUMAIN (échanges en cours). Gauthier : SLOT LIBÉRÉ anticipé (canal email jamais activé, anti-dilution). Compteur funnel actif passé de 21 à 17 contacts en suivi. Auteur : Audric via session Claude Opus du 4/05 matin.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 intégrés. Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu.
