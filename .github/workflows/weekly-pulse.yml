@@ -1,24 +1,33 @@
 name: weekly-pulse
 
-# Routine 5 d'Audric â€” revue hebdomadaire automatique tous les dimanches 19h Paris.
-# Compile l'Ã©tat des 5 fronts (AMR, KORVEX, Ã‰tuve, immo, fenÃªtre bancaire)
-# et upload le rÃ©sultat en artifact GitHub (tÃ©lÃ©chargeable depuis l'onglet Actions).
+# Routine 5 d'Audric â€” revue hebdo automatique dimanche 9h Paris.
+# GÃ©nÃ¨re pulse avec veille auto + cross-checking, l'envoie par mail.
 #
-# Pas de commit sur main = pas de problÃ¨me de branch protection.
+# Secrets requis :
+#   - ANTHROPIC_API_KEY : clÃ© API Anthropic (existant)
+#   - GMAIL_APP_PASSWORD : mot de passe d'application Gmail (Ã  crÃ©er)
 #
-# Pour activer : merger la PR sur main, la routine se dÃ©clenche au prochain dimanche
-# 18h UTC (19h Paris hiver, 20h Paris Ã©tÃ©). Pulse aussi consultable directement
-# dans l'onglet Actions > weekly-pulse > Summary.
+# Optionnel :
+#   - GMAIL_USER : adresse Gmail (dÃ©faut: audric9@gmail.com)
+#
+# Timing :
+#   - 0 7 * * 0 = dimanche 7h UTC = 9h Paris en Ã©tÃ© (UTC+2)
+#   - 0 8 * * 0 = dimanche 8h UTC = 9h Paris en hiver (UTC+1)
+#   GitHub Actions ne fait pas la conversion DST automatiquement,
+#   donc on configure les deux crons et le job s'exÃ©cute UNE fois selon le mois.
+#   En pratique le runner tournera 2 fois en heure-pivot (mars/octobre),
+#   mais l'idempotence du pulse (artifact + mail) supporte Ã§a.
 
 on:
   schedule:
-    - cron: '0 18 * * 0'  # dimanche 18h UTC
-  workflow_dispatch:  # dÃ©clenchement manuel possible depuis Actions
+    - cron: '0 7 * * 0'  # dimanche 9h Paris (Ã©tÃ©)
+    - cron: '0 8 * * 0'  # dimanche 9h Paris (hiver)
+  workflow_dispatch:  # dÃ©clenchement manuel possible
 
 jobs:
   weekly-pulse:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repo
@@ -34,13 +43,16 @@ jobs:
       - name: Install deps
         run: pip install anthropic requests
 
-      - name: Generate weekly pulse
+      - name: Generate weekly pulse + send mail
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python .github/scripts/weekly_pulse.py
 
       - name: Upload pulse as artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: weekly-pulse-${{ github.run_id }}
@@ -48,6 +60,7 @@ jobs:
           retention-days: 90
 
       - name: Show pulse in summary
+        if: always()
         run: |
           PULSE_FILE=$(ls -t weekly-pulse/*.md 2>/dev/null | head -1)
           if [ -n "$PULSE_FILE" ]; then
