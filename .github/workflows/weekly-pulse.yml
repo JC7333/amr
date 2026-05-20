@@ -1,28 +1,27 @@
 name: weekly-pulse
 
 # Routine 5 d'Audric â€” revue hebdo automatique dimanche 9h Paris.
-# GÃ©nÃ¨re pulse avec veille auto + cross-checking, l'envoie par mail.
+# v4.1 : fix encoding UTF-8 + max_tokens + Node 24 forcÃ©.
 #
 # Secrets requis :
-#   - ANTHROPIC_API_KEY : clÃ© API Anthropic (existant)
-#   - GMAIL_APP_PASSWORD : mot de passe d'application Gmail (Ã  crÃ©er)
-#
-# Optionnel :
-#   - GMAIL_USER : adresse Gmail (dÃ©faut: audric9@gmail.com)
+#   - ANTHROPIC_API_KEY : clÃ© API Anthropic
+#   - GMAIL_USER : adresse Gmail (audric9@gmail.com)
+#   - GMAIL_APP_PASSWORD : mot de passe d'application Gmail
 #
 # Timing :
-#   - 0 7 * * 0 = dimanche 7h UTC = 9h Paris en Ã©tÃ© (UTC+2)
-#   - 0 8 * * 0 = dimanche 8h UTC = 9h Paris en hiver (UTC+1)
-#   GitHub Actions ne fait pas la conversion DST automatiquement,
-#   donc on configure les deux crons et le job s'exÃ©cute UNE fois selon le mois.
-#   En pratique le runner tournera 2 fois en heure-pivot (mars/octobre),
-#   mais l'idempotence du pulse (artifact + mail) supporte Ã§a.
+#   - 0 7 * * 0 = dimanche 7h UTC = 9h Paris en Ã©tÃ©
+#   - 0 8 * * 0 = dimanche 8h UTC = 9h Paris en hiver
+#   Le job s'exÃ©cute UNE fois selon le mois (cron natif sans DST).
 
 on:
   schedule:
-    - cron: '0 7 * * 0'  # dimanche 9h Paris (Ã©tÃ©)
-    - cron: '0 8 * * 0'  # dimanche 9h Paris (hiver)
-  workflow_dispatch:  # dÃ©clenchement manuel possible
+    - cron: '0 7 * * 0'
+    - cron: '0 8 * * 0'
+  workflow_dispatch:
+
+# Forcer Node 24 dÃ¨s maintenant (anticipation deprecation 2 juin 2026)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   weekly-pulse:

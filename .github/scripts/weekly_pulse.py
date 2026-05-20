@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-weekly_pulse.py â€” Routine 5 AMR (v4 avec cross-checking et envoi mail).
+weekly_pulse.py â€” Routine 5 AMR (v4.1 â€” fix encoding UTF-8 + max_tokens).
 
 Tourne tous les dimanches Ã  9h Paris.
 Compile l'Ã©tat de la semaine + gÃ©nÃ¨re revue ET veille AMR via web_search
@@ -10,6 +10,11 @@ Sortie :
 - artifact GitHub (backup, accessible depuis Actions)
 - mail HTML Ã  audric9@gmail.com
 - summary GitHub Actions (pour debug)
+
+v4.1 fixes (par rapport Ã  v4) :
+- Encoding UTF-8 explicite sur Subject/From (fini les "Ã°Å¸Å¸Â¢" mojibake)
+- max_tokens 4500 â†’ 8000 (fini les pulses tronquÃ©s mi-phrase)
+- Le reste inchangÃ© : cross-checking + envoi mail + alert level
 
 v4 nouveautÃ©s :
 - Cross-checking obligatoire : 2 sources MINIMUM par fait, sinon marquage "âš ï¸ Ã€ VÃ‰RIFIER"
@@ -31,6 +36,8 @@ from pathlib import Path
 from typing import Any
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.header import Header
+from email.utils import formataddr
 
 import anthropic
 import requests
@@ -331,7 +338,7 @@ def call_claude_with_retry(client, system, user_prompt, retries: int = 3) -> str
         try:
             resp = client.messages.create(
                 model=ANTHROPIC_MODEL,
-                max_tokens=4500,
+                max_tokens=8000,
                 system=system,
                 tools=[{
                     "type": "web_search_20250305",
@@ -447,8 +454,9 @@ def send_mail(pulse_md: str, alert_level: str) -> bool:
     subject = f"{alert_level} Pulse AMR â€” {today}"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"{MAIL_FROM_NAME} <{GMAIL_USER}>"
+    # Encodage UTF-8 explicite pour subject et From (sinon Gmail affiche mojibake)
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = formataddr((str(Header(MAIL_FROM_NAME, "utf-8")), GMAIL_USER))
     msg["To"] = MAIL_TO
 
     text_part = MIMEText(pulse_md, "plain", "utf-8")
