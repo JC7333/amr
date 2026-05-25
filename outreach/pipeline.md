@@ -144,6 +144,28 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ---
 
+## Actions Audric cette semaine (S22 — 25/05)
+
+> ⚠️ **Pipeline figé depuis le 04/05 (21 j).** Le radar W22 a tourné le 25/05
+> depuis un environnement sans accès Gmail/LinkedIn d'Audric : **aucun statut de
+> contact n'a été modifié**, car l'état réel des réponses depuis le 04/05 est
+> inconnu. À re-synchroniser par Audric.
+
+- **Priorité #1** : **clore la boucle Iteanu.** L'appel calé 5/6 mai a-t-il eu
+  lieu ? Quelle suite ? C'est l'item à plus forte valeur de la semaine.
+- **Priorité #2** : confirmer l'état des 2 autres conversations chaudes (Hubert
+  en attente de retour ; Stefanini — fenêtre 04→18/05 désormais close, pas de
+  relance froide si silence) et re-synchroniser le tableau.
+- **Priorité #3** : trancher les slots mécaniquement échus — Erdem (35 j atteint
+  le 18/05) ; Mattioli/Rogers/Zappellini/Rice (35 j le **27/05**, dans 2 j).
+  Marquer SLOT LIBÉRÉ **uniquement** si confirmation de silence total.
+- **Priorité #4** : décider si le gel "nouveaux contacts" (théoriquement levé le
+  18/05) est rouvert ou maintenu tant que les conversations chaudes ne sont pas
+  tranchées.
+- Radar W22 : 0 cible scorée livrée (verrou de vérification environnement —
+  détail dans `outreach/drafts/2026-05-25_radar-W22.md`). Pistes à qualifier :
+  speakers IAPP AIGG Europe Dublin 1–4/6 et Paris Conference 11–12/6.
+
 ## Actions Audric cette semaine (S19)
 
 - **Priorité #1** : préparer l'appel Alexandra Iteanu (récit fondateur + 3 questions précises à envoyer 24h avant + lignes rouges en cas de questions techniques juridiques pointues). Session de prépa Claude le **04/05 ou 05/05 soir**.
@@ -154,6 +176,26 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 ---
 
 ## Journal hebdomadaire
+
+### W22 (2026-05-25 → 2026-05-31)
+
+**Outreach Radar lundi 25/05** : semaine faible assumée, **0 cible scorée**.
+Verrou de vérification depuis l'environnement d'exécution (WebFetch 403 sur les
+pages speakers de conférences ; WebSearch limité aux résumés génériques ; pas de
+Hunter ; LinkedIn fermé). Conformément à "0 invention" + "3 excellentes >
+5 médiocres", aucune cible inventée. Livré à la place : sync temporelle du
+pipeline + liste de sources vérifiables à qualifier par Audric (speakers IAPP
+AIGG Europe Dublin 1–4/6 ; Paris Conference 11–12/6 ; tribunes Usine Digitale
+07/05 et Silicon.fr mai). Détail : `outreach/drafts/2026-05-25_radar-W22.md`.
+
+**Constat dérive** : pipeline figé au 04/05 (21 j sans sync). Le cron du radar
+ne tourne plus depuis W18 (déjà signalé) — donc probablement KO sur W19/W20/W21
+aussi. À investiguer. Aucun statut de contact modifié ce jour faute d'accès à
+l'état réel des réponses (Gmail/LinkedIn d'Audric inaccessibles d'ici).
+
+**Échéances mécaniques au 25/05 (à confirmer par Audric avant action)** : gel
+nouveaux contacts levé le 18/05 ; Erdem 35 j échu (18/05) ; Mattioli/Rogers/
+Zappellini/Rice 35 j le 27/05 ; appel Iteanu (5/6 mai) d'issue inconnue = item #1.
 
 ### W17 (2026-04-20 → 2026-04-26)
 
@@ -201,6 +243,11 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-05-25 (v6.1)** : Sync temporelle W22 (additive, **aucun statut modifié**).
+  Ajout actions S22 + journal W22 + constat dérive (pipeline figé 21 j, cron radar
+  KO). Radar W22 = 0 cible scorée (verrou vérification environnement). Auteur :
+  session Claude Outreach Radar du 25/05. Source de vérité des réponses depuis le
+  04/05 = Audric (Gmail/LinkedIn inaccessibles d'ici).
 - **2026-05-04 (v6.0)** : SYNCHRO POST-S18. Adnan SORTI FUNNEL (Centurian.ai, reclassé partner LT). Iteanu : nom corrigé en Alexandra Iteanu (associée, pas Olivier), passage EN COURS HUMAIN, appel calé 5 ou 6/5. Hubert : passage EN COURS HUMAIN (échanges en cours). Gauthier : SLOT LIBÉRÉ anticipé (canal email jamais activé, anti-dilution). Compteur funnel actif passé de 21 à 17 contacts en suivi. Auteur : Audric via session Claude Opus du 4/05 matin.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 intégrés. Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu.
