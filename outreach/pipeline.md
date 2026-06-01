@@ -1,6 +1,9 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés, 4 conversations actives (Alexandra Iteanu — appel calé 5 ou 6/5 ; Gabriel Hubert/Dust — échange en cours ; Rémi Stefanini/CNIL — fenêtre réponse ouverte ; Adnan Khan/Equinix — reclassé partner LT)**.
+> **⚠️ DRIFT 4 SEMAINES — sync requise avant tout nouvel envoi**
+> Dernier update v6.0 : 04/05/2026. Aujourd'hui : **01/06/2026 (S22)**. Outreach Radar n'a pas tourné W19/W20/W21 (anomalie cron déjà notée 04/05). État réel des 3 conversations chaudes (Iteanu 5-6/05, Hubert, Stefanini) inconnu depuis 28 jours. **Toutes les dates « SLOT LIBÉRÉ » listées dans la section « Dates clés » sont théoriquement atteintes mais à confirmer manuellement par Audric avant arbitrage.** Voir section « Questions de synchro Audric W22 » en bas.
+
+Objectif: 5 Design Partners signés. Statut **figé au 04/05/2026** : 0/5 signés, 3 conversations chaudes (Iteanu appel 5-6/05 ; Hubert/Dust ; Stefanini/CNIL fenêtre ouverte) + 1 reclassement partner LT (Adnan Khan/Centurian). **État réel au 01/06 = à confirmer.**
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
@@ -74,6 +77,7 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | 2026-04-27 | **Gabriel Hubert** | Dust.tt | CEO Dust | LinkedIn message direct → échanges LinkedIn | **EN COURS HUMAIN** | 2026-04-29 (Audric 2e message : question seuil clients juristes vs métier) | Hubert a répondu 28/04 sur 1er message d'Audric : "ça dépend des tâches/de l'impact". Audric a contre-questionné 29/04 sur où il voit le seuil entre clients juristes vs métier dans l'usage agent. **En attente retour Hubert.** Cooldown 90j maintenu. |
 | 2026-04-27 | Bruno Sportisse | Inria | PDG Inria (3000 personnes) | LinkedIn note connexion | ENVOYÉ | 2026-04-27 | PDG institution publique. Note seulement. Email pattern probable bruno.sportisse@inria.fr mais filtré par secrétariat. Pas de canal alt envisagé. SLOT LIBÉRÉ 01/06. |
 | 2026-04-21 (proposé W17) | Pierre Houlès | Kering | Luxe (CAC40) | — | SKIP | — | Trigger 35j hors fenêtre. Audric a arbitré NON. |
+| 2026-06-01 (proposé W22) | Yann Lechelle | Probabl (spin-off Inria, scikit-learn) | Écosystème IA open source FR | — | **PROPOSÉ W22** | — | CEO Probabl, board Hub France IA. Trigger : tribune Maddyness 12/05/2026 « Tribune Debunk #2 » — pitch quasi-identique à AMR (imputabilité, AI Act, « ce nom est celui que la justice interrogera »). LinkedIn https://www.linkedin.com/in/ylechelle/ à vérifier visuellement (direct vs InMail). Email non CONFIRMÉ. Voir draft `2026-06-01_lechelle.md`. **Cible « partenaire écosystème », pas deployer AI Act classique — arbitrage Audric requis.** |
 
 ---
 
@@ -153,6 +157,30 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ---
 
+## Actions Audric cette semaine (S22 — Radar W22 du 01/06/2026)
+
+**Contexte** : 28 jours de gap depuis dernier sync. Le Radar W22 livre **une seule cible nouvelle** (Lechelle) au lieu de 5 — décision assumée : sans pipeline à jour ni accès LinkedIn direct pour vérifier les triggers individuels, livrer 5 cibles serait inventer. Mieux : 1 cible solide + sync rigoureuse.
+
+- **Priorité #1 — SYNCHRO** : avant tout nouvel envoi, répondre aux 5 questions de la section « Questions de synchro Audric W22 » ci-dessous. Sans ça, l'arbitrage SLOT LIBÉRÉ est aveugle.
+- **Priorité #2 — Lechelle (si arbitré OUI par Audric)** : vérifier visuellement le bouton « Message » sur https://www.linkedin.com/in/ylechelle/ puis envoyer la version longue (750c) du draft `2026-06-01_lechelle.md`. Si pas de bouton Message → note InMail 180c. Pas d'email cette semaine (non confirmé).
+- **Priorité #3 — Arbitrage Lechelle DP strict vs partenaire écosystème** : il n'est pas deployer AI Act classique. Avant d'envoyer, Audric décide si la cible vise un slot DP (5 places) ou un slot partenaire écosystème séparé (comme Adnan Khan / Centurian reclassé partner LT).
+- **Priorité #4 — Réflexion sur les SLOTS LIBÉRÉS atteints** : 14 contacts envoyés du 22/04 au 27/04 ont théoriquement atteint 35j. Selon réponses Audric, soit (a) certains ont répondu entre-temps et restent en suivi humain, soit (b) silence confirmé → SLOT LIBÉRÉ effectif → relance Outreach Radar W23 sur fondations propres.
+- **Priorité #5 — Anomalie cron Outreach Radar** : le radar n'a pas tourné depuis W18. À investiguer dès que capacité dispo (non bloquant cette semaine).
+
+---
+
+## Questions de synchro Audric W22 (à répondre avant tout nouvel envoi)
+
+Sans ces réponses, le radar W23 sera lui aussi à l'aveugle. Préférable de poser explicitement plutôt que d'extrapoler.
+
+1. **Iteanu — appel 5 ou 6/05** : a-t-il eu lieu ? Si oui, contenu et suite (DP signé, en réflexion, déclinée) ?
+2. **Hubert/Dust** : retour reçu sur la question seuil clients juristes vs métier (29/04) ? Conversation toujours active ?
+3. **Stefanini/CNIL** : réponse reçue dans la fenêtre 04/05 → 18/05 ? Si silence, statut actuel ?
+4. **Contacts 22/04 → 27/04 (vague de 14 cibles)** : combien ont répondu ? Liste précise des répondants vs silencieux confirmés (impact direct sur quels SLOTS sont libérés au 01/06).
+5. **Erdem/Remedi Finance** : a-t-il répondu au mail du 23/04 ? SLOT LIBÉRÉ devait être effectif au 18/05 si silence.
+
+---
+
 ## Journal hebdomadaire
 
 ### W17 (2026-04-20 → 2026-04-26)
@@ -170,6 +198,25 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 **Wave 1 dimanche 26/04** : ajout 3 cibles (Polu/Dust, G'sell/SciencesPo, Salathé/EPFL) hors radar habituel, à l'initiative d'Audric.
 
 **Volume W17 effectif** : 11 cibles contactées.
+
+### W22 (2026-06-01 → 2026-06-07) — radar relancé après 4 semaines d'anomalie cron
+
+**Lundi 01/06** :
+- Radar W22 livré avec **1 cible nouvelle** (Yann Lechelle / Probabl) au lieu de 5. Décision assumée : sans pipeline à jour ni vérification LinkedIn directe individuelle possible, livrer 5 cibles aurait violé la contrainte « 0 invention de contact ». Voir draft `2026-06-01_lechelle.md`.
+- **Alerte drift** placée en tête du pipeline.md : sync requise (5 questions Audric ci-dessus).
+- **Aucune relance proposée** : règle fondatrice respectée (pas de relance froide).
+- **Aucun SLOT LIBÉRÉ marqué automatiquement** : besoin de confirmation Audric pour les 14 contacts du 22/04 → 27/04 qui ont théoriquement atteint 35j (certains ont peut-être répondu sur Gmail entre 04/05 et 01/06, info non remontée dans pipeline).
+- Trigger event identifié pour Lechelle : tribune Maddyness 12/05/2026, sujet identique à AMR (imputabilité agents IA, AI Act).
+
+**Triggers macro vérifiés et utilisables comme accroche W23+** (si Audric veut continuer dans cette veine) :
+- 07/05/2026 : accord politique Conseil/Parlement Digital Omnibus → report AI Act Annex III au 02/12/2027 (Annex I au 02/08/2028)
+- 19/05/2026 : Commission EU publie draft guidelines classification high-risk AI + consultation publique ouverte jusqu'au 23/06/2026
+
+**Cibles candidates écartées cette semaine (motif documenté)** :
+- Thibaut Mercier (Drouot Avocats, tribune Bpifrance Big Media mai 2026 sur AI Act/Omnibus) : redondant avec Iteanu Avocats en cours humain. Reportée si Iteanu décline.
+- Yacine Touati (CTO « SpotOn », tribune Maddyness 26/05) : entreprise « SpotOn » ambigüe (US vs FR), pas vérifiable comme EU AI Act target. SKIP.
+- Naaia (plateforme SaaS gouvernance IA FR) : concurrent direct (gouvernance/conformité), pas DP. SKIP cooldown nature.
+- Alberto Tepox (Hub France IA, chef projet livre blanc « Agents experts IA ») : trigger principal = présentation 27/04/2026 = J-35, **hors fenêtre <30j**. Reportable si activité plus fraîche détectée.
 
 ### W18 (2026-04-27 → 2026-05-03)
 
@@ -201,6 +248,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-06-01 (v6.1 — radar W22)** : ALERTE drift 4 semaines en tête de fichier. +1 cible proposée (Lechelle / Probabl) avec trigger Maddyness 12/05/2026. Section « Questions de synchro Audric W22 » ajoutée — sync requise avant nouvel envoi ou avant arbitrage SLOT LIBÉRÉ massif. Aucun SLOT LIBÉRÉ marqué automatiquement (Audric doit confirmer silence vs réponse pour les 14 contacts du 22-27/04). Auteur : Outreach Radar W22 (session 01/06 matin).
 - **2026-05-04 (v6.0)** : SYNCHRO POST-S18. Adnan SORTI FUNNEL (Centurian.ai, reclassé partner LT). Iteanu : nom corrigé en Alexandra Iteanu (associée, pas Olivier), passage EN COURS HUMAIN, appel calé 5 ou 6/5. Hubert : passage EN COURS HUMAIN (échanges en cours). Gauthier : SLOT LIBÉRÉ anticipé (canal email jamais activé, anti-dilution). Compteur funnel actif passé de 21 à 17 contacts en suivi. Auteur : Audric via session Claude Opus du 4/05 matin.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 intégrés. Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu.
