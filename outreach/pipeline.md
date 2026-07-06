@@ -1,6 +1,14 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés, 4 conversations actives (Alexandra Iteanu — appel calé 5 ou 6/5 ; Gabriel Hubert/Dust — échange en cours ; Rémi Stefanini/CNIL — fenêtre réponse ouverte ; Adnan Khan/Equinix — reclassé partner LT)**.
+> ⚠️ **DÉRIVE PIPELINE CRITIQUE — 2 MOIS**
+> Dernière synchro : v6.0 du 2026-05-04. Aujourd'hui : 2026-07-06 = **~2 mois de dérive**.
+> Le brief W28 (2026-07-06) indique **1 DP signé / 5 slots** (4 restants) — le pipeline lui affichait 0/5 en date du 04/05.
+> Aucun statut Iteanu / Hubert / Stefanini / autres cibles W17-W18 ne peut être mis à jour sans confirmation Audric.
+> **Action Audric AVANT toute nouvelle sortie** : synchroniser l'état réel des 3 conversations chaudes de mai + identifier le DP signé.
+> Tous les cooldowns 90j des contacts W17-W18 sont **encore actifs** (expiration 2026-07-13 → 2026-07-27) — aucun re-contact possible cette semaine.
+
+Objectif: 5 Design Partners signés. Statut au dernier sync (04/05) : **0/5 signés, 4 conversations actives (Alexandra Iteanu — appel calé 5 ou 6/5 ; Gabriel Hubert/Dust — échange en cours ; Rémi Stefanini/CNIL — fenêtre réponse ouverte ; Adnan Khan/Equinix — reclassé partner LT)**.
+Statut brief W28 : **1/5 signés (à identifier), 4 slots restants**.
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
@@ -74,6 +82,8 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | 2026-04-27 | **Gabriel Hubert** | Dust.tt | CEO Dust | LinkedIn message direct → échanges LinkedIn | **EN COURS HUMAIN** | 2026-04-29 (Audric 2e message : question seuil clients juristes vs métier) | Hubert a répondu 28/04 sur 1er message d'Audric : "ça dépend des tâches/de l'impact". Audric a contre-questionné 29/04 sur où il voit le seuil entre clients juristes vs métier dans l'usage agent. **En attente retour Hubert.** Cooldown 90j maintenu. |
 | 2026-04-27 | Bruno Sportisse | Inria | PDG Inria (3000 personnes) | LinkedIn note connexion | ENVOYÉ | 2026-04-27 | PDG institution publique. Note seulement. Email pattern probable bruno.sportisse@inria.fr mais filtré par secrétariat. Pas de canal alt envisagé. SLOT LIBÉRÉ 01/06. |
 | 2026-04-21 (proposé W17) | Pierre Houlès | Kering | Luxe (CAC40) | — | SKIP | — | Trigger 35j hors fenêtre. Audric a arbitré NON. |
+| 2026-07-06 (proposé W28) | Florian Cordel | Cegid | Éditeur logiciels RH/paie/finance (GE FR) | — | **PROPOSÉ W28** | — | Trigger : VivaTech 17-20/06 annonce Cegid×Mistral pour agents IA HR explicables face à AI Act. Quote publique alignée AMR ("auditer sa conformité"). RH = Annexe III direct. Draft : `outreach/drafts/2026-07-06_cordel.md`. Email PROBABLE (pattern prenom.nom@cegid.com, à valider Hunter). Score 82/100. |
+| 2026-07-06 (proposé W28) | Benjamin Bosch | Société Générale | Banque CAC40 | — | **PROPOSÉ W28** | — | Trigger : co-contributeur Notice Gouvernance des Agents IA du Hub France IA (publication récente, ID LinkedIn activité 7348…). Banque + agents = pivot conceptuel AMR. Draft : `outreach/drafts/2026-07-06_bosch.md`. Email PROBABLE (pattern benjamin.bosch@socgen.com, à valider Hunter). Score 84/100. |
 
 ---
 
@@ -201,6 +211,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 ## Changelog pipeline
 
+- **2026-07-06 (v6.1 — dérive 2 mois signalée)** : Radar W28 tourne pour la première fois depuis W17. Ajout bandeau dérive en tête. Ajout 2 propositions W28 (Cordel/Cegid, Bosch/SG) — délibérément 2 cibles solides plutôt que 5 tièdes (règle "3 excellentes > 5 médiocres" appliquée strictement, ajustée à 2 car seul ce nombre a passé le filtre trigger <30j). Aucun statut W17-W18 modifié : à synchroniser par Audric avant tout envoi. Auteur : Radar Outreach cron.
 - **2026-05-04 (v6.0)** : SYNCHRO POST-S18. Adnan SORTI FUNNEL (Centurian.ai, reclassé partner LT). Iteanu : nom corrigé en Alexandra Iteanu (associée, pas Olivier), passage EN COURS HUMAIN, appel calé 5 ou 6/5. Hubert : passage EN COURS HUMAIN (échanges en cours). Gauthier : SLOT LIBÉRÉ anticipé (canal email jamais activé, anti-dilution). Compteur funnel actif passé de 21 à 17 contacts en suivi. Auteur : Audric via session Claude Opus du 4/05 matin.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 intégrés. Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu.
