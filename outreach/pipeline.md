@@ -56,23 +56,23 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | 2026-04-22 | Rémi Stefanini | CNIL (DTIA) | Régulateur | LinkedIn 22/04 → Email institutionnel 24/04 | **EN COURS HUMAIN (fenêtre réponse ouverte)** | 2026-04-24 (email envoyé, autoreply reçu : absent jusqu'au 30/04 ; **retour effectif 04/05 = aujourd'hui**) | Directeur DTIA CNIL. Fenêtre réponse réaliste : 04/05 → 18/05. Surveillance passive. Backups Toubiana / Della-Valle nommés mais NE PAS contacter. Confidentialité absolue. |
 | 2026-04-14 | Erdem Yağan | Remedi Finance | Fintech healthcare BNPL (UK/TR) | LinkedIn (EN) puis email 23/04 | CANAL ALT TENTÉ | 2026-04-23 (email depuis audric@mandatia.eu) | CEO Remedi = BNPL cliniques + e-KYC + credit scoring = AI Act Annex III pt 5. Email public vérifié erdem@remedifinance.com. Si silence total 18/05 : SLOT LIBÉRÉ. |
 | 2026-04-14 | Gauthier Henroz | Chift | API finance pour agents IA (Belgique) | LinkedIn direct (FR) | **SLOT LIBÉRÉ anticipé** | 2026-04-14 | **Décision 04/05** : canal email Chift prévu 28/04 jamais activé (anti-dilution face à 2 conversations chaudes Iteanu + Hubert). 20j silence LinkedIn ce jour. Slot libéré explicitement plutôt que de tenter un 2e canal en retard sur prospect tiède. Cooldown 90j maintenu jusqu'au 13/07. |
-| 2026-04-22 | Juliette Mattioli | Thales | Défense / tech souveraine (CAC40) | LinkedIn direct | ENVOYÉ | 2026-04-22 | Atteint 12j silence aujourd'hui. Fenêtre canal alt s'ouvre 06/05 (14j). Email probable juliette.mattioli@thalesgroup.com (94,5%). Valider Hunter avant tout envoi. SLOT LIBÉRÉ 27/05 si silence total. |
-| 2026-04-22 | Ian Rogers | Ledger | Fintech sécurité hardware | LinkedIn note connexion 193c | ENVOYÉ | 2026-04-22 | Profil fermé. 12j silence. Fenêtre canal alt 06/05. Email probable ian.rogers@ledger.com (72,9%) ou @ledger.fr (51,2%). Valider Hunter. SLOT LIBÉRÉ 27/05. |
-| 2026-04-22 | Aldrick Zappellini | Groupe Crédit Agricole | Banque mutualiste | LinkedIn InMail | ENVOYÉ | 2026-04-22 | 12j silence. Fenêtre canal alt 06/05. Email probable aldrick.zappellini@credit-agricole.com (89%). Valider Hunter. SLOT LIBÉRÉ 27/05. |
-| 2026-04-22 | David Rice | HSBC | Banque universelle (UK) | LinkedIn InMail | ENVOYÉ | 2026-04-22 | 12j silence. Fenêtre canal alt 06/05. Email probable david.rice@hsbc.com (71%). Risque doublon nom. Valider Hunter. SLOT LIBÉRÉ 27/05. |
-| 2026-04-26 | Stanislas Polu | Dust.tt | Plateforme agents B2B (FR) | LinkedIn message direct | ENVOYÉ | 2026-04-26 | CTO Dust. 8j silence. **Note** : Hubert (CEO Dust) a répondu, donc équipe Dust a vu AMR — Polu probablement au courant. Si silence 10/05 : ne PAS tenter email Polu (Hubert canal principal Dust). SLOT LIBÉRÉ 31/05. |
-| 2026-04-26 | Florence G'sell | Sciences Po | Académique gouvernance IA | LinkedIn message direct | ENVOYÉ | 2026-04-26 | Professeure droit IA. 8j silence. Fenêtre canal alt 10/05. Email probable florence.gsell@sciencespo.fr. SLOT LIBÉRÉ 31/05. |
-| 2026-04-26 | Marcel Salathé | EPFL | Académique IA Suisse | LinkedIn note connexion 200c | ENVOYÉ | 2026-04-26 | Profil fermé, note seulement. Attente acceptation connexion. Si pas accepté à J+14 (10/05) : tenter email marcel.salathe@epfl.ch. SLOT LIBÉRÉ 31/05. |
-| 2026-04-27 | Christine Balagué | IMT-BS | Académique chaire Good in Tech | Email institutionnel | ENVOYÉ | 2026-04-27 | christine.balague@imt-bs.eu (vérifié multi-source). 7j silence. Pas de canal alt prévu (email = canal principal). SLOT LIBÉRÉ 01/06. |
+| 2026-04-22 | Juliette Mattioli | Thales | Défense / tech souveraine (CAC40) | LinkedIn direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-22 | **Slot libéré 2026-07-13** (silence total 82j LinkedIn, seuil 35j dépassé de 47j — auto tracker sur pipeline stale depuis 04/05). Remplaçant à proposer par Outreach Radar W29. Email probable juliette.mattioli@thalesgroup.com (94,5%) à valider Hunter si cible réactivée. Historique : fenêtre canal alt s'ouvrait 06/05, jamais activée (STOP nouveaux contacts jusqu'au 18/05). |
+| 2026-04-22 | Ian Rogers | Ledger | Fintech sécurité hardware | LinkedIn note connexion 193c | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-22 | **Slot libéré 2026-07-13** (silence 82j LinkedIn, profil fermé — auto tracker sur pipeline stale). Remplaçant Outreach Radar W29. Email probable ian.rogers@ledger.com (72,9%) ou @ledger.fr (51,2%) à valider Hunter si cible réactivée. |
+| 2026-04-22 | Aldrick Zappellini | Groupe Crédit Agricole | Banque mutualiste | LinkedIn InMail | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-22 | **Slot libéré 2026-07-13** (silence 82j LinkedIn InMail — auto tracker sur pipeline stale). Remplaçant Outreach Radar W29. Email probable aldrick.zappellini@credit-agricole.com (89%) à valider Hunter si cible réactivée. |
+| 2026-04-22 | David Rice | HSBC | Banque universelle (UK) | LinkedIn InMail | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-22 | **Slot libéré 2026-07-13** (silence 82j LinkedIn InMail — auto tracker sur pipeline stale). Remplaçant Outreach Radar W29. Email probable david.rice@hsbc.com (71%) à valider Hunter — risque doublon nom, à investiguer. |
+| 2026-04-26 | Stanislas Polu | Dust.tt | Plateforme agents B2B (FR) | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-26 | **Slot libéré 2026-07-13** (silence 78j LinkedIn — auto tracker sur pipeline stale). CTO Dust. **NE PAS tenter email Polu** : Hubert (CEO Dust) reste le canal principal Dust (EN COURS HUMAIN). Remplaçant Outreach Radar W29 hors écosystème Dust. |
+| 2026-04-26 | Florence G'sell | Sciences Po | Académique gouvernance IA | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-26 | **Slot libéré 2026-07-13** (silence 78j LinkedIn — auto tracker sur pipeline stale). Professeure droit IA. Email probable florence.gsell@sciencespo.fr à valider Hunter si cible réactivée (canal alt fenêtre 10/05 jamais activée). Remplaçant Outreach Radar W29. |
+| 2026-04-26 | Marcel Salathé | EPFL | Académique IA Suisse | LinkedIn note connexion 200c | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-26 | **Slot libéré 2026-07-13** (silence 78j — auto tracker sur pipeline stale). Connexion probablement jamais acceptée (profil fermé, note seulement). Email marcel.salathe@epfl.ch à valider Hunter si cible réactivée. Remplaçant Outreach Radar W29. |
+| 2026-04-27 | Christine Balagué | IMT-BS | Académique chaire Good in Tech | Email institutionnel | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j email — auto tracker sur pipeline stale). christine.balague@imt-bs.eu déjà utilisé (email = canal principal, pas de canal alt à tenter). Remplaçant Outreach Radar W29. |
 | 2026-04-27 | **Alexandra Iteanu** | Iteanu Avocats | Avocate à la Cour — Numérique / Cybersécurité / Data / IA — Chargée d'enseignement Master 2 Droit des données Sorbonne — AFCDP | Email cabinet → Email perso | **EN COURS HUMAIN** | 2026-04-28 (réponse Alexandra : "le point que vous soulevez de la responsabilité et du mandat est fondamental, échangeons rapidement de vive voix") | Réponse de l'associée d'Olivier Iteanu (le mail initial avait été envoyé "À l'attention de Maître Iteanu" → transmis à Alexandra). **APPEL CADRÉ** : créneaux proposés 5 ou 6/5 17h30-18h30 (mail Audric 30/04). En attente confirmation date ferme. **3 questions précises à envoyer 24h avant l'appel** (préparation Claude session 4/5 soir). Tel direct fourni : 06.43.90.40.24. Confidentialité avocat-client envisagée pour DP. |
-| 2026-04-27 | Vincent Strubel | ANSSI | Régulateur cybersécurité | LinkedIn message direct | ENVOYÉ | 2026-04-27 | DG ANSSI. 7j silence. Pas de relance froide ni d'email institutionnel envisagé (PDG cible). SLOT LIBÉRÉ 01/06. |
-| 2026-04-27 | Anne Bouverot | AI Action Summit France | Gouvernance IA | LinkedIn message direct | ENVOYÉ | 2026-04-27 | 7j silence. Pas de canal alt prévu. SLOT LIBÉRÉ 01/06. |
-| 2026-04-27 | Cédric O | Ex-Sec d'État Numérique / board Mistral | Souveraineté IA / politique | LinkedIn note connexion | ENVOYÉ | 2026-04-27 | Profil fermé probable, note seulement. Attente acceptation. Si pas accepté à J+14 : NE PAS chercher email (politique/PDG, ne marchera pas). SLOT LIBÉRÉ 01/06. |
-| 2026-04-27 | Henri d'Agrain | Cigref | Délégué général Cigref (DSI 150 grandes entreprises FR) | LinkedIn message direct | ENVOYÉ | 2026-04-27 | Profil ouvert. Cible stratégique. Si silence 11/05 : tenter email institutionnel cigref. SLOT LIBÉRÉ 01/06. |
-| 2026-04-27 | Tariq Krim | Indépendant souveraineté num. | Influenceur / commentateur | LinkedIn message direct | ENVOYÉ | 2026-04-27 | Profil ouvert. 7j silence. Pas de canal alt facile (pas d'employeur fixe). SLOT LIBÉRÉ 01/06. |
-| 2026-04-27 | Stéphane Distinguin | Fabernovel / French Tech | Conseil + écosystème AI Action Summit | LinkedIn message direct | ENVOYÉ | 2026-04-27 | Profil ouvert. 7j silence. Si silence 11/05 : email probable stephane.distinguin@fabernovel.com à valider Hunter. SLOT LIBÉRÉ 01/06. |
+| 2026-04-27 | Vincent Strubel | ANSSI | Régulateur cybersécurité | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j LinkedIn — auto tracker sur pipeline stale). DG ANSSI. Pas d'email PDG envisagé (cible filtrée par secrétariat). Remplaçant Outreach Radar W29. |
+| 2026-04-27 | Anne Bouverot | AI Action Summit France | Gouvernance IA | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j LinkedIn — auto tracker sur pipeline stale). Aucun canal alt prévu. Remplaçant Outreach Radar W29. |
+| 2026-04-27 | Cédric O | Ex-Sec d'État Numérique / board Mistral | Souveraineté IA / politique | LinkedIn note connexion | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j — auto tracker sur pipeline stale). Connexion probablement jamais acceptée. NE PAS chercher email (politique/PDG, ne marchera pas). Remplaçant Outreach Radar W29. |
+| 2026-04-27 | Henri d'Agrain | Cigref | Délégué général Cigref (DSI 150 grandes entreprises FR) | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j LinkedIn — auto tracker sur pipeline stale). Cible stratégique DSI CAC40. Email institutionnel Cigref à valider Hunter avant abandon définitif — envisager avant tirer un remplaçant. Remplaçant Outreach Radar W29 si Hunter négatif. |
+| 2026-04-27 | Tariq Krim | Indépendant souveraineté num. | Influenceur / commentateur | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j LinkedIn — auto tracker sur pipeline stale). Pas de canal email facile (pas d'employeur fixe). Remplaçant Outreach Radar W29. |
+| 2026-04-27 | Stéphane Distinguin | Fabernovel / French Tech | Conseil + écosystème AI Action Summit | LinkedIn message direct | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j LinkedIn — auto tracker sur pipeline stale). Email probable stephane.distinguin@fabernovel.com à valider Hunter si cible réactivée. Remplaçant Outreach Radar W29. |
 | 2026-04-27 | **Gabriel Hubert** | Dust.tt | CEO Dust | LinkedIn message direct → échanges LinkedIn | **EN COURS HUMAIN** | 2026-04-29 (Audric 2e message : question seuil clients juristes vs métier) | Hubert a répondu 28/04 sur 1er message d'Audric : "ça dépend des tâches/de l'impact". Audric a contre-questionné 29/04 sur où il voit le seuil entre clients juristes vs métier dans l'usage agent. **En attente retour Hubert.** Cooldown 90j maintenu. |
-| 2026-04-27 | Bruno Sportisse | Inria | PDG Inria (3000 personnes) | LinkedIn note connexion | ENVOYÉ | 2026-04-27 | PDG institution publique. Note seulement. Email pattern probable bruno.sportisse@inria.fr mais filtré par secrétariat. Pas de canal alt envisagé. SLOT LIBÉRÉ 01/06. |
+| 2026-04-27 | Bruno Sportisse | Inria | PDG Inria (3000 personnes) | LinkedIn note connexion | **SLOT LIBÉRÉ (2026-07-13)** | 2026-04-27 | **Slot libéré 2026-07-13** (silence 77j — auto tracker sur pipeline stale). PDG institution publique. Connexion probablement jamais acceptée. Email bruno.sportisse@inria.fr filtré par secrétariat. Remplaçant Outreach Radar W29. |
 | 2026-04-21 (proposé W17) | Pierre Houlès | Kering | Luxe (CAC40) | — | SKIP | — | Trigger 35j hors fenêtre. Audric a arbitré NON. |
 
 ---
@@ -80,13 +80,14 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 ## Compteur Design Partners
 
 - Signés: **0 / 5**
-- **Conversations actives** : **3 chaudes** (Alexandra Iteanu — appel 5 ou 6/5 ; Gabriel Hubert — échanges en cours ; Rémi Stefanini — fenêtre réponse ouverte)
+- **Conversations actives** : **3 chaudes** (Alexandra Iteanu — appel 5 ou 6/5 ; Gabriel Hubert — échanges en cours ; Rémi Stefanini — fenêtre réponse ouverte) **⚠️ statuts figés depuis 04/05, non révisés depuis 69j — état réel inconnu du pipeline**
 - **Reclassement partner LT** : 1 (Adnan Khan / Centurian)
-- Messages ENVOYÉS sans retour : 14 (en attente naturelle, pas de relance froide)
-- Canal alt email tenté : 1 (Erdem) → silence
-- SLOT LIBÉRÉ anticipé : 1 (Gauthier Henroz / Chift)
+- Messages ENVOYÉS sans retour : ~~14~~ **0** (les 15 ENVOYÉ ont basculé SLOT LIBÉRÉ auto le 2026-07-13)
+- Canal alt email tenté : 1 (Erdem) → silence 81j (à arbitrer manuellement — hors périmètre auto tracker)
+- SLOT LIBÉRÉ anticipé (Audric) : 1 (Gauthier Henroz / Chift)
+- **SLOT LIBÉRÉ auto tracker (2026-07-13)** : 15 (Mattioli, Rogers, Zappellini, Rice, Polu, G'sell, Salathé, Balagué, Strubel, Bouverot, Cédric O, d'Agrain, Krim, Distinguin, Sportisse)
 
-**FUNNEL RÉEL** : 17 contacts en suivi actif (21 envoyés - Adnan SORTI - Gauthier libéré - Houlès SKIP). 3 conversations chaudes dont 1 RDV calé. **STOP nouveaux contacts jusqu'au 18/05** (priorité = cadrer correctement Iteanu + Hubert + Stefanini si elle répond).
+**FUNNEL RÉEL post-tracker 2026-07-13** : **3 contacts en suivi actif** (les 3 EN COURS HUMAIN, statuts non touchés) + 15 slots à remplir + Erdem à arbitrer. **Priorité absolue** : resynchroniser le pipeline avec l'état réel off-Claude avant que Outreach Radar W29 ne commande 15 remplaçants sur des données stale de 69j.
 
 ---
 
@@ -95,7 +96,7 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 - Equinix → Centurian.ai (Adnan, 2026-04-15) — cooldown 2026-07-14 (mais reclassé partner LT)
 - CNIL (Stefanini, 2026-04-22 LinkedIn + 2026-04-24 email) — cooldown 2026-07-23
 - Remedi Finance (Erdem, 2026-04-14 LinkedIn + 2026-04-23 email) — cooldown 2026-07-22
-- Chift (Gauthier, 2026-04-14) — cooldown 2026-07-13
+- Chift (Gauthier, 2026-04-14) — cooldown 2026-07-13 (**expire aujourd'hui**)
 - Thales (Mattioli, 2026-04-22) — cooldown 2026-07-21
 - Ledger (Rogers, 2026-04-22) — cooldown 2026-07-21
 - Crédit Agricole (Zappellini, 2026-04-22) — cooldown 2026-07-21
@@ -141,6 +142,7 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 | 2026-05-27 | Mattioli, Rogers, Zappellini, Rice atteignent 35j silence → SLOT LIBÉRÉ |
 | 2026-05-31 | Polu, G'sell, Salathé atteignent 35j → SLOT LIBÉRÉ |
 | 2026-06-01 | 9 contacts du 27/04 atteignent 35j → SLOT LIBÉRÉ massif |
+| **2026-07-13 (RUN TRACKER)** | Bascule auto ENVOYÉ→SLOT LIBÉRÉ appliquée sur les 15 contacts encore en ENVOYÉ dans un pipeline stale depuis 04/05 (69j). Aucune garantie que ces contacts n'aient pas évolué (CONVERTI/DÉCLINÉ/etc.) hors Claude Code. |
 
 ---
 
@@ -197,10 +199,23 @@ Ces noms sont connus via l'autoreply institutionnel de Stefanini. **NE JAMAIS le
 
 **Drift detector v2** : déployé 29/04. Aucune issue créée à ce jour malgré 6 PR Reply Tracker open ; bug de robustesse à investiguer mais non bloquant (la couche 3 prompt Reply Tracker fait le job en parallèle).
 
+### W28 (2026-07-06 → 2026-07-12) — dérive persistante
+
+**Constat au 13/07/2026** : le pipeline.md n'a reçu aucun commit depuis le 04/05 (69 jours). Le Reply Tracker a produit 12 PR quasi-identiques (#98 → #109) sur cette même base stale, toutes ouvertes et non mergées. L'Outreach Radar W28 (PR #103) a proposé 2 nouvelles cibles (Bosch/SG, Cordel/Cegid) mais réclame lui-même la resynchro avant tout envoi.
+
+Aucune trace d'évolution off-Claude des 3 conversations chaudes de mai (Iteanu, Hubert, Stefanini). Impossible pour ce tracker de savoir si :
+- L'appel Iteanu 5-6/5 a eu lieu (et son issue) ;
+- Hubert a répondu à la question seuil juristes/métier du 29/04 ;
+- Stefanini a répondu dans la fenêtre 04-18/05 ;
+- Des DP ont été signés (le brief W28 mentionne 1/5 signés — non tracé ici).
+
+Ce commit du 2026-07-13 pousse la 13ᵉ bascule mécanique SLOT LIBÉRÉ auto (15 contacts, seuil 35j dépassé de 40-47j). **La valeur informationnelle nette est nulle** vis-à-vis des 12 PR précédentes.
+
 ---
 
 ## Changelog pipeline
 
+- **2026-07-13 (v6.1 — bascule auto tracker, aucune synchro humaine)** : 15 contacts ENVOYÉ → SLOT LIBÉRÉ (seuils 35j dépassés de 40-47j sur un pipeline stale de 69j). 3 EN COURS HUMAIN (Iteanu, Hubert, Stefanini) NON touchés (statuts hors périmètre auto). Erdem (CANAL ALT TENTÉ 81j) NON touché (statut hors périmètre auto — à arbitrer manuellement). **⚠️ Ce commit ne représente PAS une synchro réelle** : il applique mécaniquement la règle 35j sur des données obsolètes de 69j. Toute évolution off-Claude entre le 04/05 et le 13/07 n'y figure pas. Auteur : Reply Tracker (Claude Code, session automatique).
 - **2026-05-04 (v6.0)** : SYNCHRO POST-S18. Adnan SORTI FUNNEL (Centurian.ai, reclassé partner LT). Iteanu : nom corrigé en Alexandra Iteanu (associée, pas Olivier), passage EN COURS HUMAIN, appel calé 5 ou 6/5. Hubert : passage EN COURS HUMAIN (échanges en cours). Gauthier : SLOT LIBÉRÉ anticipé (canal email jamais activé, anti-dilution). Compteur funnel actif passé de 21 à 17 contacts en suivi. Auteur : Audric via session Claude Opus du 4/05 matin.
 - **2026-04-27 soir (v5.0)** : SYNCHRO MAJEURE. +13 contacts envoyés depuis le 26/04 intégrés. Funnel passe de 8 à 21 contacts actifs. Ajout règle synchro pipeline + workflow drift detector.
 - **2026-04-24 soir (v4.1)** : autoreply Stefanini reçu.
