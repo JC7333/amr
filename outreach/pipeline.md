@@ -1,6 +1,6 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, warm intro Sportisse, envoyé 15/07). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 1 veille passive (Stefanini).**
+Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, envoyé 15/07, silence 12j). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 4 envois planifiés semaine 20/07 (Hadj, Klaimee, MACSF, Iteanu) — état d'exécution à reconfirmer par Audric. 1 veille passive (Stefanini). 4 nouvelles cibles Radar W31 proposées (voir plus bas).**
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
@@ -51,7 +51,11 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | 2026-04-27 | **Bruno Sportisse** | Inria | PDG | LinkedIn note connexion | **EN COURS HUMAIN — REDIRECTION** | Réponse constatée 2026-07-15 (oriente vers Gesnouin, demande cc) | Réponse ~2,5 mois après l'envoi. Preuve que la purge mécanique 35j peut se tromper sur les institutions publiques (temps long). Rien à faire de plus : le cc sur l'email Gesnouin clôt la boucle. |
 | 2026-04-27 | **Alexandra Iteanu** | Iteanu Avocats | Avocate numérique/IA, Sorbonne, AFCDP | Email | **EN COURS HUMAIN (dormant)** | Appel tenu début mai (qualifié) | **Exception relance orale active** (règle fondatrice). Draft reprise prêt (outreach/drafts/, 04/07) : proposition de texte de référence mandat/responsabilité co-signé — c'est ça qui convertit en DP. Condition avant envoi : Audric reconfirme le contenu exact de l'appel de mai. |
 | 2026-04-27 | Gabriel Hubert | Dust.tt | CEO | LinkedIn | **EN COURS HUMAIN (dormant, optionnel)** | 2026-04-29 (2e message Audric, question seuil juristes/métier, sans retour) | Dialogue ouvert donc réponse possible sans violer la règle. Optionnel, ne pas forcer. Draft prêt (04/07). |
-| 2026-04-13 | Ines Boutemadja | Klaimee (YC) | Assurance d'agents IA | LinkedIn (13/04, silence) | **PROPOSÉ — nouveau contact post-cooldown** | 2026-04-13 | Cooldown 90j fini le 12/07. Nouveau premier contact autorisé UNIQUEMENT avec valeur nouvelle (le marché assurance a mûri : exigence de preuve de mandat comme condition de police). Canal : email après validation Hunter ≥80 ou source publique. Draft prêt (04/07). Envoi recalé : **lundi 20/07**. |
+| 2026-04-13 | Ines Boutemadja | Klaimee (YC) | Assurance d'agents IA | LinkedIn (13/04, silence) | **PROPOSÉ — nouveau contact post-cooldown** | 2026-04-13 | Cooldown 90j fini le 12/07. Nouveau premier contact autorisé UNIQUEMENT avec valeur nouvelle (le marché assurance a mûri : exigence de preuve de mandat comme condition de police). Canal : email après validation Hunter ≥80 ou source publique. Draft prêt (04/07). Envoi recalé : **lundi 20/07**. Exécution à reconfirmer par Audric au 27/07. |
+| 2026-07-27 (radar W31) | **Charlotte Couallier** | Dattak | CEO co-fondatrice insurtech cyber | LinkedIn préférence (profil à vérifier visuellement) | **PROPOSÉ** | — | Draft prêt (2026-07-27_couallier.md). Trigger : refonte CG cyber Dattak couvrant explicitement les attaques IA autonomes (en vigueur 13/07, annonce Tribune de l'Assurance 21/07). Sector : assurance (2/2 avec Klaimee, cap atteint). Envoi cible : **lundi 03/08**, à condition d'avoir vérifié bouton Message LinkedIn. Email `charlotte.couallier@dattak.fr` PROBABLE, à valider Hunter ≥80 avant tout envoi email fallback. |
+| 2026-07-27 (radar W31) | **Paul-Olivier Gibert** | AFCDP (association ~6 500 DPO) | Président AFCDP + Digital & Ethics | LinkedIn ou email AFCDP | **PROPOSÉ — cible réseau (multiplicateur, pas DP direct)** | — | Draft prêt (2026-07-27_gibert.md). Trigger : rapport CNIL/AFCDP DPO/IA du 03/07/2026 (24j), passage "DPO en première ligne sans mandat clair". Cible réseau/porte-ouverture, pas conversion DP directe (association, pas client final) — Audric arbitre inclusion selon capacité pipeline. Envoi cible : **mardi 04/08** si arbitrage OK. |
+| 2026-07-27 (radar W31) | **Ronn Hacman** | Cabinet Ronn Hacman (Paris, indiv.) | Avocat AI Act, plateformes IA | LinkedIn direct probable | **PROPOSÉ (borderline trigger 40j)** | — | Draft prêt (2026-07-27_hacman.md). Trigger : 3e tribune Village-Justice sur AI Act (17/06/2026 = 40j, hors <30j strict), cite explicitement "agents autonomes". Rebond J-7 AI Act 02/08 assumé. Email non trouvé (pas de site cabinet). LinkedIn seulement. Envoi cible : **mercredi 05/08 ou juste après 02/08** pour rebond AI Act. |
+| 2026-07-27 (radar W31) | **Gérard Haas** | Haas Avocats (Paris, ~30 avocats) | Associé fondateur, Docteur en droit | LinkedIn + email pro | **PROPOSÉ (borderline trigger 111j, alignement philosophique fort)** | — | Draft prêt (2026-07-27_haas.md). Trigger primaire ancien (article 07/04 "IA agentique et contrats — théorie du mandat"), rebond J-7 AI Act. Alignement conceptuel exceptionnel : Haas invoque explicitement la théorie du mandat comme cadre juridique pour l'IA agentique — exactement le pont juridique dont mandatia a besoin. Email `ghaas@haas-avocats.com` PROBABLE (page auteur cabinet suit convention). Envoi cible : **jeudi 06/08 ou re-guet post-02/08 pour trigger frais**. |
 | 2026-06-29 (radar W27) | Laurence Hadj | Doctolib | DPO Groupe | LinkedIn (profil à vérifier visuellement) | **PROPOSÉ** | — | Draft v2 prêt (04/07, corrigé voix). Envoi initialement planifié 06/07, non exécuté. **Recalé : 16-17/07.** Canal alt si silence 14j : contact.dataprivacy@doctolib.com, "À l'attention de Laurence Hadj, DPO Groupe", depuis audric@mandatia.eu. |
 | — | MACSF | MACSF | Assureur RCP médicale (Audric sociétaire) | Courrier papier sociétaire | **PROPOSÉ** | — | Courrier de médecin sociétaire à son assureur = pas du cold outreach. Question : un assuré qui utilise un agent IA en consultation est-il couvert, et à quelles conditions de mandat ? Draft prêt (04/07). **Recalé : semaine du 20/07.** |
 | 2026-04-22 | Rémi Stefanini | CNIL (DTIA) | Régulateur | LinkedIn → email | **REPORTÉ** | 2026-04-24 (autoreply) | Veille passive. Aucune action. Réactivation uniquement sur signal entrant ou consultation publique CNIL agents. |
@@ -72,11 +76,12 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 ## Compteur Design Partners
 
 - Signés : **0 / 5**
-- Fil frais : **1** (Gesnouin, envoyé 15/07)
+- Fil frais : **1** (Gesnouin, envoyé 15/07, silence 12j)
 - Fils dormants : 2 (Iteanu — reprise autorisée ; Hubert — optionnel)
-- Envois planifiés : 3 (Hadj 16-17/07 ; Klaimee 20/07 ; MACSF semaine du 20/07)
+- Envois planifiés semaine 20/07 : 3 (Hadj 16-17/07 ; Klaimee 20/07 ; MACSF semaine du 20/07) + Iteanu sur reconfirmation → **état d'exécution à reconfirmer au 27/07 par Audric**
+- Nouvelles cibles Radar W31 (proposées 27/07) : 4 (Couallier, Gibert cible réseau, Hacman borderline, Haas borderline)
 - Veille passive : 1 (Stefanini)
-- Règle capacité : **3 fils chauds simultanés max**. Un envoi à la fois — le batch du 04/07 (4 envois planifiés d'un coup) n'a produit aucun envoi en 11 jours.
+- Règle capacité : **3 fils chauds simultanés max**. Le batch du 04/07 (4 envois d'un coup) n'a produit aucun envoi en 11 jours — les 4 nouvelles cibles W31 sont à échelonner (une par jour semaine du 03/08, PAS d'un coup) sous peine de reproduire la même paralysie.
 
 ---
 
@@ -85,20 +90,28 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 | Date | Événement |
 |---|---|
 | **2026-07-15** | Email Gesnouin envoyé (cc Sportisse). Resync pipeline v7.1. |
-| **2026-07-16 ou 17** | Envoi LinkedIn Hadj (vérifier bouton Message avant). |
-| **2026-07-20 (lundi)** | Envoi email Boutemadja/Klaimee (adresse validée Hunter ≥80 d'abord). |
-| **Semaine du 20/07** | Courrier MACSF sociétaire. |
+| **2026-07-16 ou 17** | Envoi LinkedIn Hadj (vérifier bouton Message avant). Exécution à reconfirmer. |
+| **2026-07-20 (lundi)** | Envoi email Boutemadja/Klaimee (adresse validée Hunter ≥80 d'abord). Exécution à reconfirmer. |
+| **Semaine du 20/07** | Courrier MACSF sociétaire. Exécution à reconfirmer. |
 | **Dès reconfirmation appel** | Email reprise Iteanu (pas de date artificielle — 20 min au calme pour reconfirmer le contenu de l'appel de mai, puis envoi). |
-| **2026-07-31** | Si silence Hadj 14j → canal alt contact.dataprivacy@doctolib.com. |
+| **2026-07-27** | Radar W31 : 4 nouvelles cibles proposées (Couallier, Gibert, Hacman, Haas). |
+| **2026-07-31** | Si silence Hadj 14j (et si Hadj bien envoyée) → canal alt contact.dataprivacy@doctolib.com. |
+| **2026-08-02** | **Entrée en application AI Act haut risque (Annexe III)** — trigger rebond pour cibles borderline Hacman + Haas. |
+| **2026-08-03 (lundi)** | Envoi Couallier (LinkedIn si bouton Message OK). |
+| **2026-08-04** | Envoi Gibert si arbitrage inclusion OK (cible réseau, pas DP direct). |
+| **2026-08-05 à 06** | Envois Hacman puis Haas (échelonnés, post-02/08 pour bénéficier du trigger AI Act). |
 | **2026-08-31** | Jalon : template agent-sante-rgpd shippé + brouillon texte de référence mandat/responsabilité. |
 | **2026-09-30** | Bilan 90j : objectif 1 DP signé + 1 signal payant template. |
 
 Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance). Silence = silence.
 
+**Règle échelonnement** : les 4 nouvelles cibles W31 s'envoient sur 4 jours différents semaine 03/08, PAS d'un coup — sinon on reproduit la paralysie du batch 04/07 qui n'a rien produit en 11 jours.
+
 ---
 
 ## Changelog pipeline
 
+- **2026-07-27 (v7.2)** : Radar W31. Ajout 4 nouvelles cibles (Couallier/Dattak, Gibert/AFCDP, Hacman/avocat Paris, Haas/Haas Avocats) avec drafts complets dans outreach/drafts/. Radar honnête sur qualité : 1 cible forte (Couallier, trigger 14j), 1 cible réseau (Gibert), 2 cibles borderline sur fraîcheur trigger (Hacman 40j, Haas 111j) mais rebond J-7 AI Act (02/08) assumé. Aucun email envoyé côté radar. Répartition sectorielle : 1 assurance + 1 gouvernance/DPO + 2 juridique = respect règle "max 2 par secteur". Recommandation : échelonner les envois sur semaine 03/08, pas d'un coup.
 - **2026-07-15 (v7.1)** : RESYNC RÉEL (session Claude). ★ Réponse Bruno Sportisse (redirection vers Philippe Gesnouin, resp. programme Santé numérique Inria, cc demandé) — Sportisse requalifié EN COURS HUMAIN, sorti de la purge. Nouvelle ligne Gesnouin, email envoyé 15/07 depuis Zimbra (version ultra-courte, cc Sportisse). Confirmation Audric : AUCUN des 4 envois planifiés le 04/07 (Hadj 06/07, Iteanu, Klaimee 13/07, MACSF) n'a été exécuté — replanification resserrée à un envoi à la fois. Purge v7.0 confirmée à 15 slots (16 moins Sportisse). Tableau restructuré : pipeline actif séparé des slots libérés.
 - **2026-07-04 (v7.0, jamais poussée — intégrée ici)** : resync post-dérive 60j. Purge 16 SLOT LIBÉRÉ. Stefanini → REPORTÉ. Ajout ligne manquante Boutemadja/Klaimee (contactée 13/04, jamais tracée). Iteanu : appel qualifié tenu début mai, exception relance orale activée. Ajout Hadj (Radar W27). Recentrage funnel santé/assurance (décision C-RAMPE + angles, decision log). 5 drafts dans outreach/drafts/. Post-mortem dérive : le .bat de push n'a pas été lancé pendant 11 jours — d'où cette v7.1 qui fusionne.
 - **2026-05-04 (v6.0)** : synchro post-S18 (Adnan sorti, Iteanu/Hubert EN COURS HUMAIN, funnel 21→17).
