@@ -1,6 +1,8 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, warm intro Sportisse, envoyé 15/07). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 1 veille passive (Stefanini).**
+Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. ⚠️ Pipeline désynchronisé depuis 15/07 (33 jours). 4 envois planifiés du 04/07 (Hadj, Klaimee, MACSF, Iteanu) probablement toujours non exécutés — à confirmer/exécuter avant de charger le funnel.**
+
+**Signal chaud W33** : Alexandra Iteanu a publié sur JDN le 03/08/2026 une chronique sur AI Act art. 50 ("le droit de savoir qui — ou quoi — a produit l'information"). C'est un déclencheur légitime pour la reprise Iteanu, à condition qu'Audric ait reconfirmé le contenu de l'appel de mai (règle exception relance orale). Le motif fresh naturel remplace le "je reviens vers vous" interdit.
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
@@ -56,6 +58,8 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | — | MACSF | MACSF | Assureur RCP médicale (Audric sociétaire) | Courrier papier sociétaire | **PROPOSÉ** | — | Courrier de médecin sociétaire à son assureur = pas du cold outreach. Question : un assuré qui utilise un agent IA en consultation est-il couvert, et à quelles conditions de mandat ? Draft prêt (04/07). **Recalé : semaine du 20/07.** |
 | 2026-04-22 | Rémi Stefanini | CNIL (DTIA) | Régulateur | LinkedIn → email | **REPORTÉ** | 2026-04-24 (autoreply) | Veille passive. Aucune action. Réactivation uniquement sur signal entrant ou consultation publique CNIL agents. |
 | 2026-04-15 | Adnan Khan | Centurian.ai (ex-Equinix) | Runtime gouvernance agents | LinkedIn | **SORTI FUNNEL** | 2026-04-27 | Partner intégration LT (Centurian = futur consommateur du registre). Pas de relance froide. |
+| — (radar W33) | **Pierre Desmarais** | Desmarais Avocats (Paris 1er) | Avocat droit numérique + e-santé, publications régulières IA santé (site cabinet + mind Health) | Email contact@desmarais-avocats.fr CONFIRMÉ + LinkedIn (à vérifier bouton Message) | **PROPOSÉ** | — | Draft 17/08 (outreach/drafts/2026-08-17_desmarais.md). Trigger structurel (Art.50 AI Act en vigueur depuis 15j) + cadence éditoriale cabinet sur exactement le sujet. Score 74/100. Angle : brique "mandat vérifiable avant action" absente vs AIPD/CGU éditeurs. |
+| — (radar W33) | **Omar Yahia** | Yahia Avocats (Paris 8e) | Avocat droit santé établissements (~90% clientèle santé), chroniqueur DSIH | Email contact@yahia-avocats.fr CONFIRMÉ + LinkedIn (à vérifier bouton Message) | **PROPOSÉ** | — | Draft 17/08 (outreach/drafts/2026-08-17_yahia.md). Trigger : analyse DSIH IA radiologie/responsabilités + Art.50 depuis 15j. Score 71/100. Angle : mandat manquant dans contrats DPI/éditeurs hôpitaux. |
 
 ---
 
@@ -72,11 +76,11 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 ## Compteur Design Partners
 
 - Signés : **0 / 5**
-- Fil frais : **1** (Gesnouin, envoyé 15/07)
-- Fils dormants : 2 (Iteanu — reprise autorisée ; Hubert — optionnel)
-- Envois planifiés : 3 (Hadj 16-17/07 ; Klaimee 20/07 ; MACSF semaine du 20/07)
+- Fil frais : **1** (Gesnouin, envoyé 15/07 — 33j de silence, dans la fenêtre institutionnelle "temps long")
+- Fils dormants : 2 (Iteanu — reprise autorisée avec trigger frais 03/08 ; Hubert — optionnel)
+- Envois planifiés en souffrance : 3 depuis 04/07 (Hadj, Klaimee, MACSF) + 2 nouveaux W33 (Desmarais, Yahia)
 - Veille passive : 1 (Stefanini)
-- Règle capacité : **3 fils chauds simultanés max**. Un envoi à la fois — le batch du 04/07 (4 envois planifiés d'un coup) n'a produit aucun envoi en 11 jours.
+- Règle capacité : **3 fils chauds simultanés max**. ⚠️ Le batch 04/07 n'a produit aucun envoi en 44 jours. Priorité absolue : exécuter 1 envoi avant d'en planifier un 6e.
 
 ---
 
@@ -99,6 +103,7 @@ Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance)
 
 ## Changelog pipeline
 
+- **2026-08-17 (v7.2, radar W33)** : Radar outreach mi-août. 2 nouvelles cibles PROPOSÉES (Desmarais + Yahia — avocats santé numérique Paris, emails cabinet CONFIRMÉS). Trigger sectoriel majeur = AI Act art.50 entré en application le 02/08 + Health-in-ChatGPT lancé fin juillet aux US. ⚠️ Pipeline désynchro 33j depuis v7.1 : les 4 envois planifiés le 04/07 (Hadj, Klaimee, MACSF, Iteanu) probablement TOUJOURS non exécutés. Signal Iteanu chronique JDN 03/08 sur art.50 = déclencheur légitime pour reprise (si contenu appel de mai reconfirmé). Auto-check franc : mi-août = période creuse, cibles solides mais taux réponse attendu <1/2 sur les envois immédiats. Priorité #1 W33 : exécuter au moins UN des envois en souffrance avant d'ouvrir un 6e fil.
 - **2026-07-15 (v7.1)** : RESYNC RÉEL (session Claude). ★ Réponse Bruno Sportisse (redirection vers Philippe Gesnouin, resp. programme Santé numérique Inria, cc demandé) — Sportisse requalifié EN COURS HUMAIN, sorti de la purge. Nouvelle ligne Gesnouin, email envoyé 15/07 depuis Zimbra (version ultra-courte, cc Sportisse). Confirmation Audric : AUCUN des 4 envois planifiés le 04/07 (Hadj 06/07, Iteanu, Klaimee 13/07, MACSF) n'a été exécuté — replanification resserrée à un envoi à la fois. Purge v7.0 confirmée à 15 slots (16 moins Sportisse). Tableau restructuré : pipeline actif séparé des slots libérés.
 - **2026-07-04 (v7.0, jamais poussée — intégrée ici)** : resync post-dérive 60j. Purge 16 SLOT LIBÉRÉ. Stefanini → REPORTÉ. Ajout ligne manquante Boutemadja/Klaimee (contactée 13/04, jamais tracée). Iteanu : appel qualifié tenu début mai, exception relance orale activée. Ajout Hadj (Radar W27). Recentrage funnel santé/assurance (décision C-RAMPE + angles, decision log). 5 drafts dans outreach/drafts/. Post-mortem dérive : le .bat de push n'a pas été lancé pendant 11 jours — d'où cette v7.1 qui fusionne.
 - **2026-05-04 (v6.0)** : synchro post-S18 (Adnan sorti, Iteanu/Hubert EN COURS HUMAIN, funnel 21→17).
