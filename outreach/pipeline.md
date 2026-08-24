@@ -1,6 +1,8 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, warm intro Sportisse, envoyé 15/07). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 1 veille passive (Stefanini).**
+> ⚠️ **DÉSYNCHRO SIGNALÉE 24/08/2026 (radar W35, non résolue par le radar)** — Le pipeline est à v7.1 (15/07). 40 jours de trou depuis. Cinq questions bloquantes attendent réponse Audric avant tout nouveau radar : Hadj (envoi 16-17/07 fait ?), Klaimee/Boutemadja (envoi 20/07 fait ?), MACSF (courrier semaine 20/07 fait ?), Iteanu (reconfirmation orale faite ?), Gesnouin (silence 40j acté ?). Détails et contexte AI Act + note CNIL agentique 27/07 : `outreach/radar/2026-08-24.md`. Le radar refuse de proposer de nouvelles cibles tant que ces statuts ne sont pas remis à jour.
+
+Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, warm intro Sportisse, envoyé 15/07 — silence 40j au 24/08). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 1 veille passive (Stefanini). Statut réel des 3 envois planifiés semaine du 20/07 non confirmé.**
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
