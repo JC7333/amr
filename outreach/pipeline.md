@@ -99,6 +99,20 @@ Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance)
 
 ## Changelog pipeline
 
+- **2026-08-31 (v7.1 — memo radar W36, PAS de bump version)** : session Claude routine
+  Radar. Pas de nouvelle cible livrée cette semaine (memo dans
+  `outreach/drafts/2026-08-31_W36_status.md`). Deux causes cumulées :
+  (a) pipeline désynchronisé depuis 47 jours, statut réel des 4 envois planifiés
+  semaine du 20/07 (Hadj, Klaimee/Boutemadja, MACSF, reprise Iteanu) inconnu de la
+  session — la règle synchro 24h est violée depuis 46 jours ;
+  (b) egress réseau bloque LinkedIn + presse FR + CNIL.fr cette session, "0 invention"
+  interdit de fabriquer trigger event / URL / email à partir de snippets seuls.
+  Signaux marché notés : AI Act en application générale depuis le 2 août 2026 ;
+  note conjointe CNIL + CIANum sur l'IA agentique publiée le 20 juillet 2026 ;
+  Digital Omnibus en vigueur le 27/07/2026 (report Annexe III à décembre 2027, ne
+  change rien pour AMR côté Art. 50 + RGPD). Action attendue d'Audric avant
+  prochaine session : reconfirmer le statut réel des 4 envois planifiés + signaler
+  toute réponse Gesnouin.
 - **2026-07-15 (v7.1)** : RESYNC RÉEL (session Claude). ★ Réponse Bruno Sportisse (redirection vers Philippe Gesnouin, resp. programme Santé numérique Inria, cc demandé) — Sportisse requalifié EN COURS HUMAIN, sorti de la purge. Nouvelle ligne Gesnouin, email envoyé 15/07 depuis Zimbra (version ultra-courte, cc Sportisse). Confirmation Audric : AUCUN des 4 envois planifiés le 04/07 (Hadj 06/07, Iteanu, Klaimee 13/07, MACSF) n'a été exécuté — replanification resserrée à un envoi à la fois. Purge v7.0 confirmée à 15 slots (16 moins Sportisse). Tableau restructuré : pipeline actif séparé des slots libérés.
 - **2026-07-04 (v7.0, jamais poussée — intégrée ici)** : resync post-dérive 60j. Purge 16 SLOT LIBÉRÉ. Stefanini → REPORTÉ. Ajout ligne manquante Boutemadja/Klaimee (contactée 13/04, jamais tracée). Iteanu : appel qualifié tenu début mai, exception relance orale activée. Ajout Hadj (Radar W27). Recentrage funnel santé/assurance (décision C-RAMPE + angles, decision log). 5 drafts dans outreach/drafts/. Post-mortem dérive : le .bat de push n'a pas été lancé pendant 11 jours — d'où cette v7.1 qui fusionne.
 - **2026-05-04 (v6.0)** : synchro post-S18 (Adnan sorti, Iteanu/Hubert EN COURS HUMAIN, funnel 21→17).
