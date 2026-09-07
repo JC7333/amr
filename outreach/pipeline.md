@@ -1,6 +1,6 @@
 # AMR Outreach Pipeline — Design Partners
 
-Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, warm intro Sportisse, envoyé 15/07). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 1 veille passive (Stefanini).**
+Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. ⚠️ PIPELINE EN DÉRIVE : v7.1 du 15/07 jamais actualisée en 8 semaines. Radar W37 (07/09) ne peut pas confirmer si les 4 envois planifiés fin juillet (Hadj, Klaimee, MACSF, Iteanu reprise) ont été exécutés ou pas. Audit humain requis avant toute nouvelle action côté fils dormants.**
 
 Fondateur: Audric Bugnard (Aix-les-Bains, FR). Produit: mandatia.eu.
 
@@ -54,8 +54,10 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 | 2026-04-13 | Ines Boutemadja | Klaimee (YC) | Assurance d'agents IA | LinkedIn (13/04, silence) | **PROPOSÉ — nouveau contact post-cooldown** | 2026-04-13 | Cooldown 90j fini le 12/07. Nouveau premier contact autorisé UNIQUEMENT avec valeur nouvelle (le marché assurance a mûri : exigence de preuve de mandat comme condition de police). Canal : email après validation Hunter ≥80 ou source publique. Draft prêt (04/07). Envoi recalé : **lundi 20/07**. |
 | 2026-06-29 (radar W27) | Laurence Hadj | Doctolib | DPO Groupe | LinkedIn (profil à vérifier visuellement) | **PROPOSÉ** | — | Draft v2 prêt (04/07, corrigé voix). Envoi initialement planifié 06/07, non exécuté. **Recalé : 16-17/07.** Canal alt si silence 14j : contact.dataprivacy@doctolib.com, "À l'attention de Laurence Hadj, DPO Groupe", depuis audric@mandatia.eu. |
 | — | MACSF | MACSF | Assureur RCP médicale (Audric sociétaire) | Courrier papier sociétaire | **PROPOSÉ** | — | Courrier de médecin sociétaire à son assureur = pas du cold outreach. Question : un assuré qui utilise un agent IA en consultation est-il couvert, et à quelles conditions de mandat ? Draft prêt (04/07). **Recalé : semaine du 20/07.** |
-| 2026-04-22 | Rémi Stefanini | CNIL (DTIA) | Régulateur | LinkedIn → email | **REPORTÉ** | 2026-04-24 (autoreply) | Veille passive. Aucune action. Réactivation uniquement sur signal entrant ou consultation publique CNIL agents. |
+| 2026-04-22 | Rémi Stefanini | CNIL (DTIA) | Régulateur | LinkedIn → email | **REPORTÉ** | 2026-04-24 (autoreply) | Veille passive. Aucune action. Réactivation uniquement sur signal entrant ou consultation publique CNIL agents. Note : la CNIL et le CIANum ont publié le 20/07/2026 une note exploratoire commune sur l'IA agentique — signal indirect que le sujet est vivant côté régulateur, mais règle inchangée (aucune action). |
 | 2026-04-15 | Adnan Khan | Centurian.ai (ex-Equinix) | Runtime gouvernance agents | LinkedIn | **SORTI FUNNEL** | 2026-04-27 | Partner intégration LT (Centurian = futur consommateur du registre). Pas de relance froide. |
+| 2026-09-07 (radar W37) | **Anne-Sophie Clément** | ASC Avocat (Paris 75009) | Avocate droit numérique, publie sur IA agentique | LinkedIn (URL à vérifier visuellement par Audric) puis formulaire cabinet si silence 14j | **PROPOSÉ** | — | Draft prêt (outreach/drafts/2026-09-07_clement.md). Trigger 42j (hors 30j strict, transparent). Angle : commentaire signé sur note CNIL/CIANum IA agentique du 20/07. Score estimé 68/100. Email non trouvé — pas de tentative. |
+| 2026-09-07 (radar W37) | **Hassan Kohen** | Kohen Avocats (Paris 75017) | Avocat pénaliste, série tribunes IA médicale/Doctolib/décret 27/07 | LinkedIn (profil confirmé, bouton Message à vérifier) puis formulaire cabinet si silence 14j | **PROPOSÉ** | — | Draft prêt (outreach/drafts/2026-09-07_kohen.md). Trigger 42j (hors 30j strict, transparent). Angle croisé pénal + santé + décret déontologie 27/07 qui touche Audric personnellement en tant que médecin. Score estimé 74/100. Email non trouvé — pas de tentative. |
 
 ---
 
@@ -72,11 +74,12 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 ## Compteur Design Partners
 
 - Signés : **0 / 5**
-- Fil frais : **1** (Gesnouin, envoyé 15/07)
-- Fils dormants : 2 (Iteanu — reprise autorisée ; Hubert — optionnel)
-- Envois planifiés : 3 (Hadj 16-17/07 ; Klaimee 20/07 ; MACSF semaine du 20/07)
+- Fil frais : **1 sur le papier** (Gesnouin, envoyé 15/07 — silence 55j au 07/09, cc Sportisse interdit toute insistance : statut inchangé, pas d'action)
+- Fils dormants : 2 (Iteanu — reprise autorisée mais non exécutée ; Hubert — optionnel)
+- Envois planifiés au 15/07 (statut réel inconnu au 07/09, audit humain requis) : Hadj, Klaimee, MACSF
+- Nouveaux drafts W37 : 2 (Clément, Kohen) — hors fenêtre 30j strict, livrés avec transparence
 - Veille passive : 1 (Stefanini)
-- Règle capacité : **3 fils chauds simultanés max**. Un envoi à la fois — le batch du 04/07 (4 envois planifiés d'un coup) n'a produit aucun envoi en 11 jours.
+- Règle capacité : **3 fils chauds simultanés max**. Le batch du 04/07 (4 envois planifiés) puis les recalages du 15/07 (3 envois planifiés) n'ont pas été poussés — l'ajout de 2 nouveaux drafts W37 porte le total draftés/non-envoyés à 5. Avant tout envoi W37, Audric doit trancher : (a) pousser d'abord les drafts historiques ou (b) partir des 2 W37 et abandonner les drafts stales.
 
 ---
 
@@ -92,6 +95,8 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 | **2026-07-31** | Si silence Hadj 14j → canal alt contact.dataprivacy@doctolib.com. |
 | **2026-08-31** | Jalon : template agent-sante-rgpd shippé + brouillon texte de référence mandat/responsabilité. |
 | **2026-09-30** | Bilan 90j : objectif 1 DP signé + 1 signal payant template. |
+| **2026-09-07** | Radar W37 : 2 drafts nouveaux (Clément, Kohen) + flag état pipeline stale 8 semaines. |
+| **À trancher par Audric avant tout envoi W37** | Audit état réel des 4 envois planifiés fin juillet : (a) est-ce que Hadj/Klaimee/MACSF/Iteanu ont été envoyés entre le 15/07 et le 07/09 ? (b) si oui, statut ? (c) si non, drafts encore valides ou motifs devenus stales ? |
 
 Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance). Silence = silence.
 
@@ -99,6 +104,7 @@ Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance)
 
 ## Changelog pipeline
 
+- **2026-09-07 (v8.0)** : Radar W37. Ajout de 2 drafts nouveaux (Clément avocate IA agentique, Kohen avocat pénaliste santé), tous deux avec trigger 42j (hors fenêtre 30j strict, livrés en transparence). ⚠️ Pipeline en dérive constatée : v7.1 non actualisée en 8 semaines, statut réel des 4 envois planifiés fin juillet (Hadj, Klaimee, MACSF, Iteanu reprise) inconnu au 07/09. Radar ne touche PAS aux statuts existants (règle : Radar source, Tracker maintient). Audit humain requis avant toute action côté fils dormants. Compteur DP reste 0/5 signés. Bloc Slots libérés inchangé.
 - **2026-07-15 (v7.1)** : RESYNC RÉEL (session Claude). ★ Réponse Bruno Sportisse (redirection vers Philippe Gesnouin, resp. programme Santé numérique Inria, cc demandé) — Sportisse requalifié EN COURS HUMAIN, sorti de la purge. Nouvelle ligne Gesnouin, email envoyé 15/07 depuis Zimbra (version ultra-courte, cc Sportisse). Confirmation Audric : AUCUN des 4 envois planifiés le 04/07 (Hadj 06/07, Iteanu, Klaimee 13/07, MACSF) n'a été exécuté — replanification resserrée à un envoi à la fois. Purge v7.0 confirmée à 15 slots (16 moins Sportisse). Tableau restructuré : pipeline actif séparé des slots libérés.
 - **2026-07-04 (v7.0, jamais poussée — intégrée ici)** : resync post-dérive 60j. Purge 16 SLOT LIBÉRÉ. Stefanini → REPORTÉ. Ajout ligne manquante Boutemadja/Klaimee (contactée 13/04, jamais tracée). Iteanu : appel qualifié tenu début mai, exception relance orale activée. Ajout Hadj (Radar W27). Recentrage funnel santé/assurance (décision C-RAMPE + angles, decision log). 5 drafts dans outreach/drafts/. Post-mortem dérive : le .bat de push n'a pas été lancé pendant 11 jours — d'où cette v7.1 qui fusionne.
 - **2026-05-04 (v6.0)** : synchro post-S18 (Adnan sorti, Iteanu/Hubert EN COURS HUMAIN, funnel 21→17).
