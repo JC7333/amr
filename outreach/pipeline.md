@@ -47,7 +47,7 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 
 | Date contact | Prénom Nom | Entreprise | Secteur | Canal | Statut | Dernier échange | Notes |
 |---|---|---|---|---|---|---|---|
-| 2026-07-15 | **Philippe Gesnouin** | Inria | Directeur programme Santé numérique, co-pilote PEPR Santé numérique (France 2030), cofondateur Health Data Hub | Email audric@mandatia.eu, cc Bruno Sportisse | **ENVOYÉ (warm intro)** | 2026-07-15 (email envoyé, version ultra-courte validée) | Intro via réponse Sportisse. Angle SANTÉ pur (mandat des agents dans les parcours de soin). Pas de relance si silence — Sportisse en cc, toute insistance se verrait. Cible réputation/réseau institutionnel, pas DP commercial. |
+| 2026-07-15 | **Philippe Gesnouin** | Inria | Directeur programme Santé numérique, co-pilote PEPR Santé numérique (France 2030), cofondateur Health Data Hub | Email audric@mandatia.eu, cc Bruno Sportisse | **SLOT LIBÉRÉ (2026-10-01, 76j silence)** | 2026-07-15 (email envoyé, version ultra-courte validée) | Intro via réponse Sportisse. Angle SANTÉ pur (mandat des agents dans les parcours de soin). ⚠️ Transition automatique 35j appliquée après 76j de silence, MAIS leçon Sportisse (réponse à ~2,5 mois) : les institutions publiques peuvent répondre tardivement. Audric peut requalifier manuellement si signal entrant tardif. Aucun canal alt possible (cc Sportisse interdit toute insistance). |
 | 2026-04-27 | **Bruno Sportisse** | Inria | PDG | LinkedIn note connexion | **EN COURS HUMAIN — REDIRECTION** | Réponse constatée 2026-07-15 (oriente vers Gesnouin, demande cc) | Réponse ~2,5 mois après l'envoi. Preuve que la purge mécanique 35j peut se tromper sur les institutions publiques (temps long). Rien à faire de plus : le cc sur l'email Gesnouin clôt la boucle. |
 | 2026-04-27 | **Alexandra Iteanu** | Iteanu Avocats | Avocate numérique/IA, Sorbonne, AFCDP | Email | **EN COURS HUMAIN (dormant)** | Appel tenu début mai (qualifié) | **Exception relance orale active** (règle fondatrice). Draft reprise prêt (outreach/drafts/, 04/07) : proposition de texte de référence mandat/responsabilité co-signé — c'est ça qui convertit en DP. Condition avant envoi : Audric reconfirme le contenu exact de l'appel de mai. |
 | 2026-04-27 | Gabriel Hubert | Dust.tt | CEO | LinkedIn | **EN COURS HUMAIN (dormant, optionnel)** | 2026-04-29 (2e message Audric, question seuil juristes/métier, sans retour) | Dialogue ouvert donc réponse possible sans violer la règle. Optionnel, ne pas forcer. Draft prêt (04/07). |
@@ -63,6 +63,8 @@ Toute désynchro >48h fait dériver le Reply Tracker (alertes basées sur donné
 
 Erdem Yağan (Remedi), Juliette Mattioli (Thales), Ian Rogers (Ledger), Aldrick Zappellini (Crédit Agricole), David Rice (HSBC), Stanislas Polu (Dust), Florence G'sell (Sciences Po), Marcel Salathé (EPFL), Christine Balagué (IMT-BS), Vincent Strubel (ANSSI), Anne Bouverot (AI Action Summit), Cédric O, Henri d'Agrain (Cigref), Tariq Krim, Stéphane Distinguin (Fabernovel) — **15 contacts**.
 
+**Ajout 2026-10-01 (tracker auto, 35j) : Philippe Gesnouin (Inria)** — email warm intro envoyé 2026-07-15, silence 76j. Note contextuelle : institution publique (comme Sportisse qui a répondu à 2,5 mois), signal entrant tardif encore possible — Audric peut requalifier manuellement si réactivation. Aucun canal alt (cc Sportisse interdit l'insistance). Remplaçant à proposer par Outreach Radar W40.
+
 Bruno Sportisse, initialement dans cette purge, en est SORTI le 15/07 (réponse reçue) : leçon — les institutions publiques répondent à 2-3 mois, la règle 35j est calibrée pour le privé.
 
 Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/juridique.
@@ -72,9 +74,9 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 ## Compteur Design Partners
 
 - Signés : **0 / 5**
-- Fil frais : **1** (Gesnouin, envoyé 15/07)
+- Fil frais : **0** (Gesnouin passé en SLOT LIBÉRÉ 2026-10-01 — pipeline non resync depuis 2026-07-15, à valider)
 - Fils dormants : 2 (Iteanu — reprise autorisée ; Hubert — optionnel)
-- Envois planifiés : 3 (Hadj 16-17/07 ; Klaimee 20/07 ; MACSF semaine du 20/07)
+- Envois planifiés : 3 (Hadj 16-17/07 ; Klaimee 20/07 ; MACSF semaine du 20/07) — **⚠️ dates stale, statut réel inconnu**
 - Veille passive : 1 (Stefanini)
 - Règle capacité : **3 fils chauds simultanés max**. Un envoi à la fois — le batch du 04/07 (4 envois planifiés d'un coup) n'a produit aucun envoi en 11 jours.
 
@@ -92,6 +94,7 @@ Aucune re-sollicitation prévue : le funnel reste recentré santé/assurance/jur
 | **2026-07-31** | Si silence Hadj 14j → canal alt contact.dataprivacy@doctolib.com. |
 | **2026-08-31** | Jalon : template agent-sante-rgpd shippé + brouillon texte de référence mandat/responsabilité. |
 | **2026-09-30** | Bilan 90j : objectif 1 DP signé + 1 signal payant template. |
+| **2026-10-01** | ⚠️ Pipeline non resynchronisé depuis 2026-07-15 (76 jours). Gesnouin passé en SLOT LIBÉRÉ par règle auto 35j. Resync réel urgent. |
 
 Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance). Silence = silence.
 
@@ -99,6 +102,7 @@ Gesnouin : pas de fenêtre canal alt (le cc Sportisse interdit toute insistance)
 
 ## Changelog pipeline
 
+- **2026-10-01 (tracker auto)** : Gesnouin ENVOYÉ (2026-07-15) → SLOT LIBÉRÉ après 76j de silence email (règle 35j). ⚠️ Pipeline non resync depuis 2026-07-15 (76 jours de désynchro) — la bascule est appliquée sur données obsolètes, Audric doit resynchroniser l'état réel avant d'agir.
 - **2026-07-15 (v7.1)** : RESYNC RÉEL (session Claude). ★ Réponse Bruno Sportisse (redirection vers Philippe Gesnouin, resp. programme Santé numérique Inria, cc demandé) — Sportisse requalifié EN COURS HUMAIN, sorti de la purge. Nouvelle ligne Gesnouin, email envoyé 15/07 depuis Zimbra (version ultra-courte, cc Sportisse). Confirmation Audric : AUCUN des 4 envois planifiés le 04/07 (Hadj 06/07, Iteanu, Klaimee 13/07, MACSF) n'a été exécuté — replanification resserrée à un envoi à la fois. Purge v7.0 confirmée à 15 slots (16 moins Sportisse). Tableau restructuré : pipeline actif séparé des slots libérés.
 - **2026-07-04 (v7.0, jamais poussée — intégrée ici)** : resync post-dérive 60j. Purge 16 SLOT LIBÉRÉ. Stefanini → REPORTÉ. Ajout ligne manquante Boutemadja/Klaimee (contactée 13/04, jamais tracée). Iteanu : appel qualifié tenu début mai, exception relance orale activée. Ajout Hadj (Radar W27). Recentrage funnel santé/assurance (décision C-RAMPE + angles, decision log). 5 drafts dans outreach/drafts/. Post-mortem dérive : le .bat de push n'a pas été lancé pendant 11 jours — d'où cette v7.1 qui fusionne.
 - **2026-05-04 (v6.0)** : synchro post-S18 (Adnan sorti, Iteanu/Hubert EN COURS HUMAIN, funnel 21→17).
