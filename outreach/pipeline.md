@@ -1,3 +1,5 @@
+> **FIGÉ LE 05/10/2026 — NE PLUS MODIFIER ICI.** Le pipeline AMR vit désormais dans Google Drive, document « AMR — Pipeline » (dossier AMR) : https://docs.google.com/document/d/18GzhKaWbVNcUxeFnjqk66kTbTOV7bIhyfOhgeW7PZ20/edit . Il est tenu à jour par l'Assistant mail (claude.ai). Pourquoi : le connecteur GitHub des tâches planifiées ne peut pas écrire dans ce dépôt, et le Reply Tracker quotidien est arrêté. État au 05/10/2026 : 6 envois prêts (Hadj, Iteanu, Klaimee, MACSF, Morquin, Caillat), Gesnouin tenu jusqu'au 15/01/2027, 0/5 Design Partner. Le contenu ci-dessous est l'état v7.1 du 15/07/2026, conservé pour l'historique.
+
 # AMR Outreach Pipeline — Design Partners
 
 Objectif: 5 Design Partners signés. Statut actuel: **0/5 signés. 1 fil frais (Philippe Gesnouin/Inria, warm intro Sportisse, envoyé 15/07). 2 fils dormants (Alexandra Iteanu — reprise autorisée ; Gabriel Hubert — optionnel). 1 veille passive (Stefanini).**
