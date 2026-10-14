@@ -130,7 +130,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         cursor = await db.execute("PRAGMA table_info(mandates)")
         columns = {row["name"] for row in await cursor.fetchall()}
         if "perimeter_json" not in columns:
-            await db.execute("ALTER TABLE mandates ADD COLUMN perimeter_json TEXT")
+            try:
+                await db.execute("ALTER TABLE mandates ADD COLUMN perimeter_json TEXT")
+            except aiosqlite.OperationalError as exc:
+                # Another process added it between our check and our ALTER.
+                if "duplicate column" not in str(exc):
+                    raise
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (3,),

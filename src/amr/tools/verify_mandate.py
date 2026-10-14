@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from amr.config import settings
 from amr.db.engine import get_db, init_db
+from amr.delegation import load_ancestors
 
 
 async def verify_mandate(
@@ -14,7 +15,8 @@ async def verify_mandate(
 ) -> str:
     """Verify whether an AI agent has a currently active and valid mandate to perform an action.
 
-    Looks up the most recent active, non-expired mandate for the given agent.
+    Looks up the most recent active, non-expired mandate for the given agent. For a
+    sub-mandate, every mandate above it must also be active and unexpired.
     Does NOT check the action against the scope: it returns the free-text scope and,
     when the mandate has one, its structured perimeter. To enforce the perimeter,
     request a token with issue_action_token, which refuses out-of-scope actions.
@@ -65,6 +67,22 @@ async def verify_mandate(
                     "perimeter": None,
                     "parent_mandate_id": None,
                     "expires_at": None,
+                }
+            )
+
+        _, refusal = await load_ancestors(db, row["parent_mandate_id"], now)
+        if refusal is not None:
+            return json.dumps(
+                {
+                    "authorized": False,
+                    "mandate_id": row["id"],
+                    "reason": f"Delegation chain broken: {refusal.reason}",
+                    "scope": row["scope"],
+                    "perimeter": (
+                        json.loads(row["perimeter_json"]) if row["perimeter_json"] else None
+                    ),
+                    "parent_mandate_id": row["parent_mandate_id"],
+                    "expires_at": row["expires_at"],
                 }
             )
 

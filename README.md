@@ -38,8 +38,9 @@ AMR public key and MUST check `aud`, `exp`, and `amr_action_hash`.
 
 A mandate can carry a **structured perimeter**: the action types the agent may
 request (`allowed_actions`), the ones it may never request (`forbidden_actions`,
-which always win), whether it may delegate (`delegation_allowed`), and an optional
-amount ceiling (`max_amount`, applied to `amount_actions`). The token issuer then
+which always win and also reach sub-types: forbidding `agent.create` forbids
+`agent.create.batch`), whether it may delegate (`delegation_allowed`), and an
+optional amount ceiling (`max_amount` with `currency`, applied to `amount_actions`). The token issuer then
 checks the **requested action** against the perimeter, not only the existence of
 the mandate:
 
@@ -61,8 +62,18 @@ issue_action_token(..., action_type="agent.create")
 → {"denied": true, "reason": "action_out_of_scope", "detail": "forbidden:agent.create"}
 ```
 
-Mandates without a perimeter keep working as before (free-text scope, existence
-and validity checks only).
+Root mandates without a perimeter keep working as before (free-text scope,
+existence and validity checks only, same hashes). Two changes are deliberate and
+breaking for sub-mandates: a new sub-mandate requires a parent that allows
+delegation (so a free-text parent can no longer delegate), and tokens under any
+sub-mandate, including ones created before v1.1, now require every parent to be
+active and unexpired.
+
+> **Deployment rule.** These controls hold only if agents cannot register their own
+> mandates. `create_mandate` is a principal-side tool: expose it to the principal
+> (or its back office), never to the agents it governs. An agent that can call
+> `create_mandate` can mint itself a fresh root mandate. Authenticating the
+> principal on mandate creation is on the roadmap.
 
 See `docs/token-issuance-spec.md` for the full specification.
 
@@ -160,15 +171,19 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 `perimeter` holds the structured perimeter when one was given (it is sealed into
 `chain_hash`). Perimeter and delegation errors return `{"error": "...", "code": "..."}`
 with a stable code: `perimeter_invalid`, `parent_mandate_not_found`,
-`parent_mandate_not_active`, `parent_mandate_expired`, `delegation_not_allowed`,
+`parent_mandate_<status>`, `parent_mandate_expired`, `delegation_not_allowed`,
 `delegator_mismatch`, `sub_mandate_requires_perimeter`, `perimeter_exceeds_parent`,
-`limit_exceeds_parent`, `expires_after_parent`.
+`limit_exceeds_parent`, `expires_after_parent`. A broken chain above the parent
+returns `parent_mandate_<status>`, `parent_mandate_expired` or
+`delegation_chain_too_deep` (more than 16 levels).
 
 ---
 
 ### `verify_mandate`
 
-Check whether an AI agent has a currently active, non-expired mandate.
+Check whether an AI agent has a currently active, non-expired mandate (for a
+sub-mandate, every mandate above it must be active and unexpired too). It does not
+check the action against the perimeter: `issue_action_token` does.
 
 **Parameters:**
 
@@ -185,6 +200,8 @@ Check whether an AI agent has a currently active, non-expired mandate.
   "mandate_id": "550e8400-e29b-41d4-a716-446655440000",
   "reason": "Active mandate found",
   "scope": "Compare and recommend financial products to retail clients",
+  "perimeter": null,
+  "parent_mandate_id": null,
   "expires_at": "2026-05-13T20:00:00+00:00"
 }
 ```

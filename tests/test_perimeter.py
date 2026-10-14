@@ -5,6 +5,7 @@ requested action against the mandate's perimeter, or only that a mandate exists?
 With a structured perimeter, it checks the action, at every level of a delegation chain.
 """
 
+import hashlib
 import json
 from decimal import Decimal
 from pathlib import Path
@@ -19,7 +20,7 @@ from pydantic import ValidationError
 from amr.crypto.chain import compute_hash
 from amr.crypto.signing import generate_signing_key, load_public_key
 from amr.db.engine import init_db
-from amr.models.perimeter import Perimeter, pattern_covers, pattern_matches
+from amr.models.perimeter import Perimeter, pattern_covers, pattern_matches, pattern_reaches
 from amr.tools.create_mandate import create_mandate
 from amr.tools.get_proof import get_proof
 from amr.tools.issue_action_token import _canonical_action_hash, issue_action_token
@@ -105,7 +106,26 @@ def test_pattern_covers(outer: str, inner: str, expected: bool) -> None:
     assert pattern_covers(outer, inner) is expected
 
 
-@pytest.mark.parametrize("bad", ["Invoice.pay", "invoice pay", "invoice.**", "", ".pay", "a..b"])
+@pytest.mark.parametrize(
+    ("pattern", "action_type", "expected"),
+    [
+        ("agent.create", "agent.create", True),
+        ("agent.create", "agent.create.batch", True),
+        ("agent.create", "agent.created", False),
+        ("agent.*", "agent", True),
+        ("agent.*", "agent.create", True),
+        ("agent.*", "agents", False),
+        ("*", "anything", True),
+    ],
+)
+def test_pattern_reaches_sub_types(pattern: str, action_type: str, expected: bool) -> None:
+    assert pattern_reaches(pattern, action_type) is expected
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["Invoice.pay", "invoice pay", "invoice.**", "", ".pay", "a..b", "agent.create\n", "é.x"],
+)
 def test_invalid_patterns_rejected(bad: str) -> None:
     with pytest.raises(ValidationError):
         Perimeter(allowed_actions=(bad,))
@@ -119,10 +139,11 @@ def test_canonical_form_is_order_independent() -> None:
     assert Perimeter.from_json(a.to_json()) == a
 
 
-def test_forbidden_wins_over_allowed() -> None:
+def test_forbidden_wins_over_allowed_and_reaches_sub_types() -> None:
     p = Perimeter(allowed_actions=("*",), forbidden_actions=("agent.create",))
     assert p.check_action("report.write", {}) is None
     assert p.check_action("agent.create", {}) == "forbidden:agent.create"
+    assert p.check_action("agent.create.batch", {}) == "forbidden:agent.create"
 
 
 def test_amount_actions_scope_the_limit() -> None:
@@ -131,22 +152,53 @@ def test_amount_actions_scope_the_limit() -> None:
     )
     assert p.check_action("invoice.read", {}) is None
     assert p.check_action("invoice.pay", {}) == "amount_required"
-    assert p.check_action("invoice.read", {"amount": "900"}) == "amount_above_limit:500 EUR"
+    assert p.check_action("invoice.pay.bulk", {}) == "amount_required"
+    over = {"amount": "900", "currency": "EUR"}
+    assert p.check_action("invoice.read", over) == "amount_above_limit:500 EUR"
     with pytest.raises(ValidationError):
         Perimeter(allowed_actions=("invoice.*",), amount_actions=("invoice.pay",))
 
 
 def test_amount_limit() -> None:
     p = Perimeter(allowed_actions=("invoice.pay",), max_amount=Decimal("500"))
-    assert p.check_action("invoice.pay", {"amount": "500"}) is None
-    assert p.check_action("invoice.pay", {"amount": "500.01"}) == "amount_above_limit:500 EUR"
+    eur = {"currency": "EUR"}
+    assert p.check_action("invoice.pay", {"amount": "500", **eur}) is None
+    assert p.check_action("invoice.pay", {"amount": "120.50", **eur}) is None
+    assert p.check_action("invoice.pay", {"amount": "500.01", **eur}) == (
+        "amount_above_limit:500 EUR"
+    )
     assert p.check_action("invoice.pay", {}) == "amount_required"
-    assert p.check_action("invoice.pay", {"amount": "cinq cents"}) == "amount_invalid"
-    assert p.check_action("invoice.pay", {"amount": "-1"}) == "amount_invalid"
-    assert p.check_action("invoice.pay", {"amount": "NaN"}) == "amount_invalid"
-    assert p.check_action("invoice.pay", {"amount": "10", "currency": "usd"}) == (
+    assert p.check_action("invoice.pay", {"amount": "400"}) == "currency_required"
+    assert p.check_action("invoice.pay", {"amount": "400", "Currency": "EUR"}) == (
+        "currency_required"
+    )
+    assert p.check_action("invoice.pay", {"amount": "10", "currency": "eur"}) == (
         "currency_mismatch:EUR"
     )
+    assert p.check_action("invoice.pay", {"amount": "10", "currency": "USD"}) == (
+        "currency_mismatch:EUR"
+    )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["cinq cents", "-1", "+500", " 500", "5_00", "1e3", "NaN", "Infinity", "0x10", "500,00",
+     "\uff15\uff10\uff10", "\u0664\u0660\u0660", "1.", ".5", ""],
+)
+def test_amounts_must_be_plain_decimals(raw: str) -> None:
+    p = Perimeter(allowed_actions=("invoice.pay",), max_amount=Decimal("500"))
+    assert p.check_action("invoice.pay", {"amount": raw, "currency": "EUR"}) == "amount_invalid"
+
+
+def test_ceiling_is_stored_exactly() -> None:
+    exact = "123456789012345678.123456789012345678"
+    p = Perimeter(allowed_actions=("x.y",), max_amount=exact)
+    assert p.canonical()["max_amount"] == exact
+    assert Perimeter(allowed_actions=("x.y",), max_amount="500.00").canonical()["max_amount"] == (
+        "500"
+    )
+    with pytest.raises(ValidationError):
+        Perimeter(allowed_actions=("x.y",), max_amount="1e3")
 
 
 # --- Token issuance against the perimeter --------------------------------------------
@@ -203,7 +255,7 @@ async def test_amount_above_limit_is_refused() -> None:
         m["mandate_id"],
         "agent:billing",
         action_type="invoice.pay",
-        action_metadata_json=json.dumps({"amount": "900"}),
+        action_metadata_json=json.dumps({"amount": "900", "currency": "EUR"}),
     )
     assert res["reason"] == "action_out_of_scope"
     assert res["detail"] == "amount_above_limit:500 EUR"
@@ -224,10 +276,43 @@ async def test_free_text_mandate_still_works_without_action_type() -> None:
 async def test_invalid_perimeter_inputs() -> None:
     no_allowed = await _mandate(forbidden_actions=["agent.create"])
     assert no_allowed["code"] == "perimeter_invalid"
+    empty_allowed = await _mandate(allowed_actions=[])
+    assert empty_allowed["code"] == "perimeter_invalid"
+    empty_allowed_currency = await _mandate(allowed_actions=[], currency="USD")
+    assert empty_allowed_currency["code"] == "perimeter_invalid"
     bad_pattern = await _mandate(allowed_actions=["Invoice Pay"])
     assert bad_pattern["code"] == "perimeter_invalid"
     bad_amount = await _mandate(allowed_actions=["invoice.pay"], max_amount="-5")
     assert bad_amount["code"] == "perimeter_invalid"
+
+
+async def test_free_text_hashes_are_unchanged(temp_db: Path) -> None:
+    # Action descriptor without action_type: exactly the v1.0 canonical form.
+    legacy = '{"action":"a","audience":"b","metadata":{}}'
+    assert _canonical_action_hash("a", "b", {}) == hashlib.sha256(legacy.encode()).hexdigest()
+    # Free-text mandate: the chain payload has no perimeter key at all.
+    m = await _mandate()
+    async with aiosqlite.connect(str(temp_db)) as db:
+        db.row_factory = aiosqlite.Row
+        row = await (
+            await db.execute("SELECT * FROM mandates WHERE id = ?", (m["mandate_id"],))
+        ).fetchone()
+    legal = json.loads(row["legal_basis_json"])
+    data = {
+        "id": row["id"],
+        "principal_id": row["principal_id"],
+        "agent_id": row["agent_id"],
+        "scope": row["scope"],
+        "legal_basis_regulation": legal["regulation"],
+        "legal_basis_article": legal["article"],
+        "legal_basis_jurisdiction": legal["jurisdiction"],
+        "duration_hours": 24,
+        "created_at": row["created_at"],
+        "expires_at": row["expires_at"],
+        "parent_mandate_id": None,
+    }
+    assert compute_hash(data, "") == row["chain_hash"]
+    assert row["perimeter_json"] is None
 
 
 async def test_perimeter_is_sealed_in_the_mandate_chain_hash(temp_db: Path) -> None:
@@ -341,6 +426,50 @@ async def test_sub_mandate_cannot_outlive_parent() -> None:
     assert child["code"] == "expires_after_parent"
 
 
+async def test_grandparent_revoked_blocks_new_and_existing_sub_mandates(temp_db: Path) -> None:
+    root = await _delegating_parent()
+    middle = await _sub(
+        root, agent_id="agent:middle", allowed_actions=["invoice.*"], delegation_allowed=True
+    )
+    assert middle["status"] == "created", middle
+    leaf = await _sub(middle, allowed_actions=["invoice.read"], duration_hours=12)
+    assert leaf["status"] == "created", leaf
+    async with aiosqlite.connect(str(temp_db)) as db:
+        await db.execute(
+            "UPDATE mandates SET status = 'revoked' WHERE id = ?", (root["mandate_id"],)
+        )
+        await db.commit()
+    again = await _sub(middle, allowed_actions=["invoice.read"], duration_hours=12)
+    assert again["code"] == "parent_mandate_revoked"
+    res = await _token(leaf["mandate_id"], "agent:helper", action_type="invoice.read")
+    assert res["reason"] == "parent_mandate_revoked"
+    assert res["refused_by"] == root["mandate_id"]
+    verified = json.loads(await verify_mandate("agent:helper", "read invoices"))
+    assert verified["authorized"] is False
+    assert "parent_mandate_revoked" in verified["reason"]
+
+
+async def test_free_text_sub_mandate_is_cut_when_its_parent_expires(temp_db: Path) -> None:
+    """Breaking change of v1.1: sub-mandates written before perimeters existed now
+    require every parent to be active and unexpired."""
+    parent_id, child_id = str(uuid4()), str(uuid4())
+    await insert_mandate_directly(temp_db, parent_id, agent_id="agent:lead",
+                                  hours_until_expiry=-1.0)
+    await insert_mandate_directly(temp_db, child_id, principal_id="agent:lead",
+                                  agent_id="agent:helper", hours_until_expiry=720,
+                                  parent_mandate_id=parent_id)
+    res = await _token(child_id, "agent:helper")
+    assert res["reason"] == "parent_mandate_expired"
+    assert res["refused_by"] == parent_id
+
+
+async def test_parent_id_is_stored_in_canonical_form() -> None:
+    parent = await _delegating_parent()
+    child = await _sub(parent, parent_mandate_id=parent["mandate_id"].upper())
+    assert child["status"] == "created", child
+    assert child["parent_mandate_id"] == parent["mandate_id"]
+
+
 async def test_unknown_parent_is_refused() -> None:
     child = await _mandate(
         principal_id="agent:lead",
@@ -390,7 +519,8 @@ async def test_parent_perimeter_is_enforced_even_if_the_child_record_is_wider(
 
 
 async def test_practitioner_case_sub_agent_creation_despite_instruction() -> None:
-    """An agent told not to create sub-agents gets no token and no sub-mandate."""
+    """An agent told not to create sub-agents gets no token for it (forbidden action)
+    and cannot register a sub-mandate (its mandate does not grant delegation)."""
     m = await _mandate(
         agent_id="agent:assistant",
         allowed_actions=["report.*"],
@@ -421,6 +551,9 @@ async def test_verify_and_proof_show_the_perimeter() -> None:
     assert proof["mandate"]["perimeter"]["allowed_actions"] == ["invoice.read"]
 
 
+OLD_ID = "00000000-0000-4000-8000-000000000001"
+
+
 async def test_existing_database_is_upgraded_in_place(temp_db: Path) -> None:
     async with aiosqlite.connect(str(temp_db)) as db:
         await db.executescript(
@@ -432,7 +565,8 @@ async def test_existing_database_is_upgraded_in_place(temp_db: Path) -> None:
                 expires_at TEXT NOT NULL, parent_mandate_id TEXT REFERENCES mandates(id),
                 metadata_json TEXT NOT NULL DEFAULT '{}', chain_hash TEXT NOT NULL
             );
-            INSERT INTO mandates VALUES ('old-1', 'p', 'agent:old', 's', '{}', 'active',
+            INSERT INTO mandates VALUES (
+                '00000000-0000-4000-8000-000000000001', 'p', 'agent:old', 's', '{}', 'active',
                 '2026-01-01T00:00:00+00:00', '2999-01-01T00:00:00+00:00', NULL, '{}', 'h');
             """
         )
@@ -442,7 +576,11 @@ async def test_existing_database_is_upgraded_in_place(temp_db: Path) -> None:
         db.row_factory = aiosqlite.Row
         info = await (await db.execute("PRAGMA table_info(mandates)")).fetchall()
         cols = {r["name"] for r in info}
-        old = await (await db.execute("SELECT * FROM mandates WHERE id = 'old-1'")).fetchone()
+        old = await (
+            await db.execute("SELECT * FROM mandates WHERE id = ?", (OLD_ID,))
+        ).fetchone()
     assert "perimeter_json" in cols
     assert old["chain_hash"] == "h"
     assert old["perimeter_json"] is None
+    res = await _token(OLD_ID, "agent:old")
+    assert "token" in res, res

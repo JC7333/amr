@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from amr.config import settings
 from amr.crypto.chain import compute_hash
 from amr.db.engine import get_db, get_last_mandate_hash, init_db
+from amr.delegation import load_ancestors
 from amr.models.mandate import LegalBasis, MandateCreate
 from amr.models.perimeter import Perimeter, PerimeterError
 
@@ -26,12 +27,20 @@ def _build_perimeter(
     currency: str,
     amount_actions: list[str] | None,
 ) -> Perimeter | None:
-    """Build the structured perimeter, or None for a legacy free-text mandate."""
-    if not (
-        allowed_actions or forbidden_actions or delegation_allowed or max_amount or amount_actions
+    """Build the structured perimeter, or None for a legacy free-text mandate.
+
+    Any perimeter argument given explicitly (even an empty list) asks for a perimeter;
+    an empty allowed_actions list is then rejected rather than read as "no perimeter".
+    """
+    if (
+        allowed_actions is None
+        and forbidden_actions is None
+        and amount_actions is None
+        and max_amount is None
+        and not delegation_allowed
     ):
         return None
-    if not allowed_actions:
+    if allowed_actions is None:
         raise PerimeterError(
             "perimeter_invalid",
             "allowed_actions is required when a structured perimeter is given",
@@ -54,31 +63,20 @@ async def _check_parent(
     expires_at: datetime,
     now: datetime,
 ) -> Perimeter:
-    """Validate a sub-delegation against its parent mandate.
+    """Validate a sub-delegation against its parent mandate and the chain above it.
 
     Returns the child's effective perimeter (parent prohibitions and limits inherited),
     or raises PerimeterError with a stable code.
     """
-    cursor = await db.execute(
-        """
-        SELECT id, agent_id, status, expires_at, perimeter_json
-        FROM mandates
-        WHERE id = ?
-        """,
-        (parent_mandate_id,),
-    )
-    parent = await cursor.fetchone()
-    if parent is None:
-        raise PerimeterError("parent_mandate_not_found", f"no mandate '{parent_mandate_id}'")
-    if parent["status"] != "active":
+    ancestors, refusal = await load_ancestors(db, parent_mandate_id, now)
+    if refusal is not None:
         raise PerimeterError(
-            "parent_mandate_not_active", f"parent mandate status is '{parent['status']}'"
+            refusal.reason, f"delegation chain broken at mandate '{refusal.refused_by}'"
         )
+    parent = ancestors[0]
     parent_expires = datetime.fromisoformat(parent["expires_at"])
     if parent_expires.tzinfo is None:
         parent_expires = parent_expires.replace(tzinfo=UTC)
-    if parent_expires <= now:
-        raise PerimeterError("parent_mandate_expired", "parent mandate has expired")
     if not parent["perimeter_json"]:
         raise PerimeterError(
             "delegation_not_allowed",
@@ -147,7 +145,8 @@ async def create_mandate(
         legal_basis_jurisdiction: Jurisdiction code. Default "EU".
                                   Example: "EU", "FR", "US"
         parent_mandate_id: UUID of a parent mandate for sub-delegation chains. The parent
-                           must be active, allow delegation, and have this mandate's
+                           (and every mandate above it) must be active and unexpired; the
+                           parent must allow delegation and have this mandate's
                            principal_id as its agent_id; the sub-mandate must declare
                            allowed_actions within the parent's, and cannot outlive it.
                            Example: "550e8400-e29b-41d4-a716-446655440000"
@@ -160,10 +159,12 @@ async def create_mandate(
                            Example: ["agent.create", "invoice.delete"]
         delegation_allowed: Whether the agent may grant sub-mandates to other agents.
                             Default False.
-        max_amount: Optional ceiling per action, as a decimal string. Example: "500"
+        max_amount: Optional ceiling per action, as a plain decimal string with a dot.
+                    Example: "500" or "120.50"
         currency: ISO 4217 code of max_amount. Default "EUR".
-        amount_actions: Action types that move money and must carry an "amount"
-                        metadata value at or below max_amount. Empty means every action.
+        amount_actions: Action types that move money: they must carry "amount" and
+                        "currency" metadata, the amount at or below max_amount. A pattern
+                        also reaches its sub-types. Empty means every action.
                         Example: ["invoice.pay"]
 
     Returns:
@@ -209,15 +210,19 @@ async def create_mandate(
         await init_db(settings.db_path)
         db = await get_db(settings.db_path)
 
-        if mandate_data.parent_mandate_id is not None:
-            perimeter = await _check_parent(
-                db,
-                str(mandate_data.parent_mandate_id),
-                principal_id,
-                perimeter,
-                expires_at,
-                now,
-            )
+        # Canonical UUID form, so the stored link and the lookup always agree.
+        parent_id = (
+            str(mandate_data.parent_mandate_id)
+            if mandate_data.parent_mandate_id is not None
+            else None
+        )
+        if parent_id is not None:
+            try:
+                perimeter = await _check_parent(
+                    db, parent_id, principal_id, perimeter, expires_at, now
+                )
+            except ValidationError as exc:
+                return _error("perimeter_invalid", str(exc))
 
         previous_hash = await get_last_mandate_hash(db)
 
@@ -233,7 +238,7 @@ async def create_mandate(
             "duration_hours": duration_hours,
             "created_at": now.isoformat(),
             "expires_at": expires_at.isoformat(),
-            "parent_mandate_id": str(parent_mandate_id) if parent_mandate_id else None,
+            "parent_mandate_id": parent_id,
         }
         # The perimeter is sealed into the chain. Free-text mandates keep the exact
         # pre-perimeter payload, so their hashes are unchanged.
@@ -268,7 +273,7 @@ async def create_mandate(
                 "active",
                 now.isoformat(),
                 expires_at.isoformat(),
-                str(parent_mandate_id) if parent_mandate_id else None,
+                parent_id,
                 metadata_json,
                 chain_hash,
                 perimeter.to_json() if perimeter is not None else None,
@@ -284,7 +289,7 @@ async def create_mandate(
                 "agent_id": agent_id,
                 "scope": scope,
                 "perimeter": perimeter.canonical() if perimeter is not None else None,
-                "parent_mandate_id": str(parent_mandate_id) if parent_mandate_id else None,
+                "parent_mandate_id": parent_id,
                 "expires_at": expires_at.isoformat(),
                 "chain_hash": chain_hash,
             }

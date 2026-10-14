@@ -2,30 +2,39 @@
 
 A perimeter is the machine-readable part of a mandate: which action types the agent
 may request, which ones it may never request, whether it may delegate (create a
-sub-mandate for another agent), and an optional amount limit per action.
+sub-mandate for another agent), and an optional amount ceiling per action.
 
 Action types are dotted, lowercase identifiers chosen by the principal, for example
-``invoice.read``, ``invoice.pay`` or ``agent.create``. A pattern is either an exact
-action type, a prefix pattern ending in ``.*`` (``invoice.*`` matches ``invoice.pay``
-and ``invoice.pay.partial`` but not ``invoice``), or ``*`` (every action type).
+``invoice.read``, ``invoice.pay`` or ``agent.create``. A pattern is an exact action
+type, a prefix pattern ending in ``.*``, or ``*`` (every action type).
 
-Forbidden patterns always win over allowed patterns.
+Fail-safe semantics: allow-lists are read narrowly, deny-lists broadly.
 
-An amount limit (``max_amount``) applies to the actions matched by ``amount_actions``
-(every action when ``amount_actions`` is empty): those actions must carry an ``amount``
-metadata value at or below the limit. Any other action that declares an amount is
-checked against the limit too.
+- In ``allowed_actions``, ``invoice.pay`` allows exactly ``invoice.pay``, and
+  ``invoice.*`` allows the sub-types of ``invoice`` (``invoice.pay``,
+  ``invoice.pay.partial``) but not ``invoice`` itself.
+- In ``forbidden_actions`` and ``amount_actions``, a pattern also reaches every
+  sub-type: forbidding ``agent.create`` forbids ``agent.create.batch`` too, and
+  ``agent.*`` also covers ``agent`` itself.
+- Forbidden patterns always win over allowed patterns.
+
+An amount ceiling (``max_amount``) applies to the actions reached by ``amount_actions``
+(every action when ``amount_actions`` is empty): they must carry ``amount`` and
+``currency`` metadata, the amount at or below the ceiling. Any other action that
+declares an amount is checked the same way. Amounts use plain decimal notation with
+a dot (``500``, ``120.50``): no sign, exponent, spaces, separators or non-ASCII digits.
 """
 
 import hashlib
 import json
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-ACTION_TYPE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*(\.[a-z0-9][a-z0-9_-]*)*$")
+ACTION_TYPE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*", re.ASCII)
+AMOUNT_RE = re.compile(r"[0-9]{1,18}(?:\.[0-9]{1,18})?", re.ASCII)
 MAX_PATTERNS = 100
 MAX_ACTION_TYPE_LENGTH = 200
 
@@ -40,8 +49,19 @@ class PerimeterError(ValueError):
 
 
 def is_valid_action_type(action_type: str) -> bool:
-    """Return True if ``action_type`` is a dotted lowercase identifier."""
-    return len(action_type) <= MAX_ACTION_TYPE_LENGTH and bool(ACTION_TYPE_RE.match(action_type))
+    """Return True if ``action_type`` is a dotted lowercase ASCII identifier."""
+    return len(action_type) <= MAX_ACTION_TYPE_LENGTH and bool(
+        ACTION_TYPE_RE.fullmatch(action_type)
+    )
+
+
+def parse_amount(raw: object) -> Decimal | None:
+    """Parse a plain decimal amount (``500`` or ``120.50``); None if not in that form."""
+    if isinstance(raw, Decimal):
+        raw = format(raw, "f")
+    if not isinstance(raw, str) or not AMOUNT_RE.fullmatch(raw):
+        return None
+    return Decimal(raw)
 
 
 def _validate_pattern(pattern: str) -> str:
@@ -50,14 +70,14 @@ def _validate_pattern(pattern: str) -> str:
     base = pattern[:-2] if pattern.endswith(".*") else pattern
     if not is_valid_action_type(base):
         raise ValueError(
-            f"invalid action pattern '{pattern}': expected an action type such as "
+            f"invalid action pattern {pattern!r}: expected an action type such as "
             "'invoice.pay', a prefix pattern such as 'invoice.*', or '*'"
         )
     return pattern
 
 
 def pattern_matches(pattern: str, action_type: str) -> bool:
-    """Return True if ``pattern`` matches the concrete ``action_type``."""
+    """Narrow match, for allowed_actions: exact type, strict sub-types of a prefix, or '*'."""
     if pattern == "*":
         return True
     if pattern.endswith(".*"):
@@ -65,8 +85,16 @@ def pattern_matches(pattern: str, action_type: str) -> bool:
     return action_type == pattern
 
 
+def pattern_reaches(pattern: str, action_type: str) -> bool:
+    """Broad match, for forbidden_actions and amount_actions: the type and all its sub-types."""
+    if pattern == "*":
+        return True
+    base = pattern[:-2] if pattern.endswith(".*") else pattern
+    return action_type == base or action_type.startswith(base + ".")
+
+
 def pattern_covers(outer: str, inner: str) -> bool:
-    """Return True if every action type matched by ``inner`` is matched by ``outer``."""
+    """Return True if every action type allowed by ``inner`` is allowed by ``outer``."""
     if outer == "*":
         return True
     if inner == "*":
@@ -80,7 +108,11 @@ def pattern_covers(outer: str, inner: str) -> bool:
 
 
 def _canonical_amount(amount: Decimal) -> str:
-    return format(amount.normalize(), "f")
+    """Exact plain notation without trailing zeros (no rounding)."""
+    text = format(amount, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
 
 
 class Perimeter(BaseModel):
@@ -99,6 +131,16 @@ class Perimeter(BaseModel):
     @classmethod
     def _normalize_patterns(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(sorted({_validate_pattern(p) for p in value}))
+
+    @field_validator("max_amount", mode="before")
+    @classmethod
+    def _plain_decimal(cls, value: object) -> object:
+        if value is None:
+            return None
+        parsed = parse_amount(value)
+        if parsed is None:
+            raise ValueError("max_amount must be a plain decimal such as '500' or '120.50'")
+        return parsed
 
     @model_validator(mode="after")
     def _amount_actions_need_a_limit(self) -> "Perimeter":
@@ -137,7 +179,7 @@ class Perimeter(BaseModel):
     def check_action(self, action_type: str, metadata: dict[str, str]) -> str | None:
         """Return None if the action is inside the perimeter, else a short reason detail."""
         for pattern in self.forbidden_actions:
-            if pattern_matches(pattern, action_type):
+            if pattern_reaches(pattern, action_type):
                 return f"forbidden:{pattern}"
         if not any(pattern_matches(p, action_type) for p in self.allowed_actions):
             return f"not_allowed:{action_type}"
@@ -145,17 +187,16 @@ class Perimeter(BaseModel):
             raw = metadata.get("amount")
             if raw is None:
                 limited = not self.amount_actions or any(
-                    pattern_matches(p, action_type) for p in self.amount_actions
+                    pattern_reaches(p, action_type) for p in self.amount_actions
                 )
                 return "amount_required" if limited else None
-            try:
-                amount = Decimal(raw)
-            except InvalidOperation:
-                return "amount_invalid"
-            if not amount.is_finite() or amount < 0:
+            amount = parse_amount(raw)
+            if amount is None:
                 return "amount_invalid"
             currency = metadata.get("currency")
-            if currency is not None and currency.upper() != self.currency:
+            if currency is None:
+                return "currency_required"
+            if currency != self.currency:
                 return f"currency_mismatch:{self.currency}"
             if amount > self.max_amount:
                 return f"amount_above_limit:{_canonical_amount(self.max_amount)} {self.currency}"
@@ -165,8 +206,8 @@ class Perimeter(BaseModel):
         """Return this perimeter as a sub-mandate of ``parent``, or raise PerimeterError.
 
         Every allowed pattern must lie inside the parent's allowed patterns. The parent's
-        forbidden patterns are inherited. The parent's amount limit is inherited when the
-        child sets none, and a child limit may never exceed it.
+        forbidden patterns are inherited. The parent's amount ceiling is inherited when the
+        child sets none, and a child ceiling may never exceed it.
         """
         for pattern in self.allowed_actions:
             if not any(pattern_covers(outer, pattern) for outer in parent.allowed_actions):
@@ -196,11 +237,14 @@ class Perimeter(BaseModel):
                 amount_actions = ()  # an empty list means every action is limited
             else:
                 amount_actions = tuple(set(amount_actions) | set(parent.amount_actions))
-        return Perimeter(
-            allowed_actions=self.allowed_actions,
-            forbidden_actions=forbidden,
-            delegation_allowed=self.delegation_allowed,
-            max_amount=max_amount,
-            currency=currency,
-            amount_actions=amount_actions,
-        )
+        try:
+            return Perimeter(
+                allowed_actions=self.allowed_actions,
+                forbidden_actions=forbidden,
+                delegation_allowed=self.delegation_allowed,
+                max_amount=max_amount,
+                currency=currency,
+                amount_actions=amount_actions,
+            )
+        except ValueError as exc:
+            raise PerimeterError("perimeter_invalid", str(exc)) from exc

@@ -20,12 +20,9 @@ from amr.db.engine import (
     is_token_replay,
     record_issued_token,
 )
+from amr.delegation import load_ancestors
 from amr.models.perimeter import Perimeter
 from amr.models.token import IssueTokenRequest
-
-# A delegation chain longer than this is refused (cycles are impossible by construction,
-# this bounds the walk anyway).
-MAX_DELEGATION_DEPTH = 16
 
 
 def _canonical_action_hash(
@@ -88,8 +85,10 @@ async def issue_action_token(
         lifetime_override_seconds: Optional override for token lifetime.
             Intended for tests only. If None, uses settings.token_lifetime_seconds.
         action_type: Dotted action type checked against the mandate perimeter,
-            e.g. "invoice.pay" or "agent.create". Required when the mandate has a
-            structured perimeter; sealed into the token as amr_action_type.
+            e.g. "invoice.pay" or "agent.create". Required when the mandate (or a
+            mandate above it) has a structured perimeter; sealed into the token as
+            amr_action_type. Under a free-text mandate it is sealed but not checked
+            (the token then carries no amr_perimeter_digest).
 
     Returns:
         JSON string. Success keys: token, jti, expires_at, key_id.
@@ -170,49 +169,17 @@ async def issue_action_token(
             })
 
         # --- 3b. Delegation chain: every parent must still be active and unexpired ---
-        chain = [row]
-        parent_id = row["parent_mandate_id"]
-        while parent_id:
-            if len(chain) > MAX_DELEGATION_DEPTH:
-                return json.dumps({
-                    "denied": True,
-                    "reason": "delegation_chain_too_deep",
-                    "mandate_id": str(req.mandate_id),
-                })
-            parent_cursor = await db.execute(
-                """
-                SELECT id, status, expires_at, parent_mandate_id, perimeter_json
-                FROM mandates
-                WHERE id = ?
-                """,
-                (parent_id,),
-            )
-            parent = await parent_cursor.fetchone()
-            if parent is None:
-                return json.dumps({
-                    "denied": True,
-                    "reason": "parent_mandate_not_found",
-                    "mandate_id": str(req.mandate_id),
-                })
-            if parent["status"] != "active":
-                return json.dumps({
-                    "denied": True,
-                    "reason": f"parent_mandate_{parent['status']}",
-                    "mandate_id": str(req.mandate_id),
-                    "refused_by": parent["id"],
-                })
-            parent_expires = datetime.fromisoformat(parent["expires_at"])
-            if parent_expires.tzinfo is None:
-                parent_expires = parent_expires.replace(tzinfo=UTC)
-            if parent_expires <= now:
-                return json.dumps({
-                    "denied": True,
-                    "reason": "parent_mandate_expired",
-                    "mandate_id": str(req.mandate_id),
-                    "refused_by": parent["id"],
-                })
-            chain.append(parent)
-            parent_id = parent["parent_mandate_id"]
+        ancestors, refusal = await load_ancestors(db, row["parent_mandate_id"], now)
+        if refusal is not None:
+            denial = {
+                "denied": True,
+                "reason": refusal.reason,
+                "mandate_id": str(req.mandate_id),
+            }
+            if refusal.refused_by is not None:
+                denial["refused_by"] = refusal.refused_by
+            return json.dumps(denial)
+        chain = [row, *ancestors]
 
         # --- 3c. Perimeter: the action must fit every perimeter in the chain ---
         perimeter = (
