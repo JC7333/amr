@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from amr.models.perimeter import Perimeter
+
 
 class MandateStatus(StrEnum):
     """Status of an agent mandate."""
@@ -35,6 +37,7 @@ class MandateCreate(BaseModel):
     duration_hours: float = Field(..., gt=0, le=8760)
     parent_mandate_id: UUID | None = Field(default=None)
     metadata: dict[str, str] = Field(default_factory=dict)
+    perimeter: Perimeter | None = Field(default=None)
 
 
 class Mandate(BaseModel):
@@ -48,6 +51,7 @@ class Mandate(BaseModel):
     duration_hours: float = Field(..., gt=0, le=8760)
     parent_mandate_id: UUID | None = Field(default=None)
     metadata: dict[str, str] = Field(default_factory=dict)
+    perimeter: Perimeter | None = Field(default=None)
     status: MandateStatus = Field(default=MandateStatus.ACTIVE)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime

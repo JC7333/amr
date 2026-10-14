@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS mandates (
     expires_at        TEXT NOT NULL,
     parent_mandate_id TEXT REFERENCES mandates(id),
     metadata_json     TEXT NOT NULL DEFAULT '{}',
-    chain_hash        TEXT NOT NULL
+    chain_hash        TEXT NOT NULL,
+    perimeter_json    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS action_logs (
@@ -108,7 +109,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
     """Initialize the database schema (idempotent - safe to call multiple times).
 
     Creates all tables and indexes if they do not already exist.
-    Inserts schema_version=1 if not present.
+    Records the schema versions applied (2: issued tokens, 3: mandate perimeter).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -122,6 +123,22 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (2,),
+        )
+        # Schema v3: structured mandate perimeter (allowed / forbidden action types,
+        # delegation flag, amount limit). Older databases gain a nullable column;
+        # existing rows are not modified (append-only invariant preserved).
+        cursor = await db.execute("PRAGMA table_info(mandates)")
+        columns = {row["name"] for row in await cursor.fetchall()}
+        if "perimeter_json" not in columns:
+            try:
+                await db.execute("ALTER TABLE mandates ADD COLUMN perimeter_json TEXT")
+            except aiosqlite.OperationalError as exc:
+                # Another process added it between our check and our ALTER.
+                if "duplicate column" not in str(exc):
+                    raise
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (3,),
         )
         await db.commit()
 
