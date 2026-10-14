@@ -34,6 +34,47 @@ via the `jti` claim and the `issued_tokens` audit table, and carry the exact
 action hash and scope digest they authorize. Consumers verify offline with the
 AMR public key and MUST check `aud`, `exp`, and `amr_action_hash`.
 
+### Perimeter enforcement and delegation control
+
+A mandate can carry a **structured perimeter**: the action types the agent may
+request (`allowed_actions`), the ones it may never request (`forbidden_actions`,
+which always win and also reach sub-types: forbidding `agent.create` forbids
+`agent.create.batch`), whether it may delegate (`delegation_allowed`), and an
+optional amount ceiling (`max_amount` with `currency`, applied to `amount_actions`). The token issuer then
+checks the **requested action** against the perimeter, not only the existence of
+the mandate:
+
+- an action type outside `allowed_actions`, or matching `forbidden_actions`, gets
+  no token (`reason: "action_out_of_scope"`, with a `detail` and the mandate that
+  refused it in `refused_by`);
+- a sub-mandate (`parent_mandate_id`) is created only if the parent is active,
+  allows delegation, and was granted to the agent now delegating; the sub-mandate
+  must stay inside the parent's allowed actions and limit, inherits the parent's
+  prohibitions, and cannot outlive the parent;
+- every token issued under a sub-mandate re-checks the whole chain: revoke or let
+  expire the parent, and every sub-mandate below it stops getting tokens.
+
+Example: an assistant agent told never to create sub-agents.
+
+```json
+create_mandate(..., allowed_actions=["report.*"], forbidden_actions=["agent.create"])
+issue_action_token(..., action_type="agent.create")
+→ {"denied": true, "reason": "action_out_of_scope", "detail": "forbidden:agent.create"}
+```
+
+Root mandates without a perimeter keep working as before (free-text scope,
+existence and validity checks only, same hashes). Two changes are deliberate and
+breaking for sub-mandates: a new sub-mandate requires a parent that allows
+delegation (so a free-text parent can no longer delegate), and tokens under any
+sub-mandate, including ones created before v1.1, now require every parent to be
+active and unexpired.
+
+> **Deployment rule.** These controls hold only if agents cannot register their own
+> mandates. `create_mandate` is a principal-side tool: expose it to the principal
+> (or its back office), never to the agents it governs. An agent that can call
+> `create_mandate` can mint itself a fresh root mandate. Authenticating the
+> principal on mandate creation is on the roadmap.
+
 See `docs/token-issuance-spec.md` for the full specification.
 
 ---
@@ -103,8 +144,14 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `legal_basis_article` | str | Specific article or clause. E.g. `"Art.26(1)(a)"` |
 | `duration_hours` | float | Duration in hours (max 8760 = 1 year) |
 | `legal_basis_jurisdiction` | str | Jurisdiction code (default `"EU"`) |
-| `parent_mandate_id` | str \| null | UUID of parent mandate for delegation chains |
+| `parent_mandate_id` | str \| null | UUID of parent mandate for delegation chains (parent must allow delegation) |
 | `metadata` | dict | Optional string key-value pairs for annotations |
+| `allowed_actions` | list[str] \| null | Action types the agent may request: `"invoice.pay"`, `"invoice.*"` or `"*"` |
+| `forbidden_actions` | list[str] \| null | Action types never allowed (win over `allowed_actions`). E.g. `["agent.create"]` |
+| `delegation_allowed` | bool | Whether the agent may grant sub-mandates (default `false`) |
+| `max_amount` | str \| null | Ceiling per action, decimal string. E.g. `"500"` |
+| `currency` | str | ISO 4217 code of `max_amount` (default `"EUR"`) |
+| `amount_actions` | list[str] \| null | Actions that must carry an `amount` under the ceiling (empty: all) |
 
 **Returns:**
 ```json
@@ -114,16 +161,29 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
   "principal_id": "user:audric",
   "agent_id": "agent:korvex-advisor-v1",
   "scope": "Compare and recommend financial products to retail clients",
+  "perimeter": null,
+  "parent_mandate_id": null,
   "expires_at": "2026-05-13T20:00:00+00:00",
   "chain_hash": "a3f5c2d1e8b9..."
 }
 ```
 
+`perimeter` holds the structured perimeter when one was given (it is sealed into
+`chain_hash`). Perimeter and delegation errors return `{"error": "...", "code": "..."}`
+with a stable code: `perimeter_invalid`, `parent_mandate_not_found`,
+`parent_mandate_<status>`, `parent_mandate_expired`, `delegation_not_allowed`,
+`delegator_mismatch`, `sub_mandate_requires_perimeter`, `perimeter_exceeds_parent`,
+`limit_exceeds_parent`, `expires_after_parent`. A broken chain above the parent
+returns `parent_mandate_<status>`, `parent_mandate_expired` or
+`delegation_chain_too_deep` (more than 16 levels).
+
 ---
 
 ### `verify_mandate`
 
-Check whether an AI agent has a currently active, non-expired mandate.
+Check whether an AI agent has a currently active, non-expired mandate (for a
+sub-mandate, every mandate above it must be active and unexpired too). It does not
+check the action against the perimeter: `issue_action_token` does.
 
 **Parameters:**
 
@@ -140,6 +200,8 @@ Check whether an AI agent has a currently active, non-expired mandate.
   "mandate_id": "550e8400-e29b-41d4-a716-446655440000",
   "reason": "Active mandate found",
   "scope": "Compare and recommend financial products to retail clients",
+  "perimeter": null,
+  "parent_mandate_id": null,
   "expires_at": "2026-05-13T20:00:00+00:00"
 }
 ```
@@ -287,7 +349,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
 # Install all dependencies including dev extras
 uv sync --all-extras
 
-# Run the full test suite (20 tests)
+# Run the full test suite
 uv run pytest -v
 
 # Run with short traceback on failure

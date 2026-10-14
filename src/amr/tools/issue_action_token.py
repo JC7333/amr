@@ -20,21 +20,33 @@ from amr.db.engine import (
     is_token_replay,
     record_issued_token,
 )
+from amr.delegation import load_ancestors
+from amr.models.perimeter import Perimeter
 from amr.models.token import IssueTokenRequest
 
 
-def _canonical_action_hash(action: str, audience: str, metadata: dict[str, str]) -> str:
+def _canonical_action_hash(
+    action: str,
+    audience: str,
+    metadata: dict[str, str],
+    action_type: str | None = None,
+) -> str:
     """Canonical SHA-256 hash of the action descriptor.
 
     Uses sorted keys and compact separators for reproducibility across
     languages and implementations. Consumers MUST use the exact same
-    canonicalization when verifying a token.
+    canonicalization when verifying a token. When the token carries an
+    ``amr_action_type`` claim, the descriptor includes ``action_type``;
+    otherwise it is exactly {action, audience, metadata}.
     """
-    canonical = json.dumps(
-        {"action": action, "audience": audience, "metadata": metadata},
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    descriptor: dict[str, object] = {
+        "action": action,
+        "audience": audience,
+        "metadata": metadata,
+    }
+    if action_type is not None:
+        descriptor["action_type"] = action_type
+    canonical = json.dumps(descriptor, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -50,12 +62,19 @@ async def issue_action_token(
     audience: str,
     action_metadata_json: str = "{}",
     lifetime_override_seconds: int | None = None,
+    action_type: str | None = None,
 ) -> str:
     """Issue a signed action token IF AND ONLY IF a valid mandate authorizes it.
 
     This is the hard-stop: no valid mandate → no token → no action possible.
+    When the mandate (or any mandate above it in a delegation chain) has a
+    structured perimeter, the requested action_type must be allowed, must not be
+    forbidden, and must respect the amount limit, at every level of the chain.
+    Every parent mandate must also still be active and unexpired.
     Returns a JSON string with either {token, jti, expires_at, key_id}
     on success, or {denied: true, reason: "...", mandate_id: "..."} on denial.
+    Perimeter denials use reason "action_out_of_scope", with "detail" and
+    "refused_by" (the mandate whose perimeter refused the action).
 
     Args:
         mandate_id: UUID of the mandate the agent invokes.
@@ -65,6 +84,11 @@ async def issue_action_token(
         action_metadata_json: Optional JSON-encoded dict of additional action metadata.
         lifetime_override_seconds: Optional override for token lifetime.
             Intended for tests only. If None, uses settings.token_lifetime_seconds.
+        action_type: Dotted action type checked against the mandate perimeter,
+            e.g. "invoice.pay" or "agent.create". Required when the mandate (or a
+            mandate above it) has a structured perimeter; sealed into the token as
+            amr_action_type. Under a free-text mandate it is sealed but not checked
+            (the token then carries no amr_perimeter_digest).
 
     Returns:
         JSON string. Success keys: token, jti, expires_at, key_id.
@@ -88,6 +112,7 @@ async def issue_action_token(
                 action=action,
                 audience=audience,
                 action_metadata=metadata_raw,
+                action_type=action_type,
             )
         except (ValidationError, ValueError, json.JSONDecodeError) as exc:
             return json.dumps({"denied": True, "reason": f"invalid_input: {exc}"})
@@ -102,7 +127,8 @@ async def issue_action_token(
 
         cursor = await db.execute(
             """
-            SELECT id, agent_id, scope, status, expires_at
+            SELECT id, agent_id, scope, status, expires_at, parent_mandate_id,
+                   perimeter_json
             FROM mandates
             WHERE id = ?
             """,
@@ -142,9 +168,48 @@ async def issue_action_token(
                 "mandate_id": str(req.mandate_id),
             })
 
+        # --- 3b. Delegation chain: every parent must still be active and unexpired ---
+        ancestors, refusal = await load_ancestors(db, row["parent_mandate_id"], now)
+        if refusal is not None:
+            denial = {
+                "denied": True,
+                "reason": refusal.reason,
+                "mandate_id": str(req.mandate_id),
+            }
+            if refusal.refused_by is not None:
+                denial["refused_by"] = refusal.refused_by
+            return json.dumps(denial)
+        chain = [row, *ancestors]
+
+        # --- 3c. Perimeter: the action must fit every perimeter in the chain ---
+        perimeter = (
+            Perimeter.from_json(row["perimeter_json"]) if row["perimeter_json"] else None
+        )
+        for link in chain:
+            if not link["perimeter_json"]:
+                continue
+            if req.action_type is None:
+                return json.dumps({
+                    "denied": True,
+                    "reason": "action_type_required",
+                    "mandate_id": str(req.mandate_id),
+                    "refused_by": link["id"],
+                })
+            detail = Perimeter.from_json(link["perimeter_json"]).check_action(
+                req.action_type, req.action_metadata
+            )
+            if detail is not None:
+                return json.dumps({
+                    "denied": True,
+                    "reason": "action_out_of_scope",
+                    "detail": detail,
+                    "mandate_id": str(req.mandate_id),
+                    "refused_by": link["id"],
+                })
+
         # --- 4. Replay prevention ---
         action_hash = _canonical_action_hash(
-            req.action, req.audience, req.action_metadata
+            req.action, req.audience, req.action_metadata, req.action_type
         )
         if await is_token_replay(
             db, str(req.mandate_id), action_hash, now.isoformat()
@@ -178,6 +243,10 @@ async def issue_action_token(
             "amr_action_hash": action_hash,
             "amr_scope_digest": scope_digest,
         }
+        if req.action_type is not None:
+            claims["amr_action_type"] = req.action_type
+        if perimeter is not None:
+            claims["amr_perimeter_digest"] = perimeter.digest()
 
         # Load key and serialize to PEM bytes (pyjwt expects bytes or str for EdDSA)
         private_key = load_signing_key()

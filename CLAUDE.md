@@ -31,7 +31,9 @@ src/amr/
 ├── server.py          # FastMCP server entrypoint (stdio transport)
 ├── models/
 │   ├── __init__.py
-│   └── mandate.py     # Pydantic models: MandateCreate, Mandate, ActionLog, VerifyResult
+│   ├── mandate.py     # Pydantic models: MandateCreate, Mandate, ActionLog, VerifyResult
+│   ├── perimeter.py   # Structured perimeter: allowed/forbidden action types, delegation, limit
+│   └── token.py       # Token request and result models
 ├── crypto/
 │   ├── __init__.py
 │   └── chain.py       # compute_hash() and verify_chain() — stdlib only
@@ -106,7 +108,7 @@ uv run python -c "from amr.config import settings; print(settings.server_name)"
 | `verify_mandate` | Check if an agent has an active, non-expired mandate |
 | `log_action` | Log an agent action under an active mandate (append-only, chained) |
 | `get_proof` | Generate a full Proof Pack JSON for a mandate (mandate + actions + integrity) |
-| `issue_action_token` | Issue a signed action token if and only if a valid mandate authorizes the action (hard-stop enforcement) |
+| `issue_action_token` | Issue a signed action token if and only if a valid mandate authorizes the action (hard-stop enforcement), inside its structured perimeter and along its whole delegation chain |
 
 ---
 
