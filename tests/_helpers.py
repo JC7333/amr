@@ -17,6 +17,8 @@ async def insert_mandate_directly(
     status: str = "active",
     hours_until_expiry: float = 24.0,
     chain_hash: str = "0" * 64,
+    perimeter_json: str | None = None,
+    parent_mandate_id: str | None = None,
 ) -> None:
     """Insert a mandate directly via SQL for isolated test setup.
 
@@ -39,8 +41,9 @@ async def insert_mandate_directly(
             """
             INSERT INTO mandates (
                 id, principal_id, agent_id, scope, legal_basis_json,
-                status, created_at, expires_at, metadata_json, chain_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, created_at, expires_at, metadata_json, chain_hash,
+                perimeter_json, parent_mandate_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 mandate_id,
@@ -53,6 +56,8 @@ async def insert_mandate_directly(
                 expires_at.isoformat(),
                 "{}",
                 chain_hash,
+                perimeter_json,
+                parent_mandate_id,
             ),
         )
         await db.commit()

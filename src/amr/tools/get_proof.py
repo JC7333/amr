@@ -52,7 +52,7 @@ async def get_proof(
             """
             SELECT id, principal_id, agent_id, scope, legal_basis_json,
                    status, created_at, expires_at, parent_mandate_id,
-                   metadata_json, chain_hash
+                   metadata_json, chain_hash, perimeter_json
             FROM mandates
             WHERE id = ?
             """,
@@ -74,6 +74,11 @@ async def get_proof(
             "expires_at": mandate_row["expires_at"],
             "parent_mandate_id": mandate_row["parent_mandate_id"],
             "metadata": json.loads(mandate_row["metadata_json"]),
+            "perimeter": (
+                json.loads(mandate_row["perimeter_json"])
+                if mandate_row["perimeter_json"]
+                else None
+            ),
             "chain_hash": mandate_row["chain_hash"],
         }
 
