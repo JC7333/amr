@@ -77,6 +77,26 @@ active and unexpired.
 
 See `docs/token-issuance-spec.md` for the full specification.
 
+### Sector templates
+
+A template is a ready-made, versioned perimeter for one kind of agent, with a catalog
+that says in plain words what each action type means. The first one,
+`agent-sante-rgpd`, covers an assistant agent in a medical practice: it may read the
+record, handle the schedule, draft letters and patient messages for a human to send,
+and order supplies under a ceiling; it may never prescribe, diagnose, change or export
+the record, contact a patient itself, or create a sub-agent.
+
+```python
+from amr.templates import get_template
+
+template = get_template("agent-sante-rgpd")
+create_mandate(..., **template.create_mandate_kwargs())
+```
+
+The mandate records `template_id`, `template_version` and `template_digest` in its
+metadata. Templates only fill in existing `create_mandate` arguments: existing mandates
+and their hashes are unchanged. See `docs/templates/agent-sante-rgpd.md`.
+
 ---
 
 ## Vision: from registry to enforcement
@@ -379,6 +399,7 @@ src/amr/
     ├── verify_mandate.py
     ├── log_action.py
     └── get_proof.py
+└── templates/         # Sector mandate templates (agent-sante-rgpd)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)
 ├── test_create_mandate.py   # 5 tests
