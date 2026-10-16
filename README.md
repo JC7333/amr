@@ -90,12 +90,16 @@ the record, contact a patient itself, or create a sub-agent.
 from amr.templates import get_template
 
 template = get_template("agent-sante-rgpd")
-create_mandate(..., **template.create_mandate_kwargs())
+await create_mandate(..., **template.create_mandate_kwargs())
 ```
 
 The mandate records `template_id`, `template_version` and `template_digest` in its
-metadata. Templates only fill in existing `create_mandate` arguments: existing mandates
-and their hashes are unchanged. See `docs/templates/agent-sante-rgpd.md`.
+metadata. That metadata is a label, not sealed into the chain hash; the perimeter is
+sealed and is what the token issuer enforces. Templates only fill in existing
+`create_mandate` arguments: existing mandates and their hashes are unchanged. They are a
+Python API for now (no MCP tool lists them yet). Like every perimeter, the template
+holds only if the agent cannot call `create_mandate` itself (see the deployment rule
+above). See `docs/templates/agent-sante-rgpd.md`.
 
 ---
 
@@ -394,11 +398,11 @@ src/amr/
 ├── models/mandate.py  # Pydantic models: MandateCreate, Mandate, ActionLog
 ├── crypto/chain.py    # compute_hash() and verify_chain() — stdlib only
 ├── db/engine.py       # init_db(), get_db(), get_last_mandate_hash()
-└── tools/
-    ├── create_mandate.py
-    ├── verify_mandate.py
-    ├── log_action.py
-    └── get_proof.py
+├── tools/
+│   ├── create_mandate.py
+│   ├── verify_mandate.py
+│   ├── log_action.py
+│   └── get_proof.py
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)

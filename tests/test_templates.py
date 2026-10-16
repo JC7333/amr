@@ -216,6 +216,15 @@ def test_template_ids_and_versions_are_checked() -> None:
 def test_template_is_immutable(sante: MandateTemplate) -> None:
     with pytest.raises(ValidationError):
         sante.version = "9.9.9"  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        sante.actions["patient_record.read"] = "changed"  # type: ignore[index]
+    assert sante.actions["patient_record.read"].startswith("Read the patient record")
+
+
+def test_health_template_digest_is_pinned(sante: MandateTemplate) -> None:
+    # Any change to the template content must come with a new version and a new pin.
+    assert sante.version == "1.0.0"
+    assert sante.digest() == ("133264b3dca375e5c62f6baf06fd85839c1252c122aef93126967bb3843aee42")
 
 
 def test_legal_reference_status_is_restricted() -> None:
@@ -254,6 +263,21 @@ def test_principal_may_lower_the_ceiling_but_not_raise_it(sante: MandateTemplate
     for bad in ("100.01", "250", "0", "-5", "1e2", "abc"):
         with pytest.raises(ValueError):
             sante.create_mandate_kwargs(max_amount=bad)
+
+
+def test_principal_metadata_is_merged_and_template_keys_are_reserved(
+    sante: MandateTemplate,
+) -> None:
+    kwargs = sante.create_mandate_kwargs(metadata={"client_ref": "CAB-001"})
+    assert kwargs["metadata"] == {
+        "client_ref": "CAB-001",
+        "template_id": "agent-sante-rgpd",
+        "template_version": "1.0.0",
+        "template_digest": sante.digest(),
+    }
+    for key in ("template_id", "template_digest", "template_other"):
+        with pytest.raises(ValueError, match="reserved"):
+            sante.create_mandate_kwargs(metadata={key: "x"})
 
 
 def test_ceiling_override_needs_a_template_ceiling() -> None:
@@ -341,7 +365,16 @@ async def test_end_to_end_template_is_recorded_in_mandate_and_proof(
     assert json.loads(metadata_json) == sante.create_mandate_kwargs()["metadata"]
     assert Perimeter.from_json(perimeter_json) == sante.perimeter
     proof = json.loads(await get_proof(mandate["mandate_id"]))
-    assert json.dumps(proof).count(sante.digest()) >= 1
+    assert proof["mandate"]["metadata"] == sante.create_mandate_kwargs()["metadata"]
+    assert proof["mandate"]["perimeter"] == sante.perimeter.canonical()
+
+
+async def test_end_to_end_with_principal_metadata(sante: MandateTemplate) -> None:
+    mandate = await _mandate_from(sante, metadata={"client_ref": "CAB-001"})
+    assert mandate["status"] == "created", mandate
+    proof = json.loads(await get_proof(mandate["mandate_id"]))
+    assert proof["mandate"]["metadata"]["client_ref"] == "CAB-001"
+    assert proof["mandate"]["metadata"]["template_id"] == "agent-sante-rgpd"
 
 
 # --- Documentation ---------------------------------------------------------------------

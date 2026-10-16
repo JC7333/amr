@@ -11,7 +11,7 @@ Usage::
     from amr.templates import get_template
 
     template = get_template("agent-sante-rgpd")
-    kwargs = template.create_mandate_kwargs()
+    kwargs = template.create_mandate_kwargs()  # perimeter arguments and metadata
     await create_mandate(principal_id=..., agent_id=..., scope=template.summary,
                          legal_basis_regulation=..., legal_basis_article=...,
                          duration_hours=template.default_duration_hours, **kwargs)

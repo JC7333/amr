@@ -2,9 +2,11 @@
 
 import hashlib
 import json
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from amr.models.perimeter import Perimeter, parse_amount, pattern_reaches
 
@@ -38,10 +40,15 @@ class MandateTemplate(BaseModel):
     sector: str = Field(..., pattern=TEMPLATE_ID_RE, max_length=64)
     summary: str = Field(..., min_length=1, max_length=2000)
     perimeter: Perimeter
-    actions: dict[str, str] = Field(..., min_length=1)
+    actions: Mapping[str, str] = Field(..., min_length=1)
     default_duration_hours: float = Field(..., gt=0, le=8760)
     legal_references: tuple[LegalReference, ...] = ()
     notes: tuple[str, ...] = ()
+
+    @field_validator("actions", mode="after")
+    @classmethod
+    def _read_only_catalog(cls, value: Mapping[str, str]) -> Mapping[str, str]:
+        return MappingProxyType(dict(value))
 
     @model_validator(mode="after")
     def _catalog_matches_perimeter(self) -> "MandateTemplate":
@@ -105,12 +112,22 @@ class MandateTemplate(BaseModel):
 
     # --- use ---------------------------------------------------------------------------
 
-    def create_mandate_kwargs(self, max_amount: str | None = None) -> dict[str, Any]:
+    def create_mandate_kwargs(
+        self, max_amount: str | None = None, metadata: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Return the perimeter arguments and metadata to pass to ``create_mandate``.
 
         ``max_amount`` lets the principal set its own ceiling (plain decimal string, same
-        currency). It may lower the template's ceiling, never raise it.
+        currency). It may lower the template's ceiling, never raise it. ``metadata`` adds
+        the principal's own annotations; the ``template_*`` keys are reserved.
+
+        The ``template_*`` metadata is a label: like all mandate metadata it is not sealed
+        into the chain hash. The perimeter, which is sealed, is what the token issuer
+        enforces.
         """
+        reserved = sorted(k for k in (metadata or {}) if k.startswith("template_"))
+        if reserved:
+            raise ValueError(f"metadata keys reserved for the template: {reserved}")
         perimeter = self.perimeter
         ceiling = perimeter.max_amount
         if max_amount is not None:
@@ -134,6 +151,7 @@ class MandateTemplate(BaseModel):
             "currency": perimeter.currency,
             "amount_actions": canonical["amount_actions"] or None,
             "metadata": {
+                **(metadata or {}),
                 "template_id": self.template_id,
                 "template_version": self.version,
                 "template_digest": self.digest(),

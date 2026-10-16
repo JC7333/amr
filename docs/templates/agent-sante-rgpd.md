@@ -14,8 +14,23 @@ issuer then enforces it like any other structured perimeter.
 
 Anything not listed on the left is refused (`not_allowed`). The principal may set a
 lower ceiling than 100 EUR, never a higher one. The mandate records the template it was
-built from in its metadata (`template_id`, `template_version`, `template_digest`), so the
-Proof Pack shows which version of the template governed the agent.
+built from in its metadata (`template_id`, `template_version`, `template_digest`), shown
+in the Proof Pack. That metadata is a label: like all mandate metadata it is not sealed
+into the chain hash. What is sealed, and enforced, is the perimeter itself.
+
+## Limits
+
+- The ceiling applies to each order. AMR keeps no running total: the principal or the
+  ordering system must cap the total spent.
+- `appointment.book` must not notify the patient: a confirmation sent to the patient is
+  a patient message, which this template forbids.
+- The agent names the action type it asks a token for. The system that receives the
+  token must map each real operation to the right type (a draft that is actually sent
+  is `letter.send` or `patient_message.send`).
+- Delegation is off for mandates under this one. The agent must not have access to
+  `create_mandate` itself, or it could register a new root mandate for a sub-agent
+  (README, deployment rule).
+- Templates are a Python API for now: no MCP tool lists them yet.
 
 > **Legal references are pointers, marked `to_verify`.** They have not been reviewed
 > by counsel and are not legal advice.
@@ -34,7 +49,10 @@ await create_mandate(
     legal_basis_regulation="Mandat de gestion",
     legal_basis_article="Art. 1984 Code civil",
     duration_hours=template.default_duration_hours,
-    **template.create_mandate_kwargs(max_amount="50"),  # optional lower ceiling
+    **template.create_mandate_kwargs(
+        max_amount="50",  # optional lower ceiling
+        metadata={"client_ref": "CAB-001"},  # optional own annotations
+    ),
 )
 ```
 
@@ -103,7 +121,11 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   ],
   "notes": [
     "Legal references are pointers to check, not legal advice.",
-    "The 100 EUR ceiling is a starting value: the principal may set a lower one."
+    "The 100 EUR ceiling is a starting value: the principal may set a lower one.",
+    "The ceiling applies to each order; AMR keeps no running total, so the principal or the ordering system must cap the total spent.",
+    "appointment.book must not notify the patient: a confirmation sent to the patient is a patient message, which this template forbids.",
+    "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is letter.send or patient_message.send).",
+    "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent."
   ],
   "perimeter": {
     "allowed_actions": [

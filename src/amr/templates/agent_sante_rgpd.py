@@ -89,5 +89,14 @@ AGENT_SANTE_RGPD = MandateTemplate(
     notes=(
         "Legal references are pointers to check, not legal advice.",
         "The 100 EUR ceiling is a starting value: the principal may set a lower one.",
+        "The ceiling applies to each order; AMR keeps no running total, so the principal "
+        "or the ordering system must cap the total spent.",
+        "appointment.book must not notify the patient: a confirmation sent to the "
+        "patient is a patient message, which this template forbids.",
+        "The agent names the action type it asks a token for: the system that receives "
+        "the token must map each real operation to the right type (a draft that is "
+        "actually sent is letter.send or patient_message.send).",
+        "Delegation is off for mandates under this one. The agent must not have access to "
+        "create_mandate itself, or it could register a new root mandate for a sub-agent.",
     ),
 )
