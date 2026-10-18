@@ -9,7 +9,16 @@ from pydantic import ValidationError
 
 from amr.config import settings
 from amr.crypto.chain import compute_hash
-from amr.db.engine import get_db, get_last_mandate_hash, init_db
+from amr.crypto.principal import (
+    PrincipalSignatureError,
+    b64url_encode,
+    mandate_payload,
+    parse_public_key,
+    parse_signature,
+    parse_signed_at,
+    verify,
+)
+from amr.db.engine import get_db, get_last_mandate_hash, get_principal_key, init_db
 from amr.delegation import load_ancestors
 from amr.models.mandate import LegalBasis, MandateCreate
 from amr.models.perimeter import Perimeter, PerimeterError
@@ -53,6 +62,95 @@ def _build_perimeter(
         currency=currency,
         amount_actions=tuple(amount_actions or ()),
     )
+
+
+def signed_mandate_payload(mandate_data: MandateCreate, signed_at: str) -> bytes:
+    """The bytes the principal signs for this mandate request (requested perimeter)."""
+    parse_signed_at(signed_at)
+    return mandate_payload(
+        principal_id=mandate_data.principal_id,
+        agent_id=mandate_data.agent_id,
+        scope=mandate_data.scope,
+        legal_basis=mandate_data.legal_basis.model_dump(),
+        duration_hours=mandate_data.duration_hours,
+        parent_mandate_id=(
+            str(mandate_data.parent_mandate_id)
+            if mandate_data.parent_mandate_id is not None
+            else None
+        ),
+        metadata=dict(mandate_data.metadata),
+        perimeter=(
+            mandate_data.perimeter.canonical() if mandate_data.perimeter is not None else None
+        ),
+        signed_at=signed_at,
+    )
+
+
+async def _check_principal_signature(
+    db: aiosqlite.Connection,
+    mandate_data: MandateCreate,
+    principal_signature: str | None,
+    signed_at: str | None,
+    now: datetime,
+) -> dict[str, str] | None:
+    """Apply the principal signature policy; return the verified signature record or None.
+
+    A principal with a registered key must sign; with require_principal_signature,
+    every principal must. Raises PrincipalSignatureError with a stable code.
+    """
+    key_row = await get_principal_key(db, mandate_data.principal_id)
+    if principal_signature is None and signed_at is None:
+        if key_row is not None:
+            raise PrincipalSignatureError(
+                "principal_signature_required",
+                "this principal has a registered key: the mandate must carry its signature",
+            )
+        if settings.require_principal_signature:
+            raise PrincipalSignatureError(
+                "principal_signature_required",
+                "this registry requires every mandate to be signed by its principal",
+            )
+        return None
+    if principal_signature is None or signed_at is None:
+        raise PrincipalSignatureError(
+            "principal_signature_incomplete",
+            "principal_signature and signed_at must be given together",
+        )
+    signature_raw = parse_signature(principal_signature)
+    signed_moment = parse_signed_at(signed_at)
+    if key_row is None:
+        raise PrincipalSignatureError(
+            "principal_key_not_registered",
+            "no public key is registered for this principal (register_principal_key)",
+        )
+    max_age = timedelta(seconds=settings.principal_signature_max_age_seconds)
+    if abs(now - signed_moment) > max_age:
+        raise PrincipalSignatureError(
+            "principal_signature_stale",
+            f"signed_at must be within {settings.principal_signature_max_age_seconds} "
+            "seconds of the registry clock",
+        )
+    payload = signed_mandate_payload(mandate_data, signed_at)
+    public_key_raw = parse_public_key(key_row["public_key"])
+    if not verify(public_key_raw, payload, signature_raw):
+        raise PrincipalSignatureError(
+            "principal_signature_invalid",
+            "the signature does not match this mandate and the principal's registered key",
+        )
+    signature = b64url_encode(signature_raw)
+    cursor = await db.execute(
+        "SELECT 1 FROM mandates WHERE principal_signature = ? LIMIT 1", (signature,)
+    )
+    if await cursor.fetchone() is not None:
+        raise PrincipalSignatureError(
+            "principal_signature_replayed", "this signature already registered a mandate"
+        )
+    return {
+        "signature": signature,
+        "signed_at": signed_at,
+        "key_id": key_row["key_id"],
+        "payload": payload.decode("utf-8"),
+    }
 
 
 async def _check_parent(
@@ -118,6 +216,8 @@ async def create_mandate(
     max_amount: str | None = None,
     currency: str = "EUR",
     amount_actions: list[str] | None = None,
+    principal_signature: str | None = None,
+    signed_at: str | None = None,
 ) -> str:
     """Create and register a new legal mandate authorizing an AI agent
     to act on behalf of a principal.
@@ -128,6 +228,11 @@ async def create_mandate(
     The optional structured perimeter (allowed_actions, forbidden_actions,
     delegation_allowed, max_amount) is enforced by issue_action_token: an action
     outside it gets no token. Without it, the mandate is a free-text scope only.
+
+    The principal can sign the mandate with its own Ed25519 key (registered once with
+    register_principal_key): build the exact bytes with prepare_mandate_signature, sign
+    them, and pass principal_signature and signed_at. A principal with a registered key
+    must always sign; the signature is sealed into chain_hash and kept in the Proof Pack.
 
     Args:
         principal_id: Unique identifier of the principal granting the mandate.
@@ -166,12 +271,20 @@ async def create_mandate(
                         "currency" metadata, the amount at or below max_amount. A pattern
                         also reaches its sub-types. Empty means every action.
                         Example: ["invoice.pay"]
+        principal_signature: Base64url Ed25519 signature by the principal of the payload
+                             returned by prepare_mandate_signature for these same
+                             arguments and signed_at. Required if the principal has a
+                             registered key.
+        signed_at: The ISO 8601 timestamp (with timezone) placed in the signed payload.
+                   Must be within 15 minutes of the registry clock by default.
+                   Example: "2026-10-18T20:30:00+00:00"
 
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
-        scope, perimeter, parent_mandate_id, expires_at, chain_hash.
-        On error: {"error": "...", "code": "..."} (code present for perimeter
-        and delegation errors).
+        scope, perimeter, parent_mandate_id, principal_signature, expires_at,
+        chain_hash. principal_signature is {key_id, signed_at} or null.
+        On error: {"error": "...", "code": "..."} (code present for perimeter,
+        delegation and principal signature errors).
     """
     db = None
     try:
@@ -216,6 +329,10 @@ async def create_mandate(
             if mandate_data.parent_mandate_id is not None
             else None
         )
+        signature_record = await _check_principal_signature(
+            db, mandate_data, principal_signature, signed_at, now
+        )
+
         if parent_id is not None:
             try:
                 perimeter = await _check_parent(
@@ -244,6 +361,13 @@ async def create_mandate(
         # pre-perimeter payload, so their hashes are unchanged.
         if perimeter is not None:
             hash_data["perimeter"] = perimeter.canonical()
+        # Likewise, only signed mandates carry the principal's signature in the chain.
+        if signature_record is not None:
+            hash_data["principal_signature"] = {
+                "signature": signature_record["signature"],
+                "signed_at": signature_record["signed_at"],
+                "key_id": signature_record["key_id"],
+            }
         chain_hash = compute_hash(hash_data, previous_hash)
 
         legal_basis_json = json.dumps(
@@ -261,8 +385,9 @@ async def create_mandate(
             INSERT INTO mandates
               (id, principal_id, agent_id, scope, legal_basis_json, status,
                created_at, expires_at, parent_mandate_id, metadata_json, chain_hash,
-               perimeter_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               perimeter_json, principal_signature, principal_signed_at,
+               principal_key_id, principal_signed_payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 mandate_id,
@@ -277,6 +402,10 @@ async def create_mandate(
                 metadata_json,
                 chain_hash,
                 perimeter.to_json() if perimeter is not None else None,
+                signature_record["signature"] if signature_record else None,
+                signature_record["signed_at"] if signature_record else None,
+                signature_record["key_id"] if signature_record else None,
+                signature_record["payload"] if signature_record else None,
             ),
         )
         await db.commit()
@@ -290,6 +419,14 @@ async def create_mandate(
                 "scope": scope,
                 "perimeter": perimeter.canonical() if perimeter is not None else None,
                 "parent_mandate_id": parent_id,
+                "principal_signature": (
+                    {
+                        "key_id": signature_record["key_id"],
+                        "signed_at": signature_record["signed_at"],
+                    }
+                    if signature_record
+                    else None
+                ),
                 "expires_at": expires_at.isoformat(),
                 "chain_hash": chain_hash,
             }
@@ -297,6 +434,16 @@ async def create_mandate(
 
     except PerimeterError as exc:
         return _error(exc.code, exc.message)
+
+    except PrincipalSignatureError as exc:
+        return _error(exc.code, exc.message)
+
+    except aiosqlite.IntegrityError as exc:
+        if "principal_signature" in str(exc):
+            return _error(
+                "principal_signature_replayed", "this signature already registered a mandate"
+            )
+        return json.dumps({"error": str(exc)})
 
     except Exception as exc:
         return json.dumps({"error": str(exc)})

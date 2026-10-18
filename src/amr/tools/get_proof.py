@@ -1,12 +1,65 @@
 """AMR tool: get_proof - Generate a cryptographic Proof Pack for a mandate."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from amr.config import settings
 from amr.crypto.chain import verify_chain
-from amr.db.engine import get_db, init_db
+from amr.crypto.principal import (
+    MANDATE_CONTEXT,
+    PrincipalSignatureError,
+    parse_public_key,
+    parse_signature,
+    verify,
+)
+from amr.db.engine import get_db, get_principal_key, init_db
+
+
+def _aware(moment: str) -> datetime:
+    parsed = datetime.fromisoformat(moment)
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _principal_signature_valid(mandate: dict[str, Any], signature: dict[str, Any]) -> bool:
+    """Re-verify the principal's signature and that it covers this very mandate.
+
+    The signed payload must match the stored mandate: principal, agent, scope, legal
+    basis, parent, metadata, signed_at, the duration (created_at + duration_hours ==
+    expires_at, to the second) and, for a root mandate, the perimeter. A sub-mandate's
+    stored perimeter is the requested one narrowed by its parent, so it is not compared.
+    """
+    if signature.get("public_key") is None:
+        return False
+    try:
+        public_key_raw = parse_public_key(signature["public_key"])
+        signature_raw = parse_signature(signature["signature"])
+    except PrincipalSignatureError:
+        return False
+    payload_text = signature["payload"]
+    if not verify(public_key_raw, payload_text.encode("utf-8"), signature_raw):
+        return False
+    payload = json.loads(payload_text)
+    expected = {
+        "context": MANDATE_CONTEXT,
+        "principal_id": mandate["principal_id"],
+        "agent_id": mandate["agent_id"],
+        "scope": mandate["scope"],
+        "legal_basis": mandate["legal_basis"],
+        "parent_mandate_id": mandate["parent_mandate_id"],
+        "metadata": mandate["metadata"],
+        "signed_at": signature["signed_at"],
+    }
+    if any(payload.get(key) != value for key, value in expected.items()):
+        return False
+    if mandate["parent_mandate_id"] is None and payload.get("perimeter") != mandate["perimeter"]:
+        return False
+    duration = payload.get("duration_hours")
+    if isinstance(duration, bool) or not isinstance(duration, int | float):
+        return False
+    granted = _aware(mandate["expires_at"]) - _aware(mandate["created_at"])
+    return abs(granted - timedelta(hours=duration)) <= timedelta(seconds=1)
 
 
 async def get_proof(
@@ -29,10 +82,13 @@ async def get_proof(
         JSON string (Proof Pack) with keys:
           - proof_pack_version: str
           - generated_at: ISO datetime string
-          - mandate: dict with full mandate details
+          - mandate: dict with full mandate details, including principal_signature
+            ({signature, signed_at, key_id, public_key, payload, algorithm} or null)
           - actions: list of action log entries
           - events: list of mandate events
-          - chain_integrity: dict with actions_chain_valid (bool), total_actions, total_events
+          - chain_integrity: dict with actions_chain_valid (bool),
+            principal_signature_valid (bool, or null for an unsigned mandate),
+            total_actions, total_events
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -52,7 +108,9 @@ async def get_proof(
             """
             SELECT id, principal_id, agent_id, scope, legal_basis_json,
                    status, created_at, expires_at, parent_mandate_id,
-                   metadata_json, chain_hash, perimeter_json
+                   metadata_json, chain_hash, perimeter_json,
+                   principal_signature, principal_signed_at, principal_key_id,
+                   principal_signed_payload
             FROM mandates
             WHERE id = ?
             """,
@@ -79,8 +137,28 @@ async def get_proof(
                 if mandate_row["perimeter_json"]
                 else None
             ),
+            "principal_signature": None,
             "chain_hash": mandate_row["chain_hash"],
         }
+
+        # The principal's signature, if any, with the key it was checked against.
+        principal_signature_valid = None
+        if mandate_row["principal_signature"] is not None:
+            key_row = await get_principal_key(db, mandate_row["principal_id"])
+            signature = {
+                "signature": mandate_row["principal_signature"],
+                "signed_at": mandate_row["principal_signed_at"],
+                "key_id": mandate_row["principal_key_id"],
+                "public_key": key_row["public_key"] if key_row is not None else None,
+                "payload": mandate_row["principal_signed_payload"],
+                "algorithm": "Ed25519",
+            }
+            mandate_dict["principal_signature"] = signature
+            principal_signature_valid = (
+                key_row is not None
+                and key_row["key_id"] == signature["key_id"]
+                and _principal_signature_valid(mandate_dict, signature)
+            )
 
         # Fetch all action logs for this mandate
         actions_cursor = await db.execute(
@@ -124,6 +202,7 @@ async def get_proof(
             "events": events,
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
+                "principal_signature_valid": principal_signature_valid,
                 "total_actions": len(actions),
                 "total_events": len(events),
             },
