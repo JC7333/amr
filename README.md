@@ -70,25 +70,31 @@ sub-mandate, including ones created before v1.1, now require every parent to be
 active and unexpired.
 
 > **Deployment rule.** These controls hold only if agents cannot register their own
-> mandates. Without principal signatures (below), `create_mandate` is a
-> principal-side tool: expose it to the principal (or its back office), never to the
-> agents it governs, since an agent that can call it can mint itself a fresh root
-> mandate.
+> mandates. `create_mandate` and `register_principal_key` are principal-side tools:
+> expose them to the principal (or its back office), never to the agents it governs.
+> An agent that can call `create_mandate` can mint itself a fresh root mandate for
+> any principal without a key, and one that can call `register_principal_key` can
+> claim a principal that has not registered a key yet. Principal signatures (below)
+> close the first gap once each principal has registered its key; binding keys to a
+> verified identity is on the roadmap.
 
-### Principal signatures: who really granted the mandate
+### Principal signatures: the principal signs the mandate
 
 A principal can register its own Ed25519 public key once (`register_principal_key`).
 From then on, the registry accepts a mandate in its name only if the principal signed
 it: `prepare_mandate_signature` returns the exact bytes to sign, and `create_mandate`
 takes `principal_signature` and `signed_at`. The signature is sealed into the mandate's
-`chain_hash`, cannot be replayed, and is kept in the Proof Pack with the public key and
-the signed bytes, so anyone can re-check it offline. Set
+`chain_hash`, cannot be used twice in the same registry, and is kept in the Proof Pack
+with the public key and the signed bytes, so anyone can re-check it offline. Set
 `AMR_REQUIRE_PRINCIPAL_SIGNATURE=true` to refuse every unsigned mandate.
 
-Mandates of principals without a key work exactly as before (same results, same
-hashes); mandates created before a key was registered stay valid. Limit: the first key
-registered for a `principal_id` wins, so register it when the principal is onboarded.
-See `docs/principal-signature-spec.md`.
+What a valid signature proves: the mandate was signed with the key first registered
+for that `principal_id`. The registry does not check who registers a key (first
+registration wins), so register each principal's key at onboarding, through the
+principal's own channel. Mandates of principals without a key behave as before (same
+hashes; the result gains `"principal_signature": null`); mandates created before a key
+was registered stay valid. See `docs/principal-signature-spec.md`, including its
+known limits.
 
 See `docs/token-issuance-spec.md` for the full specification.
 
@@ -311,9 +317,11 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
 }
 ```
 
-`mandate.principal_signature` holds the principal's signature, public key and signed
-bytes (or `null`); `principal_signature_valid` re-checks them against the stored mandate
-(`null` for an unsigned mandate).
+`mandate.principal_signature` holds the principal's signature, public key, the key's
+proof of possession and the signed bytes (or `null`); `principal_signature_valid`
+re-checks them against the stored mandate. It is `false` if the signature does not
+match, or if it is missing although the principal had a key when the mandate was
+created; `null` for a mandate whose principal had no key then.
 
 ---
 

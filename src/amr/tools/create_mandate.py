@@ -316,6 +316,12 @@ async def create_mandate(
             perimeter=perimeter,
         )
 
+        # Signature inputs are checked for form before any database access.
+        if principal_signature is not None:
+            parse_signature(principal_signature)
+        if signed_at is not None:
+            parse_signed_at(signed_at)
+
         now = datetime.now(UTC)
         expires_at = now + timedelta(hours=mandate_data.duration_hours)
         mandate_id = str(uuid.uuid4())

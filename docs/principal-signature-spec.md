@@ -1,11 +1,13 @@
 # Principal signatures on mandates
 
-Status: v1 (schema v4). Answers the question "who really granted this mandate?".
+Status: v1 (schema v4). First step towards answering "who really granted this mandate?".
 
 Without it, anyone who can call `create_mandate` can register a mandate in the name of
 any principal, including an agent minting itself a root mandate. With it, a principal
 registers its own Ed25519 public key once, and from then on the registry accepts a
-mandate in its name only if the principal signed it. The signature is sealed into the
+mandate in its name only if it was signed with that key. A valid signature proves
+possession of the key first registered for the `principal_id`, not the identity of
+the person behind it (see Known limits). The signature is sealed into the
 mandate's `chain_hash` and kept, with the exact signed bytes and the public key, in the
 Proof Pack, so a third party can re-check it offline.
 
@@ -41,9 +43,10 @@ mandates). One key per principal: a second registration is refused
 (`principal_key_already_registered`). Key rotation and revocation are not in v1.
 
 **Limit: first registration wins.** The registry does not check who registers a key for
-a given `principal_id`. Register each principal's key when the principal is onboarded,
-before any agent can reach the registry. Binding the key to a verified identity (eIDAS
-wallet, qualified certificate) is a later step.
+a given `principal_id`. Expose `register_principal_key` to principals (or their back
+office) only, never to agents, and register each principal's key when the principal is
+onboarded. Binding the key to a verified identity (eIDAS wallet, qualified certificate)
+is a later step.
 
 Errors: `principal_id_invalid`, `public_key_invalid`, `principal_signature_invalid`
 (malformed proof), `principal_key_proof_invalid`, `principal_key_already_registered`.
@@ -100,13 +103,40 @@ sub-mandates it grants.
   to the data sealed in its `chain_hash`. Unsigned mandates keep exactly the previous
   hash payload, so existing hashes do not change.
 - `get_proof` returns `mandate.principal_signature` =
-  `{signature, signed_at, key_id, public_key, payload, algorithm: "Ed25519"}` (or null),
-  and `chain_integrity.principal_signature_valid`: true if the signature verifies with the
-  registered key and the signed payload matches the stored mandate (principal, agent,
-  scope, legal basis, parent, metadata, signed_at, duration to the second, and the
-  perimeter for a root mandate); false otherwise; null for an unsigned mandate.
+  `{signature, signed_at, key_id, public_key, key_proof_signature, payload,
+  algorithm: "Ed25519"}` (or null), and `chain_integrity.principal_signature_valid`:
+  - true if the registered key still carries a valid proof of possession, the signature
+    verifies with it, and the signed payload matches the stored mandate (principal,
+    agent, scope, legal basis, parent, metadata, signed_at, duration to the second, and
+    the perimeter: as signed for a root mandate, as signed then narrowed by the parent
+    for a sub-mandate);
+  - false otherwise, including when the signature is missing although the principal's
+    key was registered before the mandate was created (a stripped signature);
+  - null for an unsigned mandate whose principal had no key at the time.
 
-## 5. Compatibility
+## 5. Known limits
+
+- **First registration wins** (section 1): the key is not bound to a verified identity.
+- **Per-registry replay protection**: a signature is refused if it already registered a
+  mandate in the same database. The payload names no registry, so within the 15-minute
+  window the same signed payload could be accepted by another AMR registry where the
+  same key is registered. The registration proof does not expire.
+- **Identifiers are compared exactly**: `user:victim` and `user:victim ` (trailing space)
+  or Unicode look-alikes are different principals. The signature rule protects the exact
+  `principal_id` that registered a key.
+- **Race**: the key lookup and the mandate insert are not one transaction; an unsigned
+  mandate whose creation started just before the principal's key registration can still
+  be stored. `get_proof` then reports it as `false` if its `created_at` is after the
+  registration.
+- **No full hash re-check**: `get_proof` does not recompute the mandate's `chain_hash`
+  (the stored row does not keep the raw `duration_hours`); it checks the signature and
+  the key record as described in section 4. Someone with write access to the database
+  file who replaces the key record with a key of their own (new proof of possession
+  included) and re-signs the stored payloads is not detected by `get_proof`; the
+  `principal_keys` and `mandates` chain hashes would change, but neither chain is
+  re-verified by a tool yet. Protect the database file accordingly.
+
+## 6. Compatibility
 
 - Existing databases are migrated in place (schema v4): four nullable columns on
   `mandates`, a new `principal_keys` table, a unique index on the signature. No existing

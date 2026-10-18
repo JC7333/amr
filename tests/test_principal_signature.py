@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from amr.crypto.chain import compute_hash
-from amr.crypto.principal import b64url_encode, key_registration_payload
+from amr.crypto.principal import b64url_encode, key_id, key_registration_payload
 from amr.db.engine import init_db
 from amr.tools.create_mandate import create_mandate
 from amr.tools.get_proof import get_proof
@@ -407,12 +407,86 @@ async def test_proof_pack_detects_a_swapped_key(temp_db):
     assert proof["chain_integrity"]["principal_signature_valid"] is False
 
 
+def _sql(db_path: Path, statement: str, params: tuple) -> None:
+    """Tamper with the database on purpose, as an attacker with file access would."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(statement, params)
+    conn.commit()
+    conn.close()
+
+
+async def test_proof_pack_detects_a_stripped_signature(temp_db):
+    key = _new_key()
+    await _register(key)
+    created = await _create(**await _sign(key))
+    _sql(
+        temp_db,
+        "UPDATE mandates SET principal_signature = NULL, principal_signed_at = NULL, "
+        "principal_key_id = NULL, principal_signed_payload = NULL WHERE id = ?",
+        (created["mandate_id"],),
+    )
+    proof = json.loads(await get_proof(created["mandate_id"]))
+    assert proof["mandate"]["principal_signature"] is None
+    assert proof["chain_integrity"]["principal_signature_valid"] is False
+
+
+async def test_proof_pack_of_mandate_created_before_key_registration():
+    created = await _create(**BASE)
+    await _register(_new_key())
+    proof = json.loads(await get_proof(created["mandate_id"]))
+    assert proof["chain_integrity"]["principal_signature_valid"] is None
+
+
+async def test_proof_pack_detects_a_replaced_key_without_its_proof(temp_db):
+    """A key swapped in the database fails its stored proof of possession.
+
+    (An attacker who also rewrites the proof is not detected: see spec, Known limits.)
+    """
+    key = _new_key()
+    await _register(key)
+    signed = await _sign(key)
+    created = await _create(**signed)
+    forged = _new_key()
+    forged_raw = forged.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    forged_key_id = key_id(forged_raw)
+    row = _row(temp_db, created["mandate_id"])
+    forged_signature = b64url_encode(forged.sign(row["principal_signed_payload"].encode("utf-8")))
+    _sql(
+        temp_db,
+        "UPDATE principal_keys SET public_key = ?, key_id = ? WHERE principal_id = ?",
+        (_pub(forged), forged_key_id, PRINCIPAL),
+    )
+    _sql(
+        temp_db,
+        "UPDATE mandates SET principal_signature = ?, principal_key_id = ? WHERE id = ?",
+        (forged_signature, forged_key_id, created["mandate_id"]),
+    )
+    proof = json.loads(await get_proof(created["mandate_id"]))
+    assert proof["chain_integrity"]["principal_signature_valid"] is False
+
+
+async def test_proof_pack_survives_a_damaged_payload(temp_db):
+    key = _new_key()
+    await _register(key)
+    created = await _create(**await _sign(key))
+    _sql(
+        temp_db,
+        "UPDATE mandates SET principal_signed_payload = NULL WHERE id = ?",
+        (created["mandate_id"],),
+    )
+    proof = json.loads(await get_proof(created["mandate_id"]))
+    assert "error" not in proof
+    assert proof["chain_integrity"]["principal_signature_valid"] is False
+
+
 # ---------------------------------------------------------------------------
 # Delegation
 # ---------------------------------------------------------------------------
 
 
-async def test_sub_mandate_from_an_agent_with_a_key_must_be_signed():
+async def _signed_sub_mandate() -> dict:
     root = await _create(**BASE, allowed_actions=["code.*"], delegation_allowed=True)
     agent_key = _new_key()
     await _register(agent_key, AGENT)
@@ -431,6 +505,32 @@ async def test_sub_mandate_from_an_agent_with_a_key_must_be_signed():
     assert created["status"] == "created"
     proof = json.loads(await get_proof(created["mandate_id"]))
     assert proof["chain_integrity"]["principal_signature_valid"] is True
+    return created
+
+
+async def test_sub_mandate_from_an_agent_with_a_key_must_be_signed():
+    assert (await _signed_sub_mandate())["status"] == "created"
+
+
+async def test_proof_pack_detects_a_widened_sub_mandate_perimeter(temp_db):
+    created = await _signed_sub_mandate()
+    widened = json.dumps(
+        {
+            "allowed_actions": ["*"],
+            "forbidden_actions": [],
+            "delegation_allowed": False,
+            "max_amount": None,
+            "currency": "EUR",
+            "amount_actions": [],
+        }
+    )
+    _sql(
+        temp_db,
+        "UPDATE mandates SET perimeter_json = ? WHERE id = ?",
+        (widened, created["mandate_id"]),
+    )
+    proof = json.loads(await get_proof(created["mandate_id"]))
+    assert proof["chain_integrity"]["principal_signature_valid"] is False
 
 
 # ---------------------------------------------------------------------------

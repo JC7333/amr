@@ -47,8 +47,9 @@ async def register_principal_key(
 
     After registration, create_mandate refuses any mandate from this principal that
     is not signed with the matching private key. The key cannot be replaced or
-    removed in this version (first registration wins), so register it before
-    anyone else can, ideally when the principal is onboarded.
+    removed in this version, and the registry does not check who registers it: the
+    first registration wins. Expose this tool to principals (or their back office)
+    only, never to the agents they govern, and register each key at onboarding.
 
     Proof of possession: proof_signature is the principal's signature of the canonical
     JSON {"context": "amr.principal_key.v1", "principal_id": ..., "public_key": ...}
@@ -63,7 +64,8 @@ async def register_principal_key(
     Returns:
         JSON string with keys: status ("registered"), principal_id, key_id,
         registered_at, chain_hash.
-        On error: {"error": "...", "code": "..."} with code public_key_invalid,
+        On error: {"error": "...", "code": "..."} with code principal_id_invalid,
+        public_key_invalid,
         principal_signature_invalid, principal_key_proof_invalid or
         principal_key_already_registered.
     """

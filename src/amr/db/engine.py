@@ -219,7 +219,7 @@ async def get_principal_key(
 ) -> aiosqlite.Row | None:
     """Return the registered key row of a principal, or None if it has none."""
     cursor = await db.execute(
-        "SELECT principal_id, public_key, key_id, registered_at, chain_hash "
+        "SELECT principal_id, public_key, key_id, proof_signature, registered_at, chain_hash "
         "FROM principal_keys WHERE principal_id = ?",
         (principal_id,),
     )
