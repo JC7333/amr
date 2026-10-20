@@ -122,6 +122,30 @@ Python API for now (no MCP tool lists them yet). Like every perimeter, the templ
 holds only if the agent cannot call `create_mandate` itself (see the deployment rule
 above). See `docs/templates/agent-sante-rgpd.md`.
 
+### Third-party verification: the receiver checks the mandate alone
+
+An agent can show whoever receives it (a seller, a hospital, an insurer) a signed
+**mandate attestation** (`issue_mandate_attestation`). The receiver checks it alone,
+offline, with the registry's public key fetched once (`get_registry_public_key`): no
+account, no call to the registry. The attestation states that the mandate exists, who
+granted it (and the principal's own signature when there is one, which the receiver
+re-checks), the agent, the scope and structured perimeter, the expiry, and that the
+mandate and every mandate above it were active when the attestation was issued.
+
+```bash
+python -m amr.verify_attestation attestation.jws --public-key registry.pub --audience seller:acme
+# {"valid": true, "reason": "ok", "attestation": {"principal_id": "...", "perimeter": {...}, ...}}
+```
+
+What it does not prove: that the mandate is still active *now*. An attestation lives
+at most `AMR_ATTESTATION_LIFETIME_SECONDS` (default 15 minutes) and never outlives the
+mandate or a parent; a revocation made after issuance reaches an offline receiver only
+when the attestation expires. It is a bearer document: the receiver must make sure it
+is dealing with the agent named in `agent_id`. Pass `audience` to address it to one
+receiver. Existing mandates and their hashes are unchanged; issuances are logged in a
+new append-only table, `issued_attestations` (schema v5). See
+`docs/mandate-attestation-spec.md`.
+
 ---
 
 ## Vision: from registry to enforcement
@@ -349,6 +373,28 @@ created; `null` for a mandate whose principal had no key then.
 
 ---
 
+### `issue_mandate_attestation`
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mandate_id` | str | UUID of the mandate to attest |
+| `agent_id` | str | Must match the mandate's agent |
+| `audience` | str \| null | Optional receiver it is addressed to |
+| `lifetime_seconds` | int \| null | Optional shorter lifetime (never longer than the configured maximum) |
+
+Returns `{"attestation", "jti", "issued_at", "expires_at", "key_id", "issuer"}`, or
+`{"denied": true, "reason", "mandate_id"}` (`mandate_not_found`, `agent_mismatch`,
+`mandate_status_<status>`, `mandate_expired`, `parent_mandate_<status>`,
+`parent_mandate_expired`, `principal_signature_invalid`, with `refused_by` when a
+parent is the cause).
+
+### `get_registry_public_key`
+
+No parameters. Returns `{"issuer", "key_id", "algorithm": "EdDSA", "public_key_pem",
+"public_key_jwk"}`: what a receiver needs to verify attestations offline.
+
+---
+
 ## How It Works
 
 ```
@@ -460,7 +506,10 @@ src/amr/
 │   ├── create_mandate.py
 │   ├── verify_mandate.py
 │   ├── log_action.py
-│   └── get_proof.py
+│   ├── get_proof.py
+│   └── issue_mandate_attestation.py   # attestation + registry public key
+├── attestation.py     # offline attestation verifier (no DB, no network)
+├── verify_attestation.py  # python -m amr.verify_attestation
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)
@@ -479,6 +528,7 @@ tests/
 | `AMR_SERVER_NAME` | `Agent Mandate Registry` | MCP server display name |
 | `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
+| `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
 
 ---
 

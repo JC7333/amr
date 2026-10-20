@@ -45,7 +45,8 @@ async def load_ancestors(
             return ancestors, ChainRefusal("delegation_chain_too_deep", None)
         cursor = await db.execute(
             """
-            SELECT id, agent_id, status, expires_at, parent_mandate_id, perimeter_json
+            SELECT id, principal_id, agent_id, status, expires_at, parent_mandate_id,
+                   perimeter_json
             FROM mandates
             WHERE id = ?
             """,

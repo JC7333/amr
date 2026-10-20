@@ -9,6 +9,10 @@ from amr.config import settings
 from amr.tools.create_mandate import create_mandate
 from amr.tools.get_proof import get_proof
 from amr.tools.issue_action_token import issue_action_token
+from amr.tools.issue_mandate_attestation import (
+    get_registry_public_key,
+    issue_mandate_attestation,
+)
 from amr.tools.log_action import log_action
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
 from amr.tools.verify_mandate import verify_mandate
@@ -23,6 +27,8 @@ mcp.tool()(get_proof)
 mcp.tool()(issue_action_token)
 mcp.tool()(register_principal_key)
 mcp.tool()(prepare_mandate_signature)
+mcp.tool()(issue_mandate_attestation)
+mcp.tool()(get_registry_public_key)
 
 
 def main() -> None:
