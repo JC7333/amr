@@ -76,6 +76,7 @@ async def issue_mandate_attestation(
     agent_id: str,
     audience: str | None = None,
     lifetime_seconds: int | None = None,
+    include_principal_payload: bool = False,
 ) -> str:
     """Issue a signed attestation of a mandate, for the agent to show a third party.
 
@@ -100,6 +101,10 @@ async def issue_mandate_attestation(
             The receiver must then name this audience when verifying.
         lifetime_seconds: Optional shorter lifetime. It can shorten, never extend,
             the configured maximum.
+        include_principal_payload: For a principal-signed mandate, also include the
+            principal's signature and the exact bytes it signed, so the receiver can
+            re-check it without trusting the registry. Off by default: those bytes
+            contain the mandate metadata, which is then disclosed to the receiver.
 
     Returns:
         JSON string. Success keys: attestation (compact JWS), jti, issued_at,
@@ -114,9 +119,12 @@ async def issue_mandate_attestation(
                 agent_id=agent_id,
                 audience=audience,
                 lifetime_seconds=lifetime_seconds,
+                include_principal_payload=include_principal_payload,
             )
         except (ValidationError, ValueError) as exc:
-            return json.dumps({"denied": True, "reason": f"invalid_input: {exc}"})
+            return json.dumps({
+                "denied": True, "reason": f"invalid_input: {exc}", "mandate_id": None
+            })
         mandate_key = str(req.mandate_id)
 
         ensure_signing_key_exists()
@@ -169,9 +177,17 @@ async def issue_mandate_attestation(
             return _denied("mandate_expired", mandate_key)
 
         mandate = _decoded(row)
-        del mandate["metadata"]  # labels, not sealed into the chain hash
+        del mandate["metadata"]  # labels, possibly personal: not disclosed
         mandate["perimeter_digest"] = _perimeter_digest(row["perimeter_json"])
         mandate["chain_hash"] = row["chain_hash"]
+        if signature is not None and not req.include_principal_payload:
+            # The signed payload carries the metadata: disclose it only on request.
+            signature = {
+                "key_id": signature["key_id"],
+                "public_key": signature["public_key"],
+                "signed_at": signature["signed_at"],
+                "algorithm": signature["algorithm"],
+            }
         mandate["principal_signature"] = signature
         chain = [
             {

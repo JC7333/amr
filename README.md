@@ -128,12 +128,13 @@ An agent can show whoever receives it (a seller, a hospital, an insurer) a signe
 **mandate attestation** (`issue_mandate_attestation`). The receiver checks it alone,
 offline, with the registry's public key fetched once (`get_registry_public_key`): no
 account, no call to the registry. The attestation states that the mandate exists, who
-granted it (and the principal's own signature when there is one, which the receiver
-re-checks), the agent, the scope and structured perimeter, the expiry, and that the
+granted it (and whether the principal signed it; with `include_principal_payload` the
+receiver re-checks that signature itself), the agent, the scope and structured perimeter, the expiry, and that the
 mandate and every mandate above it were active when the attestation was issued.
 
 ```bash
 python -m amr.verify_attestation attestation.jws --public-key registry.pub --audience seller:acme
+# registry.pub: the PEM (or the JSON) returned by get_registry_public_key
 # {"valid": true, "reason": "ok", "attestation": {"principal_id": "...", "perimeter": {...}, ...}}
 ```
 
@@ -142,7 +143,9 @@ at most `AMR_ATTESTATION_LIFETIME_SECONDS` (default 15 minutes) and never outliv
 mandate or a parent; a revocation made after issuance reaches an offline receiver only
 when the attestation expires. It is a bearer document: the receiver must make sure it
 is dealing with the agent named in `agent_id`. Pass `audience` to address it to one
-receiver. Existing mandates and their hashes are unchanged; issuances are logged in a
+receiver. Mandate `metadata` is not disclosed unless `include_principal_payload` is
+set (it is inside the signed bytes). The registry trusts its own database: protect the
+file. Existing mandates and their hashes are unchanged; issuances are logged in a
 new append-only table, `issued_attestations` (schema v5). See
 `docs/mandate-attestation-spec.md`.
 
@@ -381,12 +384,13 @@ created; `null` for a mandate whose principal had no key then.
 | `agent_id` | str | Must match the mandate's agent |
 | `audience` | str \| null | Optional receiver it is addressed to |
 | `lifetime_seconds` | int \| null | Optional shorter lifetime (never longer than the configured maximum) |
+| `include_principal_payload` | bool | Also carry the principal's signature and signed bytes (discloses `metadata`); default `false` |
 
 Returns `{"attestation", "jti", "issued_at", "expires_at", "key_id", "issuer"}`, or
-`{"denied": true, "reason", "mandate_id"}` (`mandate_not_found`, `agent_mismatch`,
-`mandate_status_<status>`, `mandate_expired`, `parent_mandate_<status>`,
-`parent_mandate_expired`, `principal_signature_invalid`, with `refused_by` when a
-parent is the cause).
+`{"denied": true, "reason", "mandate_id"}`, for example `mandate_not_found`,
+`agent_mismatch`, `mandate_status_<status>`, `mandate_expired`,
+`parent_mandate_<status>`, `principal_signature_invalid`, with `refused_by` when a
+parent is the cause (full list in `docs/mandate-attestation-spec.md`).
 
 ### `get_registry_public_key`
 

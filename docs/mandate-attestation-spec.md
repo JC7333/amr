@@ -37,6 +37,7 @@ accepts. Key rotation is not in v1.
 | `agent_id` | Must match the mandate's `agent_id` |
 | `audience` | Optional: the receiver it is addressed to (e.g. `"seller:acme"`) |
 | `lifetime_seconds` | Optional: a shorter lifetime; it never extends the maximum |
+| `include_principal_payload` | Optional, default `false`: also carry the principal's signature and the exact bytes it signed, so the receiver re-checks it without trusting the registry. Those bytes contain the mandate `metadata`, which is then disclosed to the receiver |
 
 Issued only if, at issuance time:
 
@@ -46,12 +47,12 @@ Issued only if, at issuance time:
   Pack's `principal_signature_valid`; a mandate whose principal had no key is attested
   with `principal_signature: null`).
 
-Otherwise: `{"denied": true, "reason": ..., "mandate_id": ...}` with `reason` one of
-`invalid_input: ...`, `mandate_not_found`, `agent_mismatch`, `mandate_status_<status>`,
+Otherwise: `{"denied": true, "reason": ..., "mandate_id": ...}` (`mandate_id` is
+`null` for invalid input) with `reason` one of `invalid_input: ...`, `mandate_not_found`, `agent_mismatch`, `mandate_status_<status>`,
 `mandate_expired`, `parent_mandate_not_found`, `parent_mandate_<status>`,
 `parent_mandate_expired`, `delegation_chain_too_deep`, `principal_signature_invalid`;
-`refused_by` names the parent mandate when the problem is above. A refusal writes
-nothing.
+`refused_by` names the parent mandate when the problem is above; an unexpected error
+gives `internal_error: ...`. A refusal writes nothing.
 
 Lifetime: `exp` is the earliest of now + lifetime (at most
 `AMR_ATTESTATION_LIFETIME_SECONDS`, default 900), the mandate's `expires_at` and every
@@ -82,10 +83,19 @@ Claims:
 | `amr_mandate` | `id`, `principal_id`, `agent_id`, `scope`, `legal_basis`, `status` (`"active"`), `created_at`, `expires_at`, `parent_mandate_id`, `perimeter` (canonical, or `null`), `perimeter_digest` (SHA-256 of the canonical perimeter JSON, as in action tokens, or `null`), `chain_hash`, `principal_signature` |
 | `amr_chain` | The parent mandates, nearest first, up to the root: `id`, `principal_id`, `agent_id`, `status`, `expires_at`, `parent_mandate_id`, `perimeter_digest` |
 
-`principal_signature` is `null` or `{signature, signed_at, key_id, public_key,
-key_proof_signature, payload, algorithm}`: the principal's own Ed25519 signature over
-`payload`, the exact bytes it signed (see `docs/principal-signature-spec.md`).
-Mandate `metadata` is not included (labels, not sealed into the chain hash).
+`principal_signature` is `null` (unsigned mandate) or, by default,
+`{key_id, public_key, signed_at, algorithm}`: the registry checked the signature at
+issuance and vouches for it. With `include_principal_payload`, it is
+`{signature, signed_at, key_id, public_key, key_proof_signature, payload, algorithm}`:
+the principal's own Ed25519 signature over `payload`, the exact bytes it signed (see
+`docs/principal-signature-spec.md`), which the receiver re-checks.
+
+Mandate `metadata` (labels, possibly personal data) is not in `amr_mandate`. It is
+inside the signed `payload`, so it reaches the receiver only with
+`include_principal_payload`.
+
+`chain_hash` is informational: it lets someone who also holds the registry's Proof
+Pack match the two. The receiver cannot re-check it offline.
 
 ## 4. Verify offline (receiver)
 
@@ -94,11 +104,15 @@ python -m amr.verify_attestation attestation.jws --public-key registry.pub \
     [--audience seller:acme] [--issuer amr://registry.example] [--leeway 30]
 ```
 
+`--public-key` takes the PEM, or the JSON returned by `get_registry_public_key`.
 Or in Python: `amr.attestation.verify_attestation(attestation, public_key_pem,
 audience=..., issuer=...)`. No database, no network. Result:
 `{"valid": true, "reason": "ok", "attestation": {...}}` or
 `{"valid": false, "reason": "<code>", "detail": "..."}`; the command exits 0 if
-valid, 1 if not, 2 if the public key cannot be read.
+valid, 1 if not (an unusable key gives `public_key_invalid`), 2 if the key file
+cannot be read. The summary says `principal_signed` and
+`principal_signature_rechecked` (true only when the receiver re-checked the
+principal's signature itself).
 
 Checks, in this order (another implementation MUST do all of them):
 
@@ -114,13 +128,20 @@ Checks, in this order (another implementation MUST do all of them):
    `nbf <= now` (`not_yet_valid`) and `now < exp` (`expired`), within the leeway.
 6. Content (`claims_invalid`): `sub` equals the mandate's agent; `perimeter_digest`
    matches the perimeter; the chain is complete and in order (mandate's parent, then
-   each parent's parent, ending at a root); every level is `active` and `exp` is not
-   after any level's `expires_at`.
+   each parent's parent, ending at a root); each mandate's `principal_id` is the
+   `agent_id` of the mandate above it; every level is `active` and `exp` is not after
+   any level's `expires_at`.
 7. Principal signature, when present (`principal_signature_invalid`): `key_id` is the
-   key id of `public_key`; the signature verifies over `payload`; the payload's
-   `context` (`amr.mandate.v1`), `principal_id`, `agent_id`, `scope`, `legal_basis`,
-   `parent_mandate_id` and `signed_at` equal the mandate's, and for a root mandate its
-   `perimeter` too.
+   key id of `public_key`. When `payload` is carried: the signature verifies over
+   `payload`; `key_proof_signature`, when present, verifies over the key registration
+   payload; the payload's `context` (`amr.mandate.v1`), `principal_id`, `agent_id`,
+   `scope`, `legal_basis`, `parent_mandate_id` and `signed_at` equal the mandate's,
+   its `duration_hours` equals `expires_at - created_at` (within a second), and for a
+   root mandate its `perimeter` equals the mandate's.
+
+These content checks catch an inconsistent attestation even when the registry signed
+it. They cannot catch a consistent false one: the registry key vouches for the facts
+(see Known limits).
 
 ## 5. Not to be confused with action tokens
 
@@ -142,7 +163,16 @@ attestation does not carry.
   principal's own signature, when present, can be re-checked independently of the
   registry; it proves possession of the key first registered for that `principal_id`,
   not a verified identity (see `docs/principal-signature-spec.md`).
-- **Parents' principal signatures** are checked by the registry at issuance but not
-  carried in the attestation (only the mandate's own is).
+- **The registry trusts its own database.** At issuance, principal signatures are
+  re-checked, but the mandate's `chain_hash` is not recomputed: someone who can write
+  to the database file can change an unsigned mandate (scope, perimeter, expiry) or
+  any mandate's status, and the registry will attest the changed row. The same holds
+  for action tokens today. Protect the database file; for a signed mandate, ask for
+  `include_principal_payload` to re-check the principal's signature yourself.
+- **What the receiver can re-check without the registry** is limited to the
+  principal's signature, when carried: principal, agent, scope, legal basis, duration
+  and, for a root mandate only, the perimeter. A sub-mandate's effective perimeter
+  (narrowed by its parents) and the parents' principal signatures are checked by the
+  registry at issuance but not carried in the attestation.
 - **Not a legal opinion.** The attestation states facts recorded in the registry; what
   they are worth to a receiver is a legal question outside this document.

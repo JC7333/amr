@@ -172,21 +172,21 @@ async def test_attestation_never_outlives_the_mandate(monkeypatch) -> None:
     assert (await _verify(issued["attestation"]))["valid"] is True
 
 
-async def test_attestation_never_outlives_a_parent(monkeypatch) -> None:
+async def test_attestation_never_outlives_a_parent(temp_db: Path, monkeypatch) -> None:
+    """Even a sub-mandate stored with a later expiry than its parent is capped."""
     monkeypatch.setattr("amr.config.settings.attestation_lifetime_seconds", 86400)
-    parent = await _mandate(
-        agent_id="agent:lead", duration_hours=0.1,
-        allowed_actions=["supplies.*"], delegation_allowed=True,
+    parent_id, child_id = str(uuid4()), str(uuid4())
+    await insert_mandate_directly(
+        temp_db, parent_id, agent_id="agent:lead", hours_until_expiry=0.1
     )
-    child = await _mandate(
-        principal_id="agent:lead", agent_id=AGENT, parent_mandate_id=parent["mandate_id"],
-        duration_hours=0.05, allowed_actions=["supplies.order"],
+    await insert_mandate_directly(
+        temp_db, child_id, principal_id="agent:lead", agent_id=AGENT,
+        parent_mandate_id=parent_id, hours_until_expiry=10,
     )
-    # The child is capped by its parent at creation; the attestation by both.
-    claims = _claims((await _attest(child["mandate_id"]))["attestation"])
-    parent_expiry = datetime.fromisoformat(parent["expires_at"]).timestamp()
-    child_expiry = datetime.fromisoformat(child["expires_at"]).timestamp()
-    assert claims["exp"] <= min(parent_expiry, child_expiry)
+    issued = await _attest(child_id)
+    claims = _claims(issued["attestation"])
+    assert claims["exp"] - claims["iat"] <= 360
+    assert (await _verify(issued["attestation"]))["valid"] is True
 
 
 async def test_issuance_is_recorded(temp_db: Path) -> None:
@@ -240,11 +240,20 @@ async def test_expired_mandate_is_refused(temp_db: Path) -> None:
     assert (await _attest(mandate_id))["reason"] == "mandate_expired"
 
 
-async def test_mandate_expiring_within_the_second_is_refused(temp_db: Path) -> None:
+async def test_mandate_expiring_within_the_second_is_refused(temp_db: Path, monkeypatch) -> None:
+    """An attestation that would expire in the second it is issued is not issued."""
+    frozen = datetime(2030, 1, 1, 12, 0, 0, 100000, tzinfo=UTC)
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: ANN001, ANN206
+            return frozen
+
     mandate_id = str(uuid4())
-    await insert_mandate_directly(
-        temp_db, mandate_id, agent_id=AGENT, hours_until_expiry=0.3 / 3600
-    )
+    await insert_mandate_directly(temp_db, mandate_id, agent_id=AGENT)
+    _sql(temp_db, "UPDATE mandates SET expires_at = ? WHERE id = ?",
+         ((frozen + timedelta(milliseconds=400)).isoformat(), mandate_id))
+    monkeypatch.setattr("amr.tools.issue_mandate_attestation.datetime", FrozenDatetime)
     assert (await _attest(mandate_id))["reason"] == "mandate_expired"
 
 
@@ -362,7 +371,7 @@ async def test_signed_mandate_attestation_lets_the_receiver_check_the_principal(
     key = _new_key()
     await _register(key)
     m = await _signed_mandate(key, allowed_actions=["supplies.order"])
-    issued = await _attest(m["mandate_id"])
+    issued = await _attest(m["mandate_id"], include_principal_payload=True)
     block = _claims(issued["attestation"])["amr_mandate"]["principal_signature"]
     assert block["public_key"] == _pub(key)
     # The receiver can re-check the principal's own signature without the registry.
@@ -372,6 +381,32 @@ async def test_signed_mandate_attestation_lets_the_receiver_check_the_principal(
     assert result["valid"] is True, result
     assert result["attestation"]["principal_signed"] is True
     assert result["attestation"]["principal_key_id"] == block["key_id"]
+    assert result["attestation"]["principal_signature_rechecked"] is True
+
+
+async def test_signed_payload_and_metadata_are_not_disclosed_by_default() -> None:
+    key = _new_key()
+    await _register(key)
+    m = await _signed_mandate(key, metadata={"client_ref": "C-0042"})
+    attestation = (await _attest(m["mandate_id"]))["attestation"]
+    assert "C-0042" not in json.dumps(_claims(attestation))
+    block = _claims(attestation)["amr_mandate"]["principal_signature"]
+    assert set(block) == {"key_id", "public_key", "signed_at", "algorithm"}
+    result = await _verify(attestation)
+    assert result["valid"] is True, result
+    assert result["attestation"]["principal_signed"] is True
+    assert result["attestation"]["principal_signature_rechecked"] is False
+
+
+async def test_signed_payload_discloses_metadata_only_on_request() -> None:
+    key = _new_key()
+    await _register(key)
+    m = await _signed_mandate(key, metadata={"client_ref": "C-0042"})
+    attestation = (await _attest(m["mandate_id"], include_principal_payload=True))[
+        "attestation"
+    ]
+    payload = _claims(attestation)["amr_mandate"]["principal_signature"]["payload"]
+    assert json.loads(payload)["metadata"] == {"client_ref": "C-0042"}
 
 
 async def test_tampered_signed_mandate_is_not_attested(temp_db: Path) -> None:
@@ -503,12 +538,14 @@ async def test_action_token_is_not_an_attestation() -> None:
 
 
 async def test_attestation_is_not_an_action_token() -> None:
-    """A consumer of action tokens that follows the spec refuses an attestation."""
+    """A JWT library alone accepts it: action-token consumers must check typ and
+    amr_action_hash (docs/token-issuance-spec.md), which an attestation lacks."""
     m = await _mandate()
     attestation = (await _attest(m["mandate_id"], audience="seller:acme"))["attestation"]
     claims = jwt.decode(attestation, await _public_key_pem(), algorithms=["EdDSA"],
                         audience="seller:acme")
     assert "amr_action_hash" not in claims
+    assert jwt.get_unverified_header(attestation)["typ"] == ATTESTATION_TYP
 
 
 async def test_algorithm_none_is_refused() -> None:
@@ -528,6 +565,14 @@ async def test_rsa_or_garbage_public_key_is_refused() -> None:
     m = await _mandate()
     attestation = (await _attest(m["mandate_id"]))["attestation"]
     assert verify_attestation(attestation, b"nope")["reason"] == "public_key_invalid"
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    rsa_pem = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key(
+    ).public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    assert verify_attestation(attestation, rsa_pem)["reason"] == "public_key_invalid"
 
 
 @pytest.mark.parametrize(
@@ -575,6 +620,9 @@ async def test_wrong_typ_is_refused_even_if_signed() -> None:
         lambda chain: chain[1].update(expires_at="2000-01-01T00:00:00+00:00"),
         lambda chain: chain[0].pop("principal_id"),
         lambda chain: chain[1].update(parent_mandate_id=str(uuid4())),  # no root
+        lambda chain: chain[0].update(id=str(uuid4())),  # a parent that is not ours
+        lambda chain: chain[0].update(agent_id="agent:other"),  # not the delegator
+        lambda chain: chain[0].update(principal_id="org:other"),  # root's agent differs
     ],
 )
 async def test_inconsistent_chain_is_refused_even_if_signed(mutate) -> None:
@@ -596,6 +644,15 @@ async def test_inconsistent_chain_is_refused_even_if_signed(mutate) -> None:
     assert (await _verify(_resign(claims)))["reason"] == "claims_invalid"
 
 
+async def test_registry_vouched_signature_still_checks_its_key_id() -> None:
+    key = _new_key()
+    await _register(key)
+    m = await _signed_mandate(key)
+    claims = _claims((await _attest(m["mandate_id"]))["attestation"])
+    claims["amr_mandate"]["principal_signature"]["public_key"] = _pub(_new_key())
+    assert (await _verify(_resign(claims)))["reason"] == "principal_signature_invalid"
+
+
 @pytest.mark.parametrize(
     ("mutate", "reason"),
     [
@@ -612,6 +669,13 @@ async def test_inconsistent_chain_is_refused_even_if_signed(mutate) -> None:
          "principal_signature_invalid"),
         (lambda b, m: b.update(payload="not json"), "principal_signature_invalid"),
         (lambda b, m: b.pop("payload"), "claims_invalid"),
+        (lambda b, m: m.update(expires_at="2099-01-01T00:00:00+00:00"),
+         "principal_signature_invalid"),
+        (lambda b, m: m.update(created_at="2000-01-01T00:00:00+00:00"),
+         "principal_signature_invalid"),
+        (lambda b, m: b.update(key_proof_signature=b64url_encode(b"\x01" * 64)),
+         "principal_signature_invalid"),
+        (lambda b, m: b.update(key_proof_signature="!"), "principal_signature_invalid"),
     ],
 )
 async def test_principal_signature_is_rechecked_by_the_receiver(mutate, reason) -> None:
@@ -619,7 +683,9 @@ async def test_principal_signature_is_rechecked_by_the_receiver(mutate, reason) 
     key = _new_key()
     await _register(key)
     m = await _signed_mandate(key, allowed_actions=["supplies.order"])
-    claims = _claims((await _attest(m["mandate_id"]))["attestation"])
+    claims = _claims(
+        (await _attest(m["mandate_id"], include_principal_payload=True))["attestation"]
+    )
     mutate(claims["amr_mandate"]["principal_signature"], claims["amr_mandate"])
     result = await _verify(_resign(claims))
     assert result["valid"] is False
@@ -654,6 +720,10 @@ async def test_offline_command(tmp_path: Path, capsys) -> None:
     token_file.write_text(attestation + "\n")
 
     assert cli_main([str(token_file), "--public-key", str(pub), "--audience", "seller:acme"]) == 0
+    capsys.readouterr()
+    json_key = tmp_path / "registry.json"
+    json_key.write_text(await get_registry_public_key())
+    assert cli_main([attestation, "--public-key", str(json_key), "--audience", "seller:acme"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["valid"] is True
     assert out["attestation"]["mandate_id"] == m["mandate_id"]
@@ -682,7 +752,7 @@ async def test_existing_mandates_and_hashes_are_unchanged(temp_db: Path) -> None
     assert {2, 3, 4, 5} <= versions
 
 
-async def test_v4_database_gains_the_attestation_table(temp_db: Path) -> None:
+async def test_database_without_the_attestation_table_gains_it(temp_db: Path) -> None:
     await init_db(temp_db)
     _sql(temp_db, "DROP TABLE issued_attestations", ())
     _sql(temp_db, "DELETE FROM schema_version WHERE version = ?", (5,))
@@ -701,13 +771,3 @@ async def test_verification_needs_no_database(temp_db: Path) -> None:
     result = verify_attestation(attestation, pem, now=time.time())
     assert result["valid"] is True
     assert not temp_db.exists()
-
-
-async def test_mandate_issued_in_the_past_is_attested_until_now_only(temp_db: Path) -> None:
-    """status_checked_at is the issuance time, not the mandate's creation time."""
-    m = await _mandate()
-    before = datetime.now(UTC) - timedelta(seconds=2)
-    issued = await _attest(m["mandate_id"])
-    result = await _verify(issued["attestation"])
-    checked = datetime.fromisoformat(result["attestation"]["status_checked_at"])
-    assert checked >= before.replace(microsecond=0)

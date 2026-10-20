@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -30,7 +31,7 @@ class Settings(BaseSettings):
     # Mandate attestations shown by an agent to a third party (see
     # docs/mandate-attestation-spec.md). Longest lifetime an attestation may have:
     # a revocation reaches a receiver that checks offline only when it expires.
-    attestation_lifetime_seconds: int = 900
+    attestation_lifetime_seconds: int = Field(default=900, gt=0)
 
     model_config = {"env_prefix": "AMR_", "env_file": ".env", "extra": "ignore"}
 

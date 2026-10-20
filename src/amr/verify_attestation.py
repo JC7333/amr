@@ -5,8 +5,9 @@ Usage:
         [--audience ME] [--issuer amr://registry] [--leeway 30]
 
 ATTESTATION is the compact JWS itself, a file that contains it, or "-" for stdin.
-The public key is the PEM from get_registry_public_key. No network call, no database.
-Prints the result as JSON; exit code 0 if valid, 1 if not, 2 on a usage error.
+The public key file is the PEM, or the JSON returned by get_registry_public_key.
+No network call, no database. Prints the result as JSON; exit code 0 if valid,
+1 if not (including an unusable key), 2 if the key file cannot be read.
 """
 
 import argparse
@@ -26,6 +27,16 @@ def _read_attestation(value: str) -> str:
         return value.strip()
 
 
+def _read_public_key(path: Path) -> bytes:
+    content = path.read_bytes()
+    if content.lstrip().startswith(b"{"):
+        try:
+            return json.loads(content)["public_key_pem"].encode("ascii")
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return content  # reported as public_key_invalid
+    return content
+
+
 def main(argv: list[str] | None = None) -> int:
     """Verify one attestation and print the result; return the exit code."""
     parser = argparse.ArgumentParser(
@@ -33,14 +44,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Verify an AMR mandate attestation offline.",
     )
     parser.add_argument("attestation", help="compact JWS, a file containing it, or -")
-    parser.add_argument("--public-key", required=True, help="registry public key (PEM file)")
+    parser.add_argument(
+        "--public-key", required=True, help="registry public key (PEM or JSON file)"
+    )
     parser.add_argument("--audience", default=None, help="who you are, if it is addressed")
     parser.add_argument("--issuer", default=None, help="registry issuer you expect")
     parser.add_argument("--leeway", type=int, default=0, help="clock skew tolerated (s)")
     args = parser.parse_args(argv)
 
     try:
-        public_key_pem = Path(args.public_key).read_bytes()
+        public_key_pem = _read_public_key(Path(args.public_key))
     except OSError as exc:
         print(json.dumps({"valid": False, "reason": "public_key_unreadable",
                           "detail": str(exc)}))

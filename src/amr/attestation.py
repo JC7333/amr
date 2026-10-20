@@ -14,7 +14,7 @@ See docs/mandate-attestation-spec.md.
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -25,6 +25,7 @@ from amr.crypto.principal import (
     MANDATE_CONTEXT,
     PrincipalSignatureError,
     key_id,
+    key_registration_payload,
     parse_public_key,
     parse_signature,
     verify,
@@ -61,7 +62,8 @@ _LINK_KEYS = (
     "parent_mandate_id",
     "perimeter_digest",
 )
-_SIGNATURE_KEYS = ("key_id", "public_key", "signature", "signed_at", "payload")
+_SIGNATURE_KEYS = ("key_id", "public_key", "signed_at")
+_SIGNED_PAYLOAD_KEYS = ("signature", "payload")
 
 
 class AttestationError(Exception):
@@ -116,26 +118,44 @@ def _perimeter_digest(perimeter: Any) -> str | None:
         raise AttestationError("claims_invalid", "perimeter is not a valid perimeter") from exc
 
 
-def _check_principal_signature(mandate: dict[str, Any]) -> None:
-    """Re-check the principal's own Ed25519 signature carried in the attestation.
+def _check_principal_signature(mandate: dict[str, Any]) -> bool:
+    """Check the principal signature block; return True if it was re-checked here.
 
-    It must verify with the principal's public key, that key must match its key id,
-    and the signed payload must name this principal, agent, scope, legal basis and
-    parent (and, for a root mandate, this exact perimeter).
+    The key must always match its key id. When the attestation carries the signed
+    payload (issued with include_principal_payload), the receiver re-checks, without
+    trusting the registry: the Ed25519 signature over the payload, the key's proof of
+    possession when present, and that the payload names this principal, agent, scope,
+    legal basis, parent, signed_at and duration (and, for a root mandate, this exact
+    perimeter). Without the payload, the signature is vouched for by the registry only.
     """
     block = _require_keys(mandate["principal_signature"], _SIGNATURE_KEYS, "principal_signature")
     try:
         public_key_raw = parse_public_key(block["public_key"])
-        signature_raw = parse_signature(block["signature"])
     except PrincipalSignatureError as exc:
         raise AttestationError("principal_signature_invalid", exc.code) from exc
     if key_id(public_key_raw) != block["key_id"]:
         raise AttestationError("principal_signature_invalid", "key_id does not match key")
+    if not any(key in block for key in _SIGNED_PAYLOAD_KEYS):
+        return False
+    _require_keys(block, _SIGNED_PAYLOAD_KEYS, "principal_signature")
+    try:
+        signature_raw = parse_signature(block["signature"])
+    except PrincipalSignatureError as exc:
+        raise AttestationError("principal_signature_invalid", exc.code) from exc
     payload_text = block["payload"]
     if not isinstance(payload_text, str) or not verify(
         public_key_raw, payload_text.encode("utf-8"), signature_raw
     ):
         raise AttestationError("principal_signature_invalid", "signature does not verify")
+    proof = block.get("key_proof_signature")
+    if proof is not None:
+        try:
+            proof_raw = parse_signature(proof)
+        except PrincipalSignatureError as exc:
+            raise AttestationError("principal_signature_invalid", exc.code) from exc
+        registration = key_registration_payload(mandate["principal_id"], block["public_key"])
+        if not verify(public_key_raw, registration, proof_raw):
+            raise AttestationError("principal_signature_invalid", "key proof does not verify")
     try:
         payload = json.loads(payload_text)
     except ValueError as exc:
@@ -158,6 +178,18 @@ def _check_principal_signature(mandate: dict[str, Any]) -> None:
             raise AttestationError(
                 "principal_signature_invalid", f"signed {field} differs from the mandate"
             )
+    duration = payload.get("duration_hours")
+    if isinstance(duration, bool) or not isinstance(duration, int | float):
+        raise AttestationError("principal_signature_invalid", "signed duration missing")
+    try:
+        granted = _timestamp(mandate["expires_at"]) - _timestamp(mandate["created_at"])
+    except (TypeError, ValueError) as exc:
+        raise AttestationError("claims_invalid", "created_at is not ISO 8601") from exc
+    if abs(granted - timedelta(hours=duration).total_seconds()) > 1:
+        raise AttestationError(
+            "principal_signature_invalid", "signed duration differs from the mandate"
+        )
+    return True
 
 
 def check_claims(claims: dict[str, Any], now: float, leeway: int = 0) -> dict[str, Any]:
@@ -189,12 +221,17 @@ def check_claims(claims: dict[str, Any], now: float, leeway: int = 0) -> dict[st
     if _perimeter_digest(mandate["perimeter"]) != mandate["perimeter_digest"]:
         raise AttestationError("claims_invalid", "perimeter_digest does not match perimeter")
 
-    # The chain must be complete and in order: mandate -> parent -> ... -> root.
+    # The chain must be complete and in order: mandate -> parent -> ... -> root, and
+    # each mandate must have been granted by the agent of the mandate above it.
     expected_parent = mandate["parent_mandate_id"]
+    delegator = mandate["principal_id"]
     for link in links:
         if link["id"] != expected_parent:
             raise AttestationError("claims_invalid", "amr_chain is incomplete or out of order")
+        if link["agent_id"] != delegator:
+            raise AttestationError("claims_invalid", "amr_chain link not granted by its agent")
         expected_parent = link["parent_mandate_id"]
+        delegator = link["principal_id"]
     if expected_parent is not None:
         raise AttestationError("claims_invalid", "amr_chain does not reach a root mandate")
 
@@ -211,8 +248,9 @@ def check_claims(claims: dict[str, Any], now: float, leeway: int = 0) -> dict[st
                 "claims_invalid", f"attestation outlives mandate {entry['id']}"
             )
 
+    rechecked = False
     if mandate["principal_signature"] is not None:
-        _check_principal_signature(mandate)
+        rechecked = _check_principal_signature(mandate)
 
     signature = mandate["principal_signature"]
     return {
@@ -231,6 +269,7 @@ def check_claims(claims: dict[str, Any], now: float, leeway: int = 0) -> dict[st
         ],
         "principal_signed": signature is not None,
         "principal_key_id": signature["key_id"] if signature is not None else None,
+        "principal_signature_rechecked": rechecked,
         "issuer": claims["iss"],
         "audience": claims.get("aud"),
         "status_checked_at": _iso(claims["iat"]),
