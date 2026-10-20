@@ -70,10 +70,31 @@ sub-mandate, including ones created before v1.1, now require every parent to be
 active and unexpired.
 
 > **Deployment rule.** These controls hold only if agents cannot register their own
-> mandates. `create_mandate` is a principal-side tool: expose it to the principal
-> (or its back office), never to the agents it governs. An agent that can call
-> `create_mandate` can mint itself a fresh root mandate. Authenticating the
-> principal on mandate creation is on the roadmap.
+> mandates. `create_mandate` and `register_principal_key` are principal-side tools:
+> expose them to the principal (or its back office), never to the agents it governs.
+> An agent that can call `create_mandate` can mint itself a fresh root mandate for
+> any principal without a key, and one that can call `register_principal_key` can
+> claim a principal that has not registered a key yet. Principal signatures (below)
+> close the first gap once each principal has registered its key; binding keys to a
+> verified identity is on the roadmap.
+
+### Principal signatures: the principal signs the mandate
+
+A principal can register its own Ed25519 public key once (`register_principal_key`).
+From then on, the registry accepts a mandate in its name only if the principal signed
+it: `prepare_mandate_signature` returns the exact bytes to sign, and `create_mandate`
+takes `principal_signature` and `signed_at`. The signature is sealed into the mandate's
+`chain_hash`, cannot be used twice in the same registry, and is kept in the Proof Pack
+with the public key and the signed bytes, so anyone can re-check it offline. Set
+`AMR_REQUIRE_PRINCIPAL_SIGNATURE=true` to refuse every unsigned mandate.
+
+What a valid signature proves: the mandate was signed with the key first registered
+for that `principal_id`. The registry does not check who registers a key (first
+registration wins), so register each principal's key at onboarding, through the
+principal's own channel. Mandates of principals without a key behave as before (same
+hashes; the result gains `"principal_signature": null`); mandates created before a key
+was registered stay valid. See `docs/principal-signature-spec.md`, including its
+known limits.
 
 See `docs/token-issuance-spec.md` for the full specification.
 
@@ -176,6 +197,8 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `max_amount` | str \| null | Ceiling per action, decimal string. E.g. `"500"` |
 | `currency` | str | ISO 4217 code of `max_amount` (default `"EUR"`) |
 | `amount_actions` | list[str] \| null | Actions that must carry an `amount` under the ceiling (empty: all) |
+| `principal_signature` | str \| null | Principal's base64url Ed25519 signature of the `prepare_mandate_signature` payload (required once the principal has a registered key) |
+| `signed_at` | str \| null | ISO 8601 timestamp with timezone placed in the signed payload (within 15 minutes of the registry clock) |
 
 **Returns:**
 ```json
@@ -187,6 +210,7 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
   "scope": "Compare and recommend financial products to retail clients",
   "perimeter": null,
   "parent_mandate_id": null,
+  "principal_signature": null,
   "expires_at": "2026-05-13T20:00:00+00:00",
   "chain_hash": "a3f5c2d1e8b9..."
 }
@@ -200,6 +224,33 @@ with a stable code: `perimeter_invalid`, `parent_mandate_not_found`,
 `limit_exceeds_parent`, `expires_after_parent`. A broken chain above the parent
 returns `parent_mandate_<status>`, `parent_mandate_expired` or
 `delegation_chain_too_deep` (more than 16 levels).
+
+`principal_signature` is `{"key_id", "signed_at"}` for a signed mandate. Signature
+errors: `principal_signature_required`, `principal_signature_incomplete`,
+`principal_key_not_registered`, `signed_at_invalid`, `principal_signature_stale`,
+`principal_signature_invalid`, `principal_signature_replayed`.
+
+---
+
+### `register_principal_key`
+
+Register a principal's Ed25519 public key, once, with a proof of possession.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `principal_id` | str | The principal. E.g. `"user:audric"` |
+| `public_key` | str | Raw 32-byte public key, base64url |
+| `proof_signature` | str | Signature of `{"context":"amr.principal_key.v1","principal_id":...,"public_key":...}` (canonical JSON) |
+
+Returns `{"status": "registered", "principal_id", "key_id", "registered_at", "chain_hash"}`.
+
+---
+
+### `prepare_mandate_signature`
+
+Same arguments as `create_mandate` (plus optional `signed_at`, default now). Writes
+nothing; returns `{"payload", "payload_b64url", "signed_at"}`: the exact bytes the
+principal signs before calling `create_mandate`.
 
 ---
 
@@ -279,6 +330,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
   "events": [],
   "chain_integrity": {
     "actions_chain_valid": true,
+    "principal_signature_valid": null,
     "total_actions": 5,
     "total_events": 0
   },
@@ -288,6 +340,12 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
   }
 }
 ```
+
+`mandate.principal_signature` holds the principal's signature, public key, the key's
+proof of possession and the signed bytes (or `null`); `principal_signature_valid`
+re-checks them against the stored mandate. It is `false` if the signature does not
+match, or if it is missing although the principal had a key when the mandate was
+created; `null` for a mandate whose principal had no key then.
 
 ---
 
@@ -419,6 +477,8 @@ tests/
 | `AMR_DB_PATH` | `amr_mandates.db` | Path to the SQLite database file |
 | `AMR_LOG_LEVEL` | `INFO` | Logging verbosity |
 | `AMR_SERVER_NAME` | `Agent Mandate Registry` | MCP server display name |
+| `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
+| `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
 
 ---
 

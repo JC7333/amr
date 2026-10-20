@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     token_issuer: str = "amr://localhost"  # noqa: S105 — not a password, it's an issuer URI
     token_lifetime_seconds: int = 300
 
+    # Principal signatures on mandates (see docs/principal-signature-spec.md).
+    # A principal that registered a key must always sign. When True, every mandate
+    # must be signed, so a principal without a registered key cannot grant one.
+    require_principal_signature: bool = False
+    # How old (or how far in the future) a principal's signed_at may be.
+    principal_signature_max_age_seconds: int = 900
+
     model_config = {"env_prefix": "AMR_", "env_file": ".env", "extra": "ignore"}
 
 
