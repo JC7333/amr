@@ -30,7 +30,11 @@ CREATE TABLE IF NOT EXISTS mandates (
     parent_mandate_id TEXT REFERENCES mandates(id),
     metadata_json     TEXT NOT NULL DEFAULT '{}',
     chain_hash        TEXT NOT NULL,
-    perimeter_json    TEXT
+    perimeter_json    TEXT,
+    principal_signature      TEXT,
+    principal_signed_at      TEXT,
+    principal_key_id         TEXT,
+    principal_signed_payload TEXT
 );
 
 CREATE TABLE IF NOT EXISTS action_logs (
@@ -64,6 +68,15 @@ CREATE TABLE IF NOT EXISTS issued_tokens (
     key_id           TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS principal_keys (
+    principal_id     TEXT PRIMARY KEY,
+    public_key       TEXT NOT NULL,
+    key_id           TEXT NOT NULL,
+    proof_signature  TEXT NOT NULL,
+    registered_at    TEXT NOT NULL,
+    chain_hash       TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_mandate  ON issued_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_expires  ON issued_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_action   ON issued_tokens(mandate_id, action_hash);
@@ -74,6 +87,23 @@ CREATE INDEX IF NOT EXISTS idx_mandates_status       ON mandates(status);
 CREATE INDEX IF NOT EXISTS idx_action_logs_mandate   ON action_logs(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_logs_agent     ON action_logs(agent_id);
 """
+
+
+_PRINCIPAL_SIGNATURE_COLUMNS = (
+    "principal_signature",
+    "principal_signed_at",
+    "principal_key_id",
+    "principal_signed_payload",
+)
+# Fixed statements (no interpolation): one per column added by schema v4.
+_ADD_COLUMN_SQL = {
+    "principal_signature": "ALTER TABLE mandates ADD COLUMN principal_signature TEXT",
+    "principal_signed_at": "ALTER TABLE mandates ADD COLUMN principal_signed_at TEXT",
+    "principal_key_id": "ALTER TABLE mandates ADD COLUMN principal_key_id TEXT",
+    "principal_signed_payload": (
+        "ALTER TABLE mandates ADD COLUMN principal_signed_payload TEXT"
+    ),
+}
 
 
 def _resolve_db_path(db_path: Path | str | None) -> Path:
@@ -109,7 +139,8 @@ async def init_db(db_path: Path | str | None = None) -> None:
     """Initialize the database schema (idempotent - safe to call multiple times).
 
     Creates all tables and indexes if they do not already exist.
-    Records the schema versions applied (2: issued tokens, 3: mandate perimeter).
+    Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
+    4: principal signatures).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -140,6 +171,26 @@ async def init_db(db_path: Path | str | None = None) -> None:
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (3,),
         )
+        # Schema v4: principal signatures. Older databases gain nullable columns
+        # (existing mandates stay unsigned and unchanged); principal_keys is created
+        # by the script above. A signature can register only one mandate (replay).
+        cursor = await db.execute("PRAGMA table_info(mandates)")
+        columns = {row["name"] for row in await cursor.fetchall()}
+        for column in _PRINCIPAL_SIGNATURE_COLUMNS:
+            if column not in columns:
+                try:
+                    await db.execute(_ADD_COLUMN_SQL[column])
+                except aiosqlite.OperationalError as exc:
+                    if "duplicate column" not in str(exc):
+                        raise
+        await db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_mandates_principal_signature "
+            "ON mandates(principal_signature) WHERE principal_signature IS NOT NULL"
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (4,),
+        )
         await db.commit()
 
 
@@ -156,6 +207,29 @@ async def get_last_mandate_hash(db: aiosqlite.Connection) -> str:
     """
     cursor = await db.execute(
         "SELECT chain_hash FROM mandates ORDER BY created_at DESC LIMIT 1"
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return ""
+    return row["chain_hash"]
+
+
+async def get_principal_key(
+    db: aiosqlite.Connection, principal_id: str
+) -> aiosqlite.Row | None:
+    """Return the registered key row of a principal, or None if it has none."""
+    cursor = await db.execute(
+        "SELECT principal_id, public_key, key_id, proof_signature, registered_at, chain_hash "
+        "FROM principal_keys WHERE principal_id = ?",
+        (principal_id,),
+    )
+    return await cursor.fetchone()
+
+
+async def get_last_principal_key_hash(db: aiosqlite.Connection) -> str:
+    """Return the chain_hash of the last registered principal key, or "" if none."""
+    cursor = await db.execute(
+        "SELECT chain_hash FROM principal_keys ORDER BY rowid DESC LIMIT 1"
     )
     row = await cursor.fetchone()
     if row is None:
