@@ -593,3 +593,41 @@ def test_request_model_refuses_reversed_period_and_unknown_fields() -> None:
         )
     with pytest.raises(ValidationError):
         InsurerDossierRequest(mandate_id=mandate_id, period="october")
+
+
+@pytest.mark.parametrize("bound", ["2026-10-31", "1700000000", 1, "2026-10-31 12:00"])
+async def test_period_bound_without_time_is_refused(bound: object) -> None:
+    root = await _root()
+    result = await _export(root, period_end=bound)
+    assert result["error"].startswith("Invalid input")
+
+
+async def test_export_never_creates_a_signing_key(tmp_path: Path, monkeypatch) -> None:
+    root = await _root()
+    missing_priv, missing_pub = tmp_path / "none.pem", tmp_path / "none.pub"
+    monkeypatch.setattr("amr.config.settings.signing_key_path", missing_priv)
+    monkeypatch.setattr("amr.config.settings.public_key_path", missing_pub)
+
+    result = await _export(root)
+
+    assert "signing key" in result["error"]
+    assert not missing_priv.exists() and not missing_pub.exists()
+
+
+async def test_sub_mandate_actions_are_not_listed_as_the_mandates_own() -> None:
+    root = await _root()
+    child = await _sub(root, AGENT, "agent:helper")
+    await log_action(mandate_id=root, action="booked")
+    await log_action(mandate_id=child, action="moved")
+
+    dossier = (await _export(root))["dossier"]
+
+    assert [a["action"] for a in dossier["actions"]] == ["booked"]
+    assert {a["mandate_id"] for a in dossier["actions"]} == {root}
+
+
+async def test_bidi_controls_are_neutralised_in_the_print_view() -> None:
+    root = await _root(scope="pay \u202erof 01 EUR")
+    page = (await _export(root, format="html"))["html"]
+    assert "\u202e" not in page
+    assert "pay \ufffdrof 01 EUR" in page

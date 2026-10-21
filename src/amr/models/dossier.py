@@ -17,6 +17,19 @@ class InsurerDossierRequest(BaseModel):
     period_end: datetime | None = None
     format: Literal["json", "html"] = "json"
 
+    @field_validator("period_start", "period_end", mode="before")
+    @classmethod
+    def _iso_datetime_only(cls, value: object) -> object:
+        """Only ISO 8601 date-times: a bare date or a number would silently cut the period."""
+        if value is None or isinstance(value, datetime):
+            return value
+        if not isinstance(value, str) or "T" not in value.upper():
+            raise ValueError("period bounds must be ISO 8601 date-times, e.g. 2026-10-31T23:59:59Z")
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"invalid ISO 8601 date-time: {value!r}") from exc
+
     @field_validator("period_start", "period_end")
     @classmethod
     def _aware_utc(cls, value: datetime | None) -> datetime | None:

@@ -8,7 +8,7 @@ import aiosqlite
 from pydantic import ValidationError
 
 from amr.config import settings
-from amr.crypto.signing import ensure_signing_key_exists, get_key_id, load_signing_key
+from amr.crypto.signing import get_key_id, load_signing_key
 from amr.db.engine import get_db, init_db
 from amr.delegation import MAX_DELEGATION_DEPTH, is_expired, load_ancestors
 from amr.models.dossier import InsurerDossierRequest
@@ -34,6 +34,10 @@ LIMITS = (
     "check who registered that key.",
     "The legal basis is the one declared when the mandate was created; the registry "
     "does not assess it.",
+    "The dossier is read in several steps, not in one database transaction: a "
+    "change recorded while it is generated may appear only in part.",
+    "If the period omits sub-mandates (sub_mandates_truncated), their events and "
+    "tokens are omitted too.",
     "Obtain the registry public key out of band to verify the signature.",
 )
 
@@ -265,7 +269,11 @@ async def export_insurer_dossier(
             "limits": list(LIMITS),
         }
 
-        ensure_signing_key_exists()
+        if not settings.signing_key_path.exists():
+            # Never mint a key here: a dossier signed by a key no verifier holds is useless.
+            return json.dumps(
+                {"error": "No registry signing key: create and publish one before exporting"}
+            )
         key_id = get_key_id()
         digest = dossier_digest(dossier)
         result: dict[str, Any] = {

@@ -95,14 +95,24 @@ tr{break-inside:avoid}}
 """
 
 
+# Bidirectional controls can make printed text read in a misleading order.
+_BIDI_CONTROLS = dict.fromkeys(
+    [0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)], "\ufffd"
+)
+
+
+def _text(value: Any) -> str:
+    return html.escape(str(value).translate(_BIDI_CONTROLS))
+
+
 def _e(value: Any) -> str:
     if value is None:
         return "—"
     if isinstance(value, bool):
         return "yes" if value else "no"
     if isinstance(value, list | tuple):
-        return ", ".join(html.escape(str(item)) for item in value) or "—"
-    return html.escape(str(value))
+        return ", ".join(_text(item) for item in value) or "—"
+    return _text(value)
 
 
 def _check(value: bool | None, none_text: str) -> str:
@@ -218,7 +228,8 @@ def render_html(dossier: dict[str, Any], digest: str, key_id: str) -> str:
     ]
     limits = "".join(f"<li>{html.escape(item)}</li>" for item in dossier["limits"])
     truncated = (
-        '<p class="bad">Sub-mandate list truncated.</p>'
+        '<p class="bad">Sub-mandate list truncated: the events and tokens of the '
+        "omitted sub-mandates are not included either.</p>"
         if dossier.get("sub_mandates_truncated")
         else ""
     )

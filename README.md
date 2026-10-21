@@ -359,17 +359,18 @@ auditor asks for about an AI agent. Read-only; facts from the registry only.
 | Parameter | Type | Description |
 |---|---|---|
 | `mandate_id` | str | UUID of the mandate |
-| `period_start` | str \| null | ISO 8601 start (naive = UTC); defaults to the mandate's creation |
-| `period_end` | str \| null | ISO 8601 end (naive = UTC); defaults to now |
+| `period_start` | str \| null | ISO 8601 date-time start (naive = UTC; a bare date is refused); defaults to the mandate's creation |
+| `period_end` | str \| null | ISO 8601 date-time end (naive = UTC; a bare date is refused); defaults to now |
 | `format` | str | `"json"` (default) or `"html"` to also get a printable page |
 
 **The dossier holds:** the mandate (principal, agent, scope, declared legal basis,
 dates); its perimeter (allowed and forbidden action types, right to delegate, amount
 limit); whether it is in force at generation time, and why not (`mandate_revoked`,
 `mandate_expired`, or a broken chain above it such as `parent_mandate_revoked`); its
-sub-mandates, each with depth, perimeter and in-force status (a cut mandate cuts its
-whole branch); the status events, actions and action tokens of the period, for the
-mandate and its sub-mandates; the integrity checks (action log chain, principal
+sub-mandates, each with depth, perimeter, in-force status and the number of actions it
+logged in the period (a cut mandate cuts its whole branch); the actions the mandate's
+own agent logged in the period; the status events and action tokens of the period, for
+the mandate and its sub-mandates; the integrity checks (action log chain, principal
 signature, last chain hash); and a fixed list of the dossier's limits (for example:
 refused token requests are not recorded, so the dossier lists issued tokens, not
 blocked actions).
@@ -396,6 +397,7 @@ from amr.proof.insurer_dossier import verify_dossier
 dossier = verify_dossier(jws, registry_public_key_pem)  # raises if anything is off
 ```
 
+The export never creates a signing key: on a registry without one it returns an error.
 Get the registry public key out of band: `public_key_pem` in the export is a
 convenience, and a dossier that carries its own key proves nothing about who signed
 it. The HTML page is a self-contained print view (no external resources; print to PDF
