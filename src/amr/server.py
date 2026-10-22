@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 from amr.config import settings
 from amr.tools.create_mandate import create_mandate
+from amr.tools.export_insurer_dossier import export_insurer_dossier
 from amr.tools.get_proof import get_proof
 from amr.tools.issue_action_token import issue_action_token
 from amr.tools.log_action import log_action
@@ -23,6 +24,7 @@ mcp.tool()(get_proof)
 mcp.tool()(issue_action_token)
 mcp.tool()(register_principal_key)
 mcp.tool()(prepare_mandate_signature)
+mcp.tool()(export_insurer_dossier)
 
 
 def main() -> None:
