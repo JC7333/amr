@@ -397,6 +397,61 @@ parent is the cause (full list in `docs/mandate-attestation-spec.md`).
 No parameters. Returns `{"issuer", "key_id", "algorithm": "EdDSA", "public_key_pem",
 "public_key_jwk"}`: what a receiver needs to verify attestations offline.
 
+### `export_insurer_dossier`
+
+Export a **signed dossier** of one mandate over a period: the piece an insurer or an
+auditor asks for about an AI agent. Read-only; facts from the registry only.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mandate_id` | str | UUID of the mandate |
+| `period_start` | str \| null | ISO 8601 date-time start (naive = UTC; a bare date is refused); defaults to the mandate's creation |
+| `period_end` | str \| null | ISO 8601 date-time end (naive = UTC; a bare date is refused); defaults to now |
+| `format` | str | `"json"` (default) or `"html"` to also get a printable page |
+
+**The dossier holds:** the mandate (principal, agent, scope, declared legal basis,
+dates); its perimeter (allowed and forbidden action types, right to delegate, amount
+limit); whether it is in force at generation time, and why not (`mandate_revoked`,
+`mandate_expired`, or a broken chain above it such as `parent_mandate_revoked`); its
+sub-mandates, each with depth, perimeter, in-force status and the number of actions it
+logged in the period (a cut mandate cuts its whole branch); the actions the mandate's
+own agent logged in the period; the status events and action tokens of the period, for
+the mandate and its sub-mandates; the integrity checks (action log chain, principal
+signature, last chain hash); and a fixed list of the dossier's limits (for example:
+refused token requests are not recorded, so the dossier lists issued tokens, not
+blocked actions).
+
+**Returns:**
+```json
+{
+  "dossier": { "dossier_version": "1.0", "period": {}, "mandate": {}, "status": {},
+               "integrity": {}, "sub_mandates": [], "events": [], "actions": [],
+               "tokens": [], "limits": [] },
+  "dossier_sha256": "hex SHA-256 of the canonical dossier",
+  "signature": { "jws": "...", "algorithm": "EdDSA", "key_id": "...",
+                 "public_key_pem": "..." },
+  "html": "only when format is \"html\""
+}
+```
+
+The signature is a JWS (RFC 7515, EdDSA / Ed25519, same registry key as action tokens)
+whose payload is the canonical JSON of the dossier. Verify it offline:
+
+```python
+from amr.proof.insurer_dossier import verify_dossier
+
+dossier = verify_dossier(jws, registry_public_key_pem)  # raises if anything is off
+```
+
+The export never creates a signing key: on a registry without one it returns an error.
+Get the registry public key out of band: `public_key_pem` in the export is a
+convenience, and a dossier that carries its own key proves nothing about who signed
+it. The HTML page is a self-contained print view (no external resources; print to PDF
+from the browser) that shows the dossier's SHA-256 and the key id; only the JSON
+signature is proof. See `docs/insurer-dossier-spec.md`.
+
 ---
 
 ## How It Works
@@ -511,9 +566,11 @@ src/amr/
 │   ├── verify_mandate.py
 │   ├── log_action.py
 │   ├── get_proof.py
-│   └── issue_mandate_attestation.py   # attestation + registry public key
+│   ├── issue_mandate_attestation.py   # attestation + registry public key
+│   └── export_insurer_dossier.py
 ├── attestation.py     # offline attestation verifier (no DB, no network)
 ├── verify_attestation.py  # python -m amr.verify_attestation
+├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)

@@ -1,0 +1,25 @@
+name: CI
+
+# Tests and security lint on every pull request and on main.
+# A red CI means the change is not ready to merge.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests + ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install
+        run: uv sync --extra dev
+      - name: Tests
+        run: uv run python -m pytest -q
+      - name: Ruff (security rules included)
+        run: uv run python -m ruff check src/
