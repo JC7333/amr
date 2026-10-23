@@ -332,7 +332,7 @@ with `prepare_revocation_signature(mandate_id, reason, signed_at=None)`.
 **Effect, as soon as it returns:** `issue_action_token` refuses the mandate
 (`mandate_status_revoked`) and every sub-mandate below it (`parent_mandate_revoked`);
 `verify_mandate` no longer returns it; no sub-mandate can be created under it;
-`get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
+`log_action` refuses it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
 called back and stay valid until their `exp`: the response gives their number and the
 last expiry.
 
@@ -395,8 +395,8 @@ re-checks them against the stored mandate. It is `false` if the signature does n
 match, or if it is missing although the principal had a key when the mandate was
 created; `null` for a mandate whose principal had no key then.
 
-Once `revoke_mandate` has run, `mandate.status` reads `"revoked"` (whatever the stored
-status) and `mandate.revocation` holds `revoked_at`, `reason`, the principal's signature
+Once `revoke_mandate` has run, `mandate.status` reads `"revoked"` (the stored value
+stays in `mandate.stored_status`) and `mandate.revocation` holds `revoked_at`, `reason`, the principal's signature
 of the revocation (or `null`) and its chain hash; `revocation_signature_valid` re-checks
 that signature against the principal's key (`null` when there is nothing to check).
 

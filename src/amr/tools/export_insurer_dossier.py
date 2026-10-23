@@ -73,6 +73,7 @@ def _integrity(proof: dict[str, Any]) -> dict[str, Any]:
     return {
         "actions_chain_valid": chain["actions_chain_valid"],
         "principal_signature_valid": chain["principal_signature_valid"],
+        "revocation_signature_valid": chain.get("revocation_signature_valid"),
         "principal_key_id": signature["key_id"] if signature else None,
         "chain_head": actions[-1]["chain_hash"] if actions else proof["mandate"]["chain_hash"],
         "total_actions": chain["total_actions"],
@@ -131,7 +132,7 @@ async def _sub_mandates(
                         "expires_at": mandate["expires_at"],
                         "perimeter": mandate["perimeter"],
                         "status": {
-                            "stored_status": mandate["status"],
+                            "stored_status": mandate.get("stored_status", mandate["status"]),
                             "in_force": in_force,
                             "not_in_force_reason": reason,
                         },
@@ -256,7 +257,7 @@ async def export_insurer_dossier(
             "period": {"start": start.isoformat(), "end": end.isoformat()},
             "mandate": mandate,
             "status": {
-                "stored_status": mandate["status"],
+                "stored_status": mandate.get("stored_status", mandate["status"]),
                 "in_force": in_force,
                 "not_in_force_reason": reason,
             },

@@ -26,8 +26,9 @@ mandate with a revocation row as revoked:
 | `issue_action_token` on any sub-mandate below | `parent_mandate_revoked`, `refused_by` = the revoked mandate |
 | `verify_mandate` | the revoked mandate is skipped (an older unrevoked mandate of the same agent, if any, is returned) |
 | `create_mandate` with it as parent | `parent_mandate_revoked` |
-| `get_proof` | `mandate.status = "revoked"`, `mandate.revocation`, `chain_integrity.revocation_signature_valid` |
-| `export_insurer_dossier` | not in force, `mandate_revoked`; its whole branch is cut |
+| `log_action` | refused: no action is logged after the revocation |
+| `get_proof` | `mandate.status = "revoked"` (the stored value stays in `mandate.stored_status`), `mandate.revocation`, `chain_integrity.revocation_signature_valid` |
+| `export_insurer_dossier` | not in force, `mandate_revoked`; its whole branch is cut; `status.stored_status` keeps the stored value; `integrity.revocation_signature_valid` |
 
 ## What triggers it, and who
 
@@ -60,7 +61,13 @@ only once.
 Errors: `invalid_input`, `mandate_not_found`, `mandate_already_revoked`,
 `principal_signature_required`, `principal_signature_incomplete`,
 `principal_signature_invalid`, `principal_signature_stale`, `principal_key_not_registered`,
-`signed_at_invalid`.
+`principal_signature_replayed`, `signed_at_invalid`.
+
+`revocation_signature_valid` in the Proof Pack is `true` when the stored signature
+matches the principal's registered key (itself re-checked) and this mandate, principal
+and reason; `false` when it does not, when the signature was stripped although the
+principal had a key at revocation time, or when a `revoked` event remains without its
+revocation record (record deleted); `null` otherwise.
 
 ## How fast
 
@@ -80,5 +87,10 @@ Errors: `invalid_input`, `mandate_not_found`, `mandate_already_revoked`,
   agents can call, is a separate, queued change.
 - An unsigned revocation proves nothing about who revoked; a principal that registers
   its key afterwards does not make it signed (`revocation_signature_valid` stays null).
+- `verify_mandate` looks only at the agent's most recent active, unexpired, unrevoked
+  mandate: if that one is a sub-mandate under a revoked parent, it answers "chain
+  broken" even when the agent holds another, older valid mandate.
+- Two revocations written at the same instant by two processes could chain to the same
+  previous hash (no exclusive transaction), as for the other chains of the registry.
 - There is no revocation list for consumers: a token consumer that wants revocation
   faster than `exp` must ask the registry (`verify_mandate`) before acting.

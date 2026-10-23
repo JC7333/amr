@@ -589,3 +589,41 @@ async def test_tampered_revocation_key_id_shows_in_the_proof(temp_db: Path) -> N
          (root["mandate_id"],))
     proof = await _proof(root["mandate_id"])
     assert proof["chain_integrity"]["revocation_signature_valid"] is False
+
+
+async def test_no_action_is_logged_under_a_revoked_mandate(temp_db: Path) -> None:
+    root = await _create()
+    await _revoke(root["mandate_id"])
+    result = json.loads(await log_action(mandate_id=root["mandate_id"], action="paid 10k"))
+    assert "revoked" in result["error"]
+    assert _sql(temp_db, "SELECT COUNT(*) FROM action_logs") == [(0,)]
+
+
+async def test_dossier_keeps_the_true_stored_status_and_reports_the_revocation_check() -> None:
+    root = await _create()
+    await _revoke(root["mandate_id"])
+    dossier = json.loads(await export_insurer_dossier(root["mandate_id"]))["dossier"]
+    assert dossier["status"]["stored_status"] == "active"
+    assert dossier["mandate"]["status"] == "revoked"
+    assert "revocation_signature_valid" in dossier["integrity"]
+    assert dossier["integrity"]["revocation_signature_valid"] is None
+
+
+async def test_deleted_revocation_record_shows_in_the_proof(temp_db: Path) -> None:
+    root = await _create()
+    await _revoke(root["mandate_id"])
+    _sql(temp_db, "DELETE FROM mandate_revocations")
+    proof = await _proof(root["mandate_id"])
+    assert proof["chain_integrity"]["revocation_signature_valid"] is False
+
+
+async def test_tampered_principal_key_voids_the_revocation_check(temp_db: Path) -> None:
+    key = _new_key()
+    await _register(key)
+    root = await _signed_root(key)
+    signed = await _signed_revocation(key, root["mandate_id"], "stop")
+    await _revoke(root["mandate_id"], "stop", **signed)
+    _sql(temp_db, "UPDATE principal_keys SET proof_signature = ? WHERE principal_id = ?",
+         (b64url_encode(b"\x00" * 64), PRINCIPAL))
+    proof = await _proof(root["mandate_id"])
+    assert proof["chain_integrity"]["revocation_signature_valid"] is False
