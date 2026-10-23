@@ -20,7 +20,7 @@ from amr.db.engine import (
     is_token_replay,
     record_issued_token,
 )
-from amr.delegation import load_ancestors
+from amr.delegation import is_revoked, load_ancestors
 from amr.models.perimeter import Perimeter
 from amr.models.token import IssueTokenRequest
 
@@ -154,6 +154,13 @@ async def issue_action_token(
             return json.dumps({
                 "denied": True,
                 "reason": f"mandate_status_{row['status']}",
+                "mandate_id": str(req.mandate_id),
+            })
+
+        if await is_revoked(db, row["id"]):
+            return json.dumps({
+                "denied": True,
+                "reason": "mandate_status_revoked",
                 "mandate_id": str(req.mandate_id),
             })
 

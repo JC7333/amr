@@ -15,8 +15,9 @@ async def verify_mandate(
 ) -> str:
     """Verify whether an AI agent has a currently active and valid mandate to perform an action.
 
-    Looks up the most recent active, non-expired mandate for the given agent. For a
-    sub-mandate, every mandate above it must also be active and unexpired.
+    Looks up the most recent active, non-expired, non-revoked mandate for the given
+    agent. For a sub-mandate, every mandate above it must also be active, unrevoked
+    and unexpired.
     Does NOT check the action against the scope: it returns the free-text scope and,
     when the mandate has one, its structured perimeter. To enforce the perimeter,
     request a token with issue_action_token, which refuses out-of-scope actions.
@@ -50,6 +51,9 @@ async def verify_mandate(
             WHERE agent_id = ?
               AND status = ?
               AND expires_at > ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM mandate_revocations r WHERE r.mandate_id = mandates.id
+              )
             ORDER BY created_at DESC
             LIMIT 1
             """,
