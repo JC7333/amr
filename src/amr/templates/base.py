@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from amr.models.organ_decision import ORGAN_DECISION_KEY, OrganDecision
 from amr.models.perimeter import Perimeter, parse_amount, pattern_reaches
 
 TEMPLATE_ID_RE = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -30,6 +31,10 @@ class MandateTemplate(BaseModel):
     ``actions`` is the catalog: every action type named in the perimeter (allowed or
     forbidden) has a plain-language meaning, so that an agent or a reviewer can read
     what the mandate permits without guessing from the identifiers.
+
+    ``organ_decision`` says whether a mandate built from the template records the
+    decision of a body (committee, board) that authorized the agent: ``none`` (not
+    asked), ``optional`` (recorded when given) or ``required`` (refused without it).
     """
 
     model_config = {"extra": "forbid", "frozen": True}
@@ -44,6 +49,7 @@ class MandateTemplate(BaseModel):
     default_duration_hours: float = Field(..., gt=0, le=8760)
     legal_references: tuple[LegalReference, ...] = ()
     notes: tuple[str, ...] = ()
+    organ_decision: Literal["none", "optional", "required"] = "none"
 
     @field_validator("actions", mode="after")
     @classmethod
@@ -76,6 +82,13 @@ class MandateTemplate(BaseModel):
         )
         if overlap:
             raise ValueError(f"allowed actions blocked by a forbidden pattern: {overlap}")
+        # A body authorizes a predefined list of actions: no pattern may widen it.
+        wildcards = sorted(a for a in self.perimeter.allowed_actions if a.endswith("*"))
+        if self.organ_decision != "none" and wildcards:
+            raise ValueError(
+                f"a template that records an organ decision needs a closed list of "
+                f"allowed actions, not patterns: {wildcards}"
+            )
         return self
 
     # --- serialization -------------------------------------------------------------
@@ -93,6 +106,7 @@ class MandateTemplate(BaseModel):
             "default_duration_hours": self.default_duration_hours,
             "legal_references": [ref.model_dump() for ref in self.legal_references],
             "notes": list(self.notes),
+            "organ_decision": self.organ_decision,
         }
 
     def to_json(self, indent: int | None = None) -> str:
@@ -113,21 +127,39 @@ class MandateTemplate(BaseModel):
     # --- use ---------------------------------------------------------------------------
 
     def create_mandate_kwargs(
-        self, max_amount: str | None = None, metadata: dict[str, str] | None = None
+        self,
+        max_amount: str | None = None,
+        metadata: dict[str, str] | None = None,
+        organ_decision: OrganDecision | None = None,
     ) -> dict[str, Any]:
         """Return the perimeter arguments and metadata to pass to ``create_mandate``.
 
         ``max_amount`` lets the principal set its own ceiling (plain decimal string, same
         currency). It may lower the template's ceiling, never raise it. ``metadata`` adds
-        the principal's own annotations; the ``template_*`` keys are reserved.
+        the principal's own annotations; the ``template_*`` keys and ``organ_decision``
+        are reserved. ``organ_decision`` records the decision of the body that authorized
+        the agent (allowed when the template's ``organ_decision`` is not ``none``,
+        mandatory when it is ``required``); create_mandate seals it into the chain hash.
 
-        The ``template_*`` metadata is a label: like all mandate metadata it is not sealed
+        The ``template_*`` metadata is a label: like other mandate metadata (except the
+        ``organ_decision`` key, which create_mandate seals) it is not sealed
         into the chain hash. The perimeter, which is sealed, is what the token issuer
         enforces.
         """
-        reserved = sorted(k for k in (metadata or {}) if k.startswith("template_"))
+        reserved = sorted(
+            k for k in (metadata or {}) if k.startswith("template_") or k == ORGAN_DECISION_KEY
+        )
         if reserved:
             raise ValueError(f"metadata keys reserved for the template: {reserved}")
+        if organ_decision is not None and self.organ_decision == "none":
+            raise ValueError(f"template {self.template_id!r} does not record an organ decision")
+        if organ_decision is None and self.organ_decision == "required":
+            raise ValueError(f"template {self.template_id!r} requires an organ decision")
+        decision_metadata = (
+            {ORGAN_DECISION_KEY: organ_decision.to_metadata_value()}
+            if organ_decision is not None
+            else {}
+        )
         perimeter = self.perimeter
         ceiling = perimeter.max_amount
         if max_amount is not None:
@@ -152,6 +184,7 @@ class MandateTemplate(BaseModel):
             "amount_actions": canonical["amount_actions"] or None,
             "metadata": {
                 **(metadata or {}),
+                **decision_metadata,
                 "template_id": self.template_id,
                 "template_version": self.version,
                 "template_digest": self.digest(),

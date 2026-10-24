@@ -21,6 +21,7 @@ from amr.crypto.principal import (
 from amr.db.engine import get_db, get_last_mandate_hash, get_principal_key, init_db
 from amr.delegation import load_ancestors
 from amr.models.mandate import LegalBasis, MandateCreate
+from amr.models.organ_decision import OrganDecisionError, organ_decision_from_metadata
 from amr.models.perimeter import Perimeter, PerimeterError
 
 
@@ -234,6 +235,14 @@ async def create_mandate(
     them, and pass principal_signature and signed_at. A principal with a registered key
     must always sign; the signature is sealed into chain_hash and kept in the Proof Pack.
 
+    When a body (committee, board) authorized the agent, its decision goes in metadata
+    under the reserved key "organ_decision": body, title, decided_on (YYYY-MM-DD, not in
+    the future, judged on the registry's UTC date), optional reference, and
+    authorized_personnel (the persons or roles the decision designates), as the compact
+    JSON of OrganDecision.to_metadata_value(). It needs allowed_actions without patterns
+    and is refused on a sub-mandate. It is validated, sealed into chain_hash, and shown
+    by verify_mandate and get_proof.
+
     Args:
         principal_id: Unique identifier of the principal granting the mandate.
                       Example: "user:audric" or "org:acme-corp"
@@ -257,6 +266,7 @@ async def create_mandate(
                            Example: "550e8400-e29b-41d4-a716-446655440000"
         metadata: Optional dict of string key-value pairs for custom annotations.
                   Example: {"client_ref": "CL-2026-001", "advisor_code": "ADV42"}
+                  The key "organ_decision" is reserved (see above).
         allowed_actions: Action types the agent may request. Dotted lowercase identifiers,
                          "domain.*" prefix patterns, or "*".
                          Example: ["invoice.read", "invoice.pay"]
@@ -282,9 +292,10 @@ async def create_mandate(
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
         scope, perimeter, parent_mandate_id, principal_signature, expires_at,
-        chain_hash. principal_signature is {key_id, signed_at} or null.
+        organ_decision, chain_hash. principal_signature is {key_id, signed_at} or
+        null; organ_decision is the recorded decision or null.
         On error: {"error": "...", "code": "..."} (code present for perimeter,
-        delegation and principal signature errors).
+        delegation, organ decision and principal signature errors).
     """
     db = None
     try:
@@ -316,6 +327,21 @@ async def create_mandate(
             perimeter=perimeter,
         )
 
+        organ_decision = organ_decision_from_metadata(mandate_data.metadata)
+        if organ_decision is not None:
+            # A body decides for the root principal only; an agent cannot declare one for
+            # its own sub-agent. And it authorizes a closed list of predefined actions.
+            if mandate_data.parent_mandate_id is not None:
+                return _error(
+                    "organ_decision_on_sub_mandate",
+                    "an organ decision can only be recorded on a root mandate",
+                )
+            if perimeter is None or any(a.endswith("*") for a in perimeter.allowed_actions):
+                return _error(
+                    "organ_decision_needs_closed_list",
+                    "an organ decision needs allowed_actions as a closed list, without patterns",
+                )
+
         # Signature inputs are checked for form before any database access.
         if principal_signature is not None:
             parse_signature(principal_signature)
@@ -323,6 +349,8 @@ async def create_mandate(
             parse_signed_at(signed_at)
 
         now = datetime.now(UTC)
+        if organ_decision is not None and organ_decision.decided_on_date > now.date():
+            return _error("organ_decision_invalid", "organ_decision.decided_on is in the future")
         expires_at = now + timedelta(hours=mandate_data.duration_hours)
         mandate_id = str(uuid.uuid4())
 
@@ -374,6 +402,9 @@ async def create_mandate(
                 "signed_at": signature_record["signed_at"],
                 "key_id": signature_record["key_id"],
             }
+        # And only mandates that record an organ decision carry it in the chain.
+        if organ_decision is not None:
+            hash_data["organ_decision"] = organ_decision.canonical()
         chain_hash = compute_hash(hash_data, previous_hash)
 
         legal_basis_json = json.dumps(
@@ -433,6 +464,9 @@ async def create_mandate(
                     if signature_record
                     else None
                 ),
+                "organ_decision": (
+                    organ_decision.canonical() if organ_decision is not None else None
+                ),
                 "expires_at": expires_at.isoformat(),
                 "chain_hash": chain_hash,
             }
@@ -442,6 +476,9 @@ async def create_mandate(
         return _error(exc.code, exc.message)
 
     except PrincipalSignatureError as exc:
+        return _error(exc.code, exc.message)
+
+    except OrganDecisionError as exc:
         return _error(exc.code, exc.message)
 
     except aiosqlite.IntegrityError as exc:

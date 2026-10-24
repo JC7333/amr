@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from amr.config import settings
 from amr.db.engine import get_db, init_db
 from amr.delegation import load_ancestors
+from amr.models.organ_decision import recorded_organ_decision
 
 
 async def verify_mandate(
@@ -32,7 +33,9 @@ async def verify_mandate(
     Returns:
         JSON string with keys: authorized (bool), mandate_id (str|null),
         reason (str), scope (str), perimeter (dict|null),
-        parent_mandate_id (str|null), expires_at (str|null).
+        parent_mandate_id (str|null), organ_decision (dict|null: the body,
+        title, date, reference and authorized personnel of the decision that
+        authorized the agent, when the mandate records one), expires_at (str|null).
         authorized=True means an active mandate exists; the caller should verify
         that the action falls within the returned scope.
     """
@@ -45,7 +48,8 @@ async def verify_mandate(
 
         cursor = await db.execute(
             """
-            SELECT id, scope, expires_at, status, parent_mandate_id, perimeter_json
+            SELECT id, scope, expires_at, status, parent_mandate_id, perimeter_json,
+                   metadata_json
             FROM mandates
             WHERE agent_id = ?
               AND status = ?
@@ -66,6 +70,7 @@ async def verify_mandate(
                     "scope": "",
                     "perimeter": None,
                     "parent_mandate_id": None,
+                    "organ_decision": None,
                     "expires_at": None,
                 }
             )
@@ -82,6 +87,7 @@ async def verify_mandate(
                         json.loads(row["perimeter_json"]) if row["perimeter_json"] else None
                     ),
                     "parent_mandate_id": row["parent_mandate_id"],
+                    "organ_decision": recorded_organ_decision(row["metadata_json"]),
                     "expires_at": row["expires_at"],
                 }
             )
@@ -94,6 +100,7 @@ async def verify_mandate(
                 "scope": row["scope"],
                 "perimeter": json.loads(row["perimeter_json"]) if row["perimeter_json"] else None,
                 "parent_mandate_id": row["parent_mandate_id"],
+                "organ_decision": recorded_organ_decision(row["metadata_json"]),
                 "expires_at": row["expires_at"],
             }
         )

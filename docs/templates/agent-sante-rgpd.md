@@ -15,8 +15,37 @@ issuer then enforces it like any other structured perimeter.
 Anything not listed on the left is refused (`not_allowed`). The principal may set a
 lower ceiling than 100 EUR, never a higher one. The mandate records the template it was
 built from in its metadata (`template_id`, `template_version`, `template_digest`), shown
-in the Proof Pack. That metadata is a label: like all mandate metadata it is not sealed
-into the chain hash. What is sealed, and enforced, is the perimeter itself.
+in the Proof Pack. That metadata is a label: like other mandate metadata (except
+`organ_decision`, below) it is not sealed into the chain hash. What is sealed, and enforced, is the perimeter itself.
+
+## Decision of a body (organ decision)
+
+In a facility, an agent is often authorized by a body (an AI or digital strategy
+committee) for predefined actions and designated staff. The mandate can record that
+decision, so that whoever receives the agent sees who decided, when, and for whom:
+
+```python
+from amr.models.organ_decision import OrganDecision
+
+decision = OrganDecision(
+    body="Digital strategy committee",
+    title="Use of the scheduling assistant in the outpatient department",
+    decided_on="2026-10-01",
+    reference="CSN-2026-14",  # optional
+    authorized_personnel=("Head of outpatient department", "Care coordinator"),
+)
+template.create_mandate_kwargs(organ_decision=decision)
+```
+
+The decision goes in the mandate metadata under the reserved key `organ_decision`
+(compact canonical JSON). `create_mandate` checks its form (date `YYYY-MM-DD`, not
+after the registry's UTC date; at least one designated person or role) and seals it into
+the chain hash; a principal signature covers it, since it signs the metadata.
+`verify_mandate` and `get_proof` return it as `organ_decision`. The predefined actions
+are the allowed actions: `create_mandate` accepts a decision only with a closed list (no
+`*` pattern), and anything else is refused at token issuance. A decision is recorded on
+a root mandate only (`organ_decision_on_sub_mandate` otherwise). A practice without such
+a body leaves the decision out; the mandate and its hash are then unchanged.
 
 ## Limits
 
@@ -30,6 +59,15 @@ into the chain hash. What is sealed, and enforced, is the perimeter itself.
 - Delegation is off for mandates under this one. The agent must not have access to
   `create_mandate` itself, or it could register a new root mandate for a sub-agent
   (README, deployment rule).
+- AMR records the organ decision as the principal declares it: it does not check that
+  the decision exists, nor the identity of the persons it designates.
+- `verify_mandate` and `get_proof` read the decision of the mandate asked about: for a
+  sub-mandate under a mandate that records one, they return `null` (look at the parent).
+- They do not recompute the mandate hash: a mandate written before this version with a
+  free metadata key `organ_decision` in exactly the canonical form would be shown as a
+  decision without being sealed.
+- `prepare_mandate_signature` does not check the decision's form: a malformed one is
+  refused by `create_mandate`, after the principal has signed.
 - Templates are a Python API for now: no MCP tool lists them yet.
 
 > **Legal references are pointers, marked `to_verify`.** They have not been reviewed
@@ -125,8 +163,10 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     "The ceiling applies to each order; AMR keeps no running total, so the principal or the ordering system must cap the total spent.",
     "appointment.book must not notify the patient: a confirmation sent to the patient is a patient message, which this template forbids.",
     "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is letter.send or patient_message.send).",
-    "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent."
+    "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
+    "When a body authorized the agent, record its decision (organ_decision) with the persons or roles it designates. AMR records what the principal declares: it does not check that the decision exists or that the people named are who they say."
   ],
+  "organ_decision": "optional",
   "perimeter": {
     "allowed_actions": [
       "appointment.book",
@@ -158,6 +198,6 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   "summary": "Assist a medical practice or facility: read the patient record, handle the practice schedule, draft letters and patient messages for human validation, order supplies under a ceiling. Never prescribe, diagnose, change or export the record, contact a patient directly, or create a sub-agent.",
   "template_id": "agent-sante-rgpd",
   "title": "Healthcare practice assistant agent (GDPR health data)",
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
 ```
