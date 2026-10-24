@@ -7,6 +7,7 @@ from uuid import UUID
 from amr.config import settings
 from amr.crypto.chain import compute_hash
 from amr.db.engine import get_db, get_last_action_hash, init_db
+from amr.delegation import is_revoked
 
 
 async def log_action(
@@ -18,7 +19,8 @@ async def log_action(
     """Log an action performed by an AI agent under an active mandate for audit and compliance.
 
     Each action log entry is cryptographically linked to the previous action (SHA-256 chain),
-    creating a tamper-evident audit trail. The mandate must be active and not expired.
+    creating a tamper-evident audit trail. The mandate must be active, not revoked and
+    not expired.
 
     Args:
         mandate_id: UUID of the mandate under which the action was performed.
@@ -69,6 +71,11 @@ async def log_action(
                         f"(status: {mandate_row['status']})"
                     )
                 }
+            )
+
+        if await is_revoked(db, mandate_row["id"]):
+            return json.dumps(
+                {"error": f"Mandate '{mandate_id}' is not active (status: revoked)"}
             )
 
         expires_at_str = mandate_row["expires_at"]
