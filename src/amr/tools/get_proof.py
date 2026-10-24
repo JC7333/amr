@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import aiosqlite
+
 from amr.config import settings
 from amr.crypto.chain import verify_chain
 from amr.crypto.principal import (
@@ -94,6 +96,55 @@ def _signature_matches(
     return abs(granted - timedelta(hours=duration)) <= timedelta(seconds=1)
 
 
+async def principal_signature_status(
+    db: aiosqlite.Connection, mandate_row: Any, mandate_dict: dict[str, Any]
+) -> tuple[dict[str, Any] | None, bool | None]:
+    """Return the principal's signature block of a mandate and whether it is valid.
+
+    The block is None for an unsigned mandate. Validity is None for an unsigned mandate
+    whose principal had no key when it was created, False if the signature does not
+    verify or was stripped (the principal already had a key), True otherwise.
+    ``mandate_dict`` is the decoded mandate (legal_basis, metadata and perimeter as
+    objects), as in the Proof Pack.
+    """
+    key_row = await get_principal_key(db, mandate_row["principal_id"])
+    if mandate_row["principal_signature"] is not None:
+        signature = {
+            "signature": mandate_row["principal_signature"],
+            "signed_at": mandate_row["principal_signed_at"],
+            "key_id": mandate_row["principal_key_id"],
+            "public_key": key_row["public_key"] if key_row is not None else None,
+            "key_proof_signature": (
+                key_row["proof_signature"] if key_row is not None else None
+            ),
+            "payload": mandate_row["principal_signed_payload"],
+            "algorithm": "Ed25519",
+        }
+        parent_perimeter_json = None
+        if mandate_row["parent_mandate_id"] is not None:
+            parent_cursor = await db.execute(
+                "SELECT perimeter_json FROM mandates WHERE id = ?",
+                (mandate_row["parent_mandate_id"],),
+            )
+            parent_row = await parent_cursor.fetchone()
+            if parent_row is not None:
+                parent_perimeter_json = parent_row["perimeter_json"]
+        valid = (
+            key_row is not None
+            and key_row["key_id"] == signature["key_id"]
+            and _key_row_valid(key_row)
+            and _principal_signature_valid(mandate_dict, signature, parent_perimeter_json)
+        )
+        return signature, valid
+    if key_row is not None and _aware(key_row["registered_at"]) <= _aware(
+        mandate_row["created_at"]
+    ):
+        # The principal had a key when this mandate was created, so it was signed:
+        # a missing signature means it was stripped.
+        return None, False
+    return None, None
+
+
 async def get_proof(
     mandate_id: str,
     format: str = "json",  # noqa: A002
@@ -178,42 +229,10 @@ async def get_proof(
         }
 
         # The principal's signature, if any, with the key it was checked against.
-        principal_signature_valid = None
-        key_row = await get_principal_key(db, mandate_row["principal_id"])
-        if mandate_row["principal_signature"] is not None:
-            signature = {
-                "signature": mandate_row["principal_signature"],
-                "signed_at": mandate_row["principal_signed_at"],
-                "key_id": mandate_row["principal_key_id"],
-                "public_key": key_row["public_key"] if key_row is not None else None,
-                "key_proof_signature": (
-                    key_row["proof_signature"] if key_row is not None else None
-                ),
-                "payload": mandate_row["principal_signed_payload"],
-                "algorithm": "Ed25519",
-            }
-            mandate_dict["principal_signature"] = signature
-            parent_perimeter_json = None
-            if mandate_row["parent_mandate_id"] is not None:
-                parent_cursor = await db.execute(
-                    "SELECT perimeter_json FROM mandates WHERE id = ?",
-                    (mandate_row["parent_mandate_id"],),
-                )
-                parent_row = await parent_cursor.fetchone()
-                if parent_row is not None:
-                    parent_perimeter_json = parent_row["perimeter_json"]
-            principal_signature_valid = (
-                key_row is not None
-                and key_row["key_id"] == signature["key_id"]
-                and _key_row_valid(key_row)
-                and _principal_signature_valid(mandate_dict, signature, parent_perimeter_json)
-            )
-        elif key_row is not None and _aware(key_row["registered_at"]) <= _aware(
-            mandate_row["created_at"]
-        ):
-            # The principal had a key when this mandate was created, so it was signed:
-            # a missing signature means it was stripped.
-            principal_signature_valid = False
+        signature, principal_signature_valid = await principal_signature_status(
+            db, mandate_row, mandate_dict
+        )
+        mandate_dict["principal_signature"] = signature
 
         # Fetch all action logs for this mandate
         actions_cursor = await db.execute(
