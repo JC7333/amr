@@ -16,6 +16,7 @@ from amr.tools.issue_mandate_attestation import (
 )
 from amr.tools.log_action import log_action
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
+from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
 from amr.tools.verify_mandate import verify_mandate
 
 mcp = FastMCP(settings.server_name)
@@ -31,6 +32,8 @@ mcp.tool()(prepare_mandate_signature)
 mcp.tool()(issue_mandate_attestation)
 mcp.tool()(get_registry_public_key)
 mcp.tool()(export_insurer_dossier)
+mcp.tool()(revoke_mandate)
+mcp.tool()(prepare_revocation_signature)
 
 
 def main() -> None:

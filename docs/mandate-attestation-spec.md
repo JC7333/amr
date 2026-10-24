@@ -41,15 +41,16 @@ accepts. Key rotation is not in v1.
 
 Issued only if, at issuance time:
 
-- the mandate exists, belongs to `agent_id`, has status `active` and is not expired;
-- every mandate above it (delegation chain) is active and not expired;
+- the mandate exists, belongs to `agent_id`, has status `active`, is not expired and is not revoked (`revoke_mandate`);
+- every mandate above it (delegation chain) is active, not expired and not revoked;
 - no principal signature in the chain is invalid or stripped (same check as the Proof
   Pack's `principal_signature_valid`; a mandate whose principal had no key is attested
   with `principal_signature: null`).
 
 Otherwise: `{"denied": true, "reason": ..., "mandate_id": ...}` (`mandate_id` is
 `null` for invalid input) with `reason` one of `invalid_input: ...`, `mandate_not_found`, `agent_mismatch`, `mandate_status_<status>`,
-`mandate_expired`, `parent_mandate_not_found`, `parent_mandate_<status>`,
+`mandate_status_revoked`, `mandate_expired`, `parent_mandate_not_found`,
+`parent_mandate_<status>`, `parent_mandate_revoked`,
 `parent_mandate_expired`, `delegation_chain_too_deep`, `principal_signature_invalid`;
 `refused_by` names the parent mandate when the problem is above; an unexpected error
 gives `internal_error: ...`. A refusal writes nothing.
@@ -154,7 +155,7 @@ attestation does not carry.
 ## Known limits
 
 - **Status at issuance, not now.** The receiver learns that the chain was active at
-  `iat`. A revocation made later reaches it only when the attestation expires (15
+  `iat`. A revocation made later (`revoke_mandate`) reaches it only when the attestation expires (15
   minutes by default). For an important act, ask the agent for a fresh attestation,
   with a short `lifetime_seconds` and your `audience`.
 - **Bearer document.** Whoever holds the attestation can show it. It names the agent

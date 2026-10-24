@@ -28,7 +28,7 @@ from amr.crypto.signing import (
     load_signing_key,
 )
 from amr.db.engine import get_db, init_db, record_issued_attestation
-from amr.delegation import is_expired, load_ancestors
+from amr.delegation import is_expired, is_revoked, load_ancestors
 from amr.models.attestation import AttestationRequest
 from amr.models.perimeter import Perimeter
 from amr.tools.get_proof import principal_signature_status
@@ -140,6 +140,8 @@ async def issue_mandate_attestation(
             return _denied("agent_mismatch", mandate_key)
         if row["status"] != "active":
             return _denied(f"mandate_status_{row['status']}", mandate_key)
+        if await is_revoked(db, row["id"]):
+            return _denied("mandate_status_revoked", mandate_key)
         if is_expired(row["expires_at"], now):
             return _denied("mandate_expired", mandate_key)
 

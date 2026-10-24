@@ -51,8 +51,9 @@ the mandate:
   allows delegation, and was granted to the agent now delegating; the sub-mandate
   must stay inside the parent's allowed actions and limit, inherits the parent's
   prohibitions, and cannot outlive the parent;
-- every token issued under a sub-mandate re-checks the whole chain: revoke or let
-  expire the parent, and every sub-mandate below it stops getting tokens.
+- every token issued under a sub-mandate re-checks the whole chain: revoke
+  (`revoke_mandate`) or let expire the parent, and every sub-mandate below it stops
+  getting tokens.
 
 Example: an assistant agent told never to create sub-agents.
 
@@ -342,6 +343,54 @@ Log an agent action under an active mandate. Cryptographically chained to previo
 
 ---
 
+### `revoke_mandate`
+
+The principal's stop button. Records a **final** revocation of a mandate, with the
+reason the principal gives. Append-only: a chained row in `mandate_revocations` and a
+`revoked` mandate event; the mandate row is not modified and its hash does not change.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mandate_id` | str | UUID of the mandate to revoke |
+| `reason` | str | Why, as it will be recorded (1 to 500 characters) |
+| `principal_signature` | str \| null | Ed25519 signature of the revocation payload (required if the principal has a registered key) |
+| `signed_at` | str \| null | The `signed_at` placed in the payload |
+
+Only the mandate's own principal revokes it (for a sub-mandate, the agent that
+delegated it). Same signature policy as `create_mandate`; build the exact bytes to sign
+with `prepare_revocation_signature(mandate_id, reason, signed_at=None)`.
+
+**Effect, as soon as it returns:** `issue_action_token` and `issue_mandate_attestation`
+refuse the mandate (`mandate_status_revoked`) and every sub-mandate below it
+(`parent_mandate_revoked`);
+`verify_mandate` no longer returns it; no sub-mandate can be created under it;
+`log_action` refuses it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
+called back and stay valid until their `exp`: the response gives their number and the
+last expiry. Mandate attestations already issued also stay valid until their `exp`
+(15 minutes by default) and are not counted in the response.
+
+**Returns:**
+```json
+{
+  "status": "revoked",
+  "mandate_id": "550e8400-e29b-41d4-a716-446655440000",
+  "principal_id": "org:clinic",
+  "reason": "agent exceeded its order limit",
+  "revoked_at": "2026-10-23T20:30:01.123456+00:00",
+  "principal_signature": null,
+  "chain_hash": "a3f1...",
+  "outstanding_tokens": {"still_valid": 1, "last_expires_at": "2026-10-23T20:34:12+00:00"}
+}
+```
+
+Known limit: `issue_action_token` still lets its caller ask a longer token lifetime
+(`lifetime_override_seconds`), which delays the end of outstanding tokens by as much.
+See `docs/revocation-spec.md`.
+
+---
+
 ### `get_proof`
 
 Generate a complete **Proof Pack** — a full audit bundle for a mandate including all actions and cryptographic chain verification.
@@ -364,6 +413,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
   "chain_integrity": {
     "actions_chain_valid": true,
     "principal_signature_valid": null,
+    "revocation_signature_valid": null,
     "total_actions": 5,
     "total_events": 0
   },
@@ -380,6 +430,11 @@ re-checks them against the stored mandate. It is `false` if the signature does n
 match, or if it is missing although the principal had a key when the mandate was
 created; `null` for a mandate whose principal had no key then.
 
+Once `revoke_mandate` has run, `mandate.status` reads `"revoked"` (the stored value
+stays in `mandate.stored_status`) and `mandate.revocation` holds `revoked_at`, `reason`, the principal's signature
+of the revocation (or `null`) and its chain hash; `revocation_signature_valid` re-checks
+that signature against the principal's key (`null` when there is nothing to check).
+
 ---
 
 ### `issue_mandate_attestation`
@@ -394,8 +449,8 @@ created; `null` for a mandate whose principal had no key then.
 
 Returns `{"attestation", "jti", "issued_at", "expires_at", "key_id", "issuer"}`, or
 `{"denied": true, "reason", "mandate_id"}`, for example `mandate_not_found`,
-`agent_mismatch`, `mandate_status_<status>`, `mandate_expired`,
-`parent_mandate_<status>`, `principal_signature_invalid`, with `refused_by` when a
+`agent_mismatch`, `mandate_status_<status>`, `mandate_status_revoked`, `mandate_expired`,
+`parent_mandate_<status>`, `parent_mandate_revoked`, `principal_signature_invalid`, with `refused_by` when a
 parent is the cause (full list in `docs/mandate-attestation-spec.md`).
 
 ### `get_registry_public_key`
@@ -573,6 +628,7 @@ src/amr/
 │   ├── log_action.py
 │   ├── get_proof.py
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
+│   ├── revoke_mandate.py
 │   └── export_insurer_dossier.py
 ├── attestation.py     # offline attestation verifier (no DB, no network)
 ├── verify_attestation.py  # python -m amr.verify_attestation

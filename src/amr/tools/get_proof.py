@@ -18,9 +18,10 @@ from amr.crypto.principal import (
     parse_signature,
     verify,
 )
-from amr.db.engine import get_db, get_principal_key, init_db
+from amr.db.engine import get_db, get_principal_key, get_revocation, init_db
 from amr.models.organ_decision import recorded_organ_decision
 from amr.models.perimeter import Perimeter
+from amr.tools.revoke_mandate import revocation_signature_valid
 
 
 def _aware(moment: str) -> datetime:
@@ -167,13 +168,18 @@ async def get_proof(
           - generated_at: ISO datetime string
           - mandate: dict with full mandate details, including principal_signature
             ({signature, signed_at, key_id, public_key, key_proof_signature, payload,
-            algorithm} or null) and organ_decision (the decision of the body that
-            authorized the agent, or null)
+            algorithm} or null), organ_decision (the decision of the body that
+            authorized the agent, or null), status ("revoked" once revoke_mandate ran,
+            whatever the stored status, which stays in stored_status) and revocation
+            ({revoked_at, reason, principal_signature, chain_hash} or null)
           - actions: list of action log entries
           - events: list of mandate events
           - chain_integrity: dict with actions_chain_valid (bool),
             principal_signature_valid (bool; null for an unsigned mandate whose
-            principal had no key when it was created),
+            principal had no key when it was created), revocation_signature_valid
+            (bool; null when the mandate is not revoked or was revoked without a
+            signature by a principal that had no key; false when a "revoked" event
+            has lost its revocation record),
             total_actions, total_events
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
@@ -234,6 +240,53 @@ async def get_proof(
         )
         mandate_dict["principal_signature"] = signature
 
+        # A revocation (revoke_mandate) overrides the stored status.
+        key_row = await get_principal_key(db, mandate_row["principal_id"])
+        mandate_dict["revocation"] = None
+        revocation_valid = None
+        revocation_row = await get_revocation(db, mandate_row["id"])
+        mandate_dict["stored_status"] = mandate_row["status"]
+        if revocation_row is not None:
+            mandate_dict["status"] = "revoked"
+            revocation = dict(revocation_row)
+            mandate_dict["revocation"] = {
+                "revoked_at": revocation["revoked_at"],
+                "reason": revocation["reason"],
+                "principal_signature": (
+                    {
+                        "signature": revocation["principal_signature"],
+                        "signed_at": revocation["principal_signed_at"],
+                        "key_id": revocation["principal_key_id"],
+                        "payload": revocation["principal_signed_payload"],
+                        "algorithm": "Ed25519",
+                    }
+                    if revocation["principal_signature"] is not None
+                    else None
+                ),
+                "chain_hash": revocation["chain_hash"],
+            }
+            if revocation["principal_signature"] is not None:
+                revocation_valid = (
+                    key_row is not None
+                    and key_row["key_id"] == revocation["principal_key_id"]
+                    and _key_row_valid(key_row)
+                    and revocation_signature_valid(revocation, key_row["public_key"])
+                )
+            elif key_row is not None and _aware(key_row["registered_at"]) <= _aware(
+                revocation["revoked_at"]
+            ):
+                # The principal had a key when it revoked, so the revocation was signed.
+                revocation_valid = False
+        else:
+            # revoke_mandate writes the record and a "revoked" event together: an event
+            # without its record means the record was deleted.
+            cursor = await db.execute(
+                "SELECT 1 FROM mandate_events WHERE mandate_id = ? AND event_type = ? LIMIT 1",
+                (mandate_row["id"], "revoked"),
+            )
+            if await cursor.fetchone() is not None:
+                revocation_valid = False
+
         # Fetch all action logs for this mandate
         actions_cursor = await db.execute(
             """
@@ -277,6 +330,7 @@ async def get_proof(
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,
+                "revocation_signature_valid": revocation_valid,
                 "total_actions": len(actions),
                 "total_events": len(events),
             },

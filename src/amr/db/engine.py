@@ -56,6 +56,20 @@ CREATE TABLE IF NOT EXISTS mandate_events (
     reason      TEXT NOT NULL DEFAULT ''
 );
 
+-- One row per revoked mandate (append-only; the PRIMARY KEY makes a revocation final).
+-- Effective status = 'revoked' when a row exists here, whatever mandates.status says.
+CREATE TABLE IF NOT EXISTS mandate_revocations (
+    mandate_id               TEXT PRIMARY KEY REFERENCES mandates(id),
+    principal_id             TEXT NOT NULL,
+    reason                   TEXT NOT NULL,
+    revoked_at               TEXT NOT NULL,
+    principal_signature      TEXT UNIQUE,
+    principal_signed_at      TEXT,
+    principal_key_id         TEXT,
+    principal_signed_payload TEXT,
+    chain_hash               TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS issued_tokens (
     jti              TEXT PRIMARY KEY,
     mandate_id       TEXT NOT NULL REFERENCES mandates(id),
@@ -152,7 +166,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
 
     Creates all tables and indexes if they do not already exist.
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
-    4: principal signatures, 5: issued attestations).
+    4: principal signatures, 5: issued attestations, 6: mandate revocations).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -209,6 +223,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (5,),
         )
+        # Schema v6: mandate_revocations, created by the script above (v5:
+        # issued_attestations, just before). Existing mandates are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (6,),
+        )
         await db.commit()
 
 
@@ -248,6 +268,30 @@ async def get_last_principal_key_hash(db: aiosqlite.Connection) -> str:
     """Return the chain_hash of the last registered principal key, or "" if none."""
     cursor = await db.execute(
         "SELECT chain_hash FROM principal_keys ORDER BY rowid DESC LIMIT 1"
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return ""
+    return row["chain_hash"]
+
+
+async def get_revocation(
+    db: aiosqlite.Connection, mandate_id: str
+) -> aiosqlite.Row | None:
+    """Return the revocation row of a mandate, or None if it was never revoked."""
+    cursor = await db.execute(
+        "SELECT mandate_id, principal_id, reason, revoked_at, principal_signature, "
+        "principal_signed_at, principal_key_id, principal_signed_payload, chain_hash "
+        "FROM mandate_revocations WHERE mandate_id = ?",
+        (mandate_id,),
+    )
+    return await cursor.fetchone()
+
+
+async def get_last_revocation_hash(db: aiosqlite.Connection) -> str:
+    """Return the chain_hash of the last recorded revocation, or "" if none."""
+    cursor = await db.execute(
+        "SELECT chain_hash FROM mandate_revocations ORDER BY rowid DESC LIMIT 1"
     )
     row = await cursor.fetchone()
     if row is None:
