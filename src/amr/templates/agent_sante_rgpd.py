@@ -6,6 +6,12 @@ and order supplies under a ceiling. What it may never do: prescribe, diagnose, w
 export the patient record, send a letter or a message to a patient itself, or create a
 sub-agent (delegation is off, and ``agent.create`` is forbidden).
 
+In a facility, the use of an agent is often decided by a body (an AI or digital strategy
+committee) for predefined actions and designated staff. The mandate can record that
+decision (``organ_decision``: body, title, date, reference, authorized personnel); the
+predefined actions are the closed list of allowed actions below. A practice without such
+a body simply leaves it out.
+
 The legal references are pointers for the principal, all marked ``to_verify``: they are
 not legal advice and have not been reviewed by counsel.
 """
@@ -15,7 +21,7 @@ from amr.templates.base import LegalReference, MandateTemplate
 
 AGENT_SANTE_RGPD = MandateTemplate(
     template_id="agent-sante-rgpd",
-    version="1.0.0",
+    version="1.1.0",
     title="Healthcare practice assistant agent (GDPR health data)",
     sector="health",
     summary=(
@@ -98,5 +104,9 @@ AGENT_SANTE_RGPD = MandateTemplate(
         "actually sent is letter.send or patient_message.send).",
         "Delegation is off for mandates under this one. The agent must not have access to "
         "create_mandate itself, or it could register a new root mandate for a sub-agent.",
+        "When a body authorized the agent, record its decision (organ_decision) with the "
+        "persons or roles it designates. AMR records what the principal declares: it does "
+        "not check that the decision exists or that the people named are who they say.",
     ),
+    organ_decision="optional",
 )
