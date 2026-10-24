@@ -122,6 +122,12 @@ Python API for now (no MCP tool lists them yet). Like every perimeter, the templ
 holds only if the agent cannot call `create_mandate` itself (see the deployment rule
 above). See `docs/templates/agent-sante-rgpd.md`.
 
+When a body (committee, board) authorized the agent, the mandate can record its decision
+(`organ_decision`: body, title, date, optional reference, designated persons or roles);
+the health template accepts it, `create_mandate` seals it into the chain hash (root
+mandates with a closed list of allowed actions only), and `verify_mandate` and
+`get_proof` return it. Mandates without it keep their exact hash.
+
 ### Third-party verification: the receiver checks the mandate alone
 
 An agent can show whoever receives it (a seller, a hospital, an insurer) a signed

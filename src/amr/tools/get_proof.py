@@ -19,6 +19,7 @@ from amr.crypto.principal import (
     verify,
 )
 from amr.db.engine import get_db, get_principal_key, init_db
+from amr.models.organ_decision import recorded_organ_decision
 from amr.models.perimeter import Perimeter
 
 
@@ -166,7 +167,8 @@ async def get_proof(
           - generated_at: ISO datetime string
           - mandate: dict with full mandate details, including principal_signature
             ({signature, signed_at, key_id, public_key, key_proof_signature, payload,
-            algorithm} or null)
+            algorithm} or null) and organ_decision (the decision of the body that
+            authorized the agent, or null)
           - actions: list of action log entries
           - events: list of mandate events
           - chain_integrity: dict with actions_chain_valid (bool),
@@ -222,6 +224,7 @@ async def get_proof(
                 else None
             ),
             "principal_signature": None,
+            "organ_decision": recorded_organ_decision(mandate_row["metadata_json"]),
             "chain_hash": mandate_row["chain_hash"],
         }
 
