@@ -7,16 +7,23 @@
 #   3. every GitHub Actions check of the head commit is completed and green, including "Tests + ruff";
 #   4. no protected path is touched: signing code and keys (any path containing "signing", *.pem, *.key),
 #      databases (*.db, *.sqlite), pyproject.toml, uv.lock, .github/, LICENSE, CLAUDE.md
-#      (section 3 e of the Atelier's instructions: these wait for Audric);
+#      (section 3 e of the Atelier's instructions: these wait for Audric), and the files that
+#      configure the tests and the linter (conftest.py, pytest.ini, setup.cfg, tox.ini,
+#      ruff.toml, .ruff.toml, .gitignore), so that a pull request cannot weaken the CI that
+#      judges it; matching ignores case and also looks at the old name of a renamed file;
 #   5. no conflict with main.
-# A draft that meets everything is first marked ready, then merged.
+# A draft that meets everything is first marked ready, then merged. The merge is pinned to
+# the head commit that was checked (--match-head-commit): a commit pushed in between is not
+# merged, it waits for its own CI.
 # DRY_RUN=1: print the decisions, change nothing.
 set -euo pipefail
 REPO="${REPO:?REPO missing}"
 DRY_RUN="${DRY_RUN:-0}"
 merged=0
 
-for n in $(gh api "repos/$REPO/pulls?state=open&base=main&per_page=50" --jq '.[].number'); do
+numbers=$(gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+
+for n in $numbers; do
   pr=$(gh api "repos/$REPO/pulls/$n")
   head=$(jq -r '.head.ref' <<<"$pr")
   sha=$(jq -r '.head.sha' <<<"$pr")
@@ -39,14 +46,17 @@ for n in $(gh api "repos/$REPO/pulls?state=open&base=main&per_page=50" --jq '.[]
   if (( red > 0 )); then waiting "$red red check(s)"; continue; fi
   if (( total == 0 || tests == 0 )); then waiting "\"Tests + ruff\" missing or not green"; continue; fi
 
-  protected=$(gh api --paginate "repos/$REPO/pulls/$n/files?per_page=100" --jq '.[].filename' \
-    | grep -E '(signing|\.pem$|\.key$|\.db$|\.sqlite$|^pyproject\.toml$|^uv\.lock$|^\.github/|^LICENSE$|^CLAUDE\.md$)' || true)
+  changed=$(jq -r '.changed_files' <<<"$pr")
+  files=$(gh api --paginate "repos/$REPO/pulls/$n/files?per_page=100" --jq '.[].filename')
+  if [[ "$(grep -c . <<<"$files" || true)" != "$changed" ]]; then waiting "file list incomplete ($changed changed)"; continue; fi
+  protected=$( { echo "$files"; gh api --paginate "repos/$REPO/pulls/$n/files?per_page=100" --jq '.[].previous_filename // empty'; } \
+    | grep -iE '(signing|\.pem$|\.key$|\.db$|\.sqlite$|^pyproject\.toml$|^uv\.lock$|^\.github/|^LICENSE$|^CLAUDE\.md$|(^|/)conftest\.py$|^pytest\.ini$|^setup\.cfg$|^tox\.ini$|^\.?ruff\.toml$|(^|/)\.gitignore$)' || true)
   if [[ -n "$protected" ]]; then waiting "touches protected path(s): $(tr '\n' ' ' <<<"$protected")(Audric's click)"; continue; fi
   if [[ "$mergeable" != "true" ]]; then waiting "not mergeable or not computed yet (mergeable=$mergeable)"; continue; fi
 
   if [[ "$DRY_RUN" == "1" ]]; then echo "#$n WOULD BE MERGED ($title)"; continue; fi
   if [[ "$draft" == "true" ]]; then gh pr ready "$n" -R "$REPO" || { waiting "could not mark ready"; continue; }; fi
-  if ! gh pr merge "$n" -R "$REPO" --squash --delete-branch; then waiting "merge refused by GitHub"; continue; fi
+  if ! gh pr merge "$n" -R "$REPO" --squash --delete-branch --match-head-commit "$sha"; then waiting "merge refused by GitHub"; continue; fi
   echo "#$n merged ($title)"
   merged=$((merged + 1))
 done
