@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     require_principal_signature: bool = False
     # How old (or how far in the future) a principal's signed_at may be.
     principal_signature_max_age_seconds: int = 900
+
+    # Mandate attestations shown by an agent to a third party (see
+    # docs/mandate-attestation-spec.md). Longest lifetime an attestation may have:
+    # a revocation reaches a receiver that checks offline only when it expires.
+    attestation_lifetime_seconds: int = Field(default=900, gt=0)
 
     model_config = {"env_prefix": "AMR_", "env_file": ".env", "extra": "ignore"}
 

@@ -91,6 +91,18 @@ CREATE TABLE IF NOT EXISTS principal_keys (
     chain_hash       TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS issued_attestations (
+    jti              TEXT PRIMARY KEY,
+    mandate_id       TEXT NOT NULL REFERENCES mandates(id),
+    agent_id         TEXT NOT NULL,
+    audience         TEXT,
+    issued_at        TEXT NOT NULL,
+    expires_at       TEXT NOT NULL,
+    key_id           TEXT NOT NULL,
+    claims_digest    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_issued_attestations_mandate ON issued_attestations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_mandate  ON issued_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_expires  ON issued_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_action   ON issued_tokens(mandate_id, action_hash);
@@ -154,7 +166,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
 
     Creates all tables and indexes if they do not already exist.
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
-    4: principal signatures, 6: mandate revocations).
+    4: principal signatures, 5: issued attestations, 6: mandate revocations).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -205,8 +217,14 @@ async def init_db(db_path: Path | str | None = None) -> None:
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (4,),
         )
-        # Schema v6: mandate_revocations, created by the script above (v5 is used by
-        # the mandate attestation branch). Existing mandates are not modified.
+        # Schema v5: issued_attestations (append-only audit of the attestations shown
+        # to third parties), created by the script above. Nothing else changes.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (5,),
+        )
+        # Schema v6: mandate_revocations, created by the script above (v5:
+        # issued_attestations, just before). Existing mandates are not modified.
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (6,),
@@ -338,6 +356,34 @@ async def record_issued_token(
             token_row["issued_at"],
             token_row["expires_at"],
             token_row["key_id"],
+        ),
+    )
+
+
+async def record_issued_attestation(
+    db: aiosqlite.Connection, row: dict[str, str | None]
+) -> None:
+    """Insert an issued mandate attestation into issued_attestations. Does NOT commit.
+
+    Expected keys: jti, mandate_id, agent_id, audience (or None), issued_at,
+    expires_at, key_id, claims_digest.
+    """
+    await db.execute(
+        """
+        INSERT INTO issued_attestations (
+            jti, mandate_id, agent_id, audience, issued_at, expires_at,
+            key_id, claims_digest
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            row["jti"],
+            row["mandate_id"],
+            row["agent_id"],
+            row["audience"],
+            row["issued_at"],
+            row["expires_at"],
+            row["key_id"],
+            row["claims_digest"],
         ),
     )
 

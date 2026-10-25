@@ -26,6 +26,8 @@ mandate with a revocation row as revoked:
 | `issue_action_token` on any sub-mandate below | `parent_mandate_revoked`, `refused_by` = the revoked mandate |
 | `verify_mandate` | the revoked mandate is skipped (an older unrevoked mandate of the same agent, if any, is returned) |
 | `create_mandate` with it as parent | `parent_mandate_revoked` |
+| `issue_mandate_attestation` | `{"denied": true, "reason": "mandate_status_revoked"}` |
+| `issue_mandate_attestation` on any sub-mandate below | `parent_mandate_revoked`, `refused_by` = the revoked mandate |
 | `log_action` | refused: no action is logged after the revocation |
 | `get_proof` | `mandate.status = "revoked"` (the stored value stays in `mandate.stored_status`), `mandate.revocation`, `chain_integrity.revocation_signature_valid` |
 | `export_insurer_dossier` | not in force, `mandate_revoked`; its whole branch is cut; `status.stored_status` keeps the stored value; `integrity.revocation_signature_valid` |
@@ -72,15 +74,21 @@ revocation record (record deleted); `null` otherwise.
 ## How fast
 
 - Every check made after `revoke_mandate` returns sees the revocation: no new token,
-  no positive `verify_mandate`, no new sub-mandate, for the mandate and its whole branch.
+  no new attestation, no positive `verify_mandate`, no new sub-mandate, for the mandate and its whole branch.
 - Action tokens already issued are signed JWS: they cannot be called back. A consumer
   that checks only the signature accepts them until their `exp`. The response says
   exactly how many are still valid and until when (`outstanding_tokens.still_valid`,
   `outstanding_tokens.last_expires_at`), counting the mandate and its sub-mandates. The
   default token lifetime is `AMR_TOKEN_LIFETIME_SECONDS` = 300 seconds.
+- Mandate attestations already issued (`issue_mandate_attestation`) are signed JWS too:
+  a receiver that checks them offline accepts them until their `exp`. The default
+  attestation lifetime is `AMR_ATTESTATION_LIFETIME_SECONDS` = 900 seconds. They are not
+  counted in the `revoke_mandate` response (see Known limits).
 
 ## Known limits
 
+- The `revoke_mandate` response counts outstanding action tokens only, not mandate
+  attestations still within their lifetime (`issued_attestations`).
 - `issue_action_token` still accepts `lifetime_override_seconds` from its caller, with
   no upper bound: a token asked with a long lifetime outlives a revocation by as much.
   Bounding token lifetime by the mandate's expiry, and removing that parameter from what

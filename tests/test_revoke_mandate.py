@@ -23,6 +23,7 @@ from amr.tools.create_mandate import create_mandate
 from amr.tools.export_insurer_dossier import export_insurer_dossier
 from amr.tools.get_proof import get_proof
 from amr.tools.issue_action_token import issue_action_token
+from amr.tools.issue_mandate_attestation import issue_mandate_attestation
 from amr.tools.log_action import log_action
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
 from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
@@ -627,3 +628,28 @@ async def test_tampered_principal_key_voids_the_revocation_check(temp_db: Path) 
          (b64url_encode(b"\x00" * 64), PRINCIPAL))
     proof = await _proof(root["mandate_id"])
     assert proof["chain_integrity"]["revocation_signature_valid"] is False
+
+
+async def test_no_attestation_for_a_revoked_mandate(temp_db: Path) -> None:
+    root = await _create()
+    granted = json.loads(await issue_mandate_attestation(root["mandate_id"], AGENT))
+    assert "attestation" in granted, granted
+    await _revoke(root["mandate_id"])
+    denied = json.loads(await issue_mandate_attestation(root["mandate_id"], AGENT))
+    assert denied["denied"] is True
+    assert denied["reason"] == "mandate_status_revoked"
+    assert "attestation" not in denied
+    count = "SELECT COUNT(*) FROM issued_attestations"
+    assert _sql(temp_db, count) == [(1,)]
+
+
+async def test_no_attestation_under_a_revoked_parent() -> None:
+    root = await _create()
+    child = await _sub(root["mandate_id"])
+    granted = json.loads(await issue_mandate_attestation(child["mandate_id"], HELPER))
+    assert "attestation" in granted, granted
+    await _revoke(root["mandate_id"])
+    denied = json.loads(await issue_mandate_attestation(child["mandate_id"], HELPER))
+    assert denied["denied"] is True
+    assert denied["reason"] == "parent_mandate_revoked"
+    assert denied["refused_by"] == root["mandate_id"]
