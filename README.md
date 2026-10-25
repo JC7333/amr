@@ -129,6 +129,33 @@ the health template accepts it, `create_mandate` seals it into the chain hash (r
 mandates with a closed list of allowed actions only), and `verify_mandate` and
 `get_proof` return it. Mandates without it keep their exact hash.
 
+### Third-party verification: the receiver checks the mandate alone
+
+An agent can show whoever receives it (a seller, a hospital, an insurer) a signed
+**mandate attestation** (`issue_mandate_attestation`). The receiver checks it alone,
+offline, with the registry's public key fetched once (`get_registry_public_key`): no
+account, no call to the registry. The attestation states that the mandate exists, who
+granted it (and whether the principal signed it; with `include_principal_payload` the
+receiver re-checks that signature itself), the agent, the scope and structured perimeter, the expiry, and that the
+mandate and every mandate above it were active when the attestation was issued.
+
+```bash
+python -m amr.verify_attestation attestation.jws --public-key registry.pub --audience seller:acme
+# registry.pub: the PEM (or the JSON) returned by get_registry_public_key
+# {"valid": true, "reason": "ok", "attestation": {"principal_id": "...", "perimeter": {...}, ...}}
+```
+
+What it does not prove: that the mandate is still active *now*. An attestation lives
+at most `AMR_ATTESTATION_LIFETIME_SECONDS` (default 15 minutes) and never outlives the
+mandate or a parent; a revocation made after issuance reaches an offline receiver only
+when the attestation expires. It is a bearer document: the receiver must make sure it
+is dealing with the agent named in `agent_id`. Pass `audience` to address it to one
+receiver. Mandate `metadata` is not disclosed unless `include_principal_payload` is
+set (it is inside the signed bytes). The registry trusts its own database: protect the
+file. Existing mandates and their hashes are unchanged; issuances are logged in a
+new append-only table, `issued_attestations` (schema v5). See
+`docs/mandate-attestation-spec.md`.
+
 ---
 
 ## Vision: from registry to enforcement
@@ -335,12 +362,14 @@ Only the mandate's own principal revokes it (for a sub-mandate, the agent that
 delegated it). Same signature policy as `create_mandate`; build the exact bytes to sign
 with `prepare_revocation_signature(mandate_id, reason, signed_at=None)`.
 
-**Effect, as soon as it returns:** `issue_action_token` refuses the mandate
-(`mandate_status_revoked`) and every sub-mandate below it (`parent_mandate_revoked`);
+**Effect, as soon as it returns:** `issue_action_token` and `issue_mandate_attestation`
+refuse the mandate (`mandate_status_revoked`) and every sub-mandate below it
+(`parent_mandate_revoked`);
 `verify_mandate` no longer returns it; no sub-mandate can be created under it;
 `log_action` refuses it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
 called back and stay valid until their `exp`: the response gives their number and the
-last expiry.
+last expiry. Mandate attestations already issued also stay valid until their `exp`
+(15 minutes by default) and are not counted in the response.
 
 **Returns:**
 ```json
@@ -407,6 +436,27 @@ of the revocation (or `null`) and its chain hash; `revocation_signature_valid` r
 that signature against the principal's key (`null` when there is nothing to check).
 
 ---
+
+### `issue_mandate_attestation`
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mandate_id` | str | UUID of the mandate to attest |
+| `agent_id` | str | Must match the mandate's agent |
+| `audience` | str \| null | Optional receiver it is addressed to |
+| `lifetime_seconds` | int \| null | Optional shorter lifetime (never longer than the configured maximum) |
+| `include_principal_payload` | bool | Also carry the principal's signature and signed bytes (discloses `metadata`); default `false` |
+
+Returns `{"attestation", "jti", "issued_at", "expires_at", "key_id", "issuer"}`, or
+`{"denied": true, "reason", "mandate_id"}`, for example `mandate_not_found`,
+`agent_mismatch`, `mandate_status_<status>`, `mandate_status_revoked`, `mandate_expired`,
+`parent_mandate_<status>`, `parent_mandate_revoked`, `principal_signature_invalid`, with `refused_by` when a
+parent is the cause (full list in `docs/mandate-attestation-spec.md`).
+
+### `get_registry_public_key`
+
+No parameters. Returns `{"issuer", "key_id", "algorithm": "EdDSA", "public_key_pem",
+"public_key_jwk"}`: what a receiver needs to verify attestations offline.
 
 ### `export_insurer_dossier`
 
@@ -577,8 +627,11 @@ src/amr/
 │   ├── verify_mandate.py
 │   ├── log_action.py
 │   ├── get_proof.py
+│   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
 │   └── export_insurer_dossier.py
+├── attestation.py     # offline attestation verifier (no DB, no network)
+├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
 tests/
@@ -598,6 +651,7 @@ tests/
 | `AMR_SERVER_NAME` | `Agent Mandate Registry` | MCP server display name |
 | `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
+| `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
 
 ---
 

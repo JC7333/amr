@@ -100,6 +100,9 @@ Consumers MUST check, in this order:
    about to execute.
 
 If any check fails, the consumer MUST reject the token and refuse the action.
+The same registry key also signs mandate attestations (header
+`typ: amr-attestation+jwt`, see `docs/mandate-attestation-spec.md`): they carry no
+`amr_action_hash`, so check 5 rejects them; a consumer SHOULD also reject that `typ`.
 
 ## Security Notes
 - Private key is generated once, stored at `settings.signing_key_path`,
