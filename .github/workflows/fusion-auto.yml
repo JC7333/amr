@@ -1,0 +1,43 @@
+name: Auto-merge
+
+# Decision of Audric, 2026-10-25: ready pull requests from the Atelier are merged without a click.
+# The conditions live in .github/scripts/fusion-auto.sh (green CI, no conflict, atelier/ or fix/
+# branch, no protected path). The script that runs is always the one on main: a pull request
+# cannot change the rule that judges it.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  schedule:
+    - cron: "11,31,51 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  # Reading the check runs of the head commit needs checks: read, otherwise the API answers
+  # 403 "Resource not accessible by integration" (seen on trustlayer-verified-platforms, 2026-10-20).
+  checks: read
+  statuses: read
+  actions: read
+
+concurrency:
+  group: fusion-auto
+  cancel-in-progress: false
+
+jobs:
+  fusion:
+    name: Merge ready pull requests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Merge ready pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: bash .github/scripts/fusion-auto.sh
