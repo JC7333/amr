@@ -6,6 +6,83 @@ AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that regist
 
 ---
 
+## Quickstart for agents
+
+This section is written so that an AI agent (Claude Code, Cursor, any MCP client) can
+install AMR and reach a first verified mandate on its own: no account, no email, no
+person to ask. Everything runs on your machine; AMR makes no network call.
+
+**1. Run the server** (needs [uv](https://docs.astral.sh/uv/)). The `--with "mcp<2"`
+part is required today: AMR is written for version 1 of the MCP Python SDK and a fresh
+install without it picks version 2, which fails at start with
+`No module named 'mcp.server.fastmcp'`.
+
+```bash
+uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+```
+
+AMR is not published on PyPI: `uvx amr` would install a different project. Use the
+command above, or clone the repository and run `uv sync && uv run amr`.
+
+**2. Declare it in your MCP client.**
+
+Claude Code:
+
+```bash
+claude mcp add amr -- uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+```
+
+Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
+
+```json
+{
+  "mcpServers": {
+    "amr": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/JC7333/amr", "--with", "mcp<2", "amr"],
+      "env": {
+        "AMR_DB_PATH": "/absolute/path/amr_mandates.db",
+        "AMR_SIGNING_KEY_PATH": "/absolute/path/amr_signing_key.pem",
+        "AMR_PUBLIC_KEY_PATH": "/absolute/path/amr_signing_key.pub"
+      }
+    }
+  }
+}
+```
+
+Set the three paths: by default AMR writes its database and its signing key in the
+current directory of the client. Keep the `.pem` private key out of version control.
+
+**3. Reach a first verified mandate.** The tools, in the order an agent uses them:
+
+1. `create_mandate`: register who authorizes what (`principal_id`, `agent_id`, `scope`,
+   `legal_basis_regulation`, `legal_basis_article`, `duration_hours`; add
+   `allowed_actions` / `forbidden_actions` for a perimeter; only `issue_action_token`
+   enforces it).
+2. `verify_mandate(agent_id, action)`: `authorized: true` while the agent has an active
+   mandate. It does not check `action` against the perimeter; `issue_action_token` does.
+3. `log_action(mandate_id, action)`: append an entry to the hash-chained journal.
+4. `issue_mandate_attestation` + `get_registry_public_key`: a signed document a third
+   party checks offline with `python -m amr.verify_attestation`.
+5. `revoke_mandate(mandate_id, reason)`: the stop button; `verify_mandate` then answers
+   `authorized: false`. Tokens and attestations already issued stay valid until they
+   expire.
+6. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
+
+The same flow, runnable and checked by the test suite, is in
+[`examples/quickstart_agent.py`](examples/quickstart_agent.py):
+
+```bash
+git clone https://github.com/JC7333/amr.git && cd amr && uv sync
+uv run python examples/quickstart_agent.py   # prints every step, ends with "OK"
+```
+
+Machine-readable summaries for agents: [`AGENTS.md`](AGENTS.md) and [`llms.txt`](llms.txt).
+To report a problem, open an issue at https://github.com/JC7333/amr/issues (never paste
+real mandate contents or personal data into it).
+
+---
+
 ## Why AMR?
 
 Modern AI agent infrastructure covers many concerns — but the legal mandate layer is missing:
@@ -179,7 +256,7 @@ The open-source registry stays free. The enforcement layer is the commercial pro
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-org/amr.git
+git clone https://github.com/JC7333/amr.git
 cd amr
 uv sync
 uv run amr

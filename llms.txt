@@ -1,0 +1,22 @@
+# AMR (Agent Mandate Registry)
+
+> Open-source MCP server (Apache-2.0) that records which principal authorized which AI agent to do what, verifies it, and keeps a hash-chained, append-only journal of the agent's actions. Runs locally over stdio; makes no network call. Not legal advice; does not make anyone compliant.
+
+Install and run (needs uv; keep `--with "mcp<2"`, AMR is written for version 1 of the MCP Python SDK; AMR is not on PyPI):
+
+    uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+
+## Docs
+- [AGENTS.md](https://github.com/JC7333/amr/blob/main/AGENTS.md): what AMR does and does not do, tools, how to report a problem
+- [README](https://github.com/JC7333/amr#quickstart-for-agents): quickstart for agents, then the reference of every tool
+- [Runnable example](https://github.com/JC7333/amr/blob/main/examples/quickstart_agent.py): create, verify, log, attest, check offline, revoke, prove
+
+## Specifications
+- [Token issuance](https://github.com/JC7333/amr/blob/main/docs/token-issuance-spec.md)
+- [Principal signatures](https://github.com/JC7333/amr/blob/main/docs/principal-signature-spec.md)
+- [Mandate attestation (offline verification)](https://github.com/JC7333/amr/blob/main/docs/mandate-attestation-spec.md)
+- [Revocation](https://github.com/JC7333/amr/blob/main/docs/revocation-spec.md)
+- [Insurer dossier](https://github.com/JC7333/amr/blob/main/docs/insurer-dossier-spec.md)
+
+## Support
+- [Issues](https://github.com/JC7333/amr/issues): include version, tool name, arguments and error; never real mandate contents, personal data, keys or tokens
