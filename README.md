@@ -57,13 +57,16 @@ current directory of the client. Keep the `.pem` private key out of version cont
 
 1. `create_mandate`: register who authorizes what (`principal_id`, `agent_id`, `scope`,
    `legal_basis_regulation`, `legal_basis_article`, `duration_hours`; add
-   `allowed_actions` / `forbidden_actions` to bound it).
-2. `verify_mandate(agent_id, action)`: `authorized: true` while the mandate is active.
+   `allowed_actions` / `forbidden_actions` for a perimeter; only `issue_action_token`
+   enforces it).
+2. `verify_mandate(agent_id, action)`: `authorized: true` while the agent has an active
+   mandate. It does not check `action` against the perimeter; `issue_action_token` does.
 3. `log_action(mandate_id, action)`: append an entry to the hash-chained journal.
 4. `issue_mandate_attestation` + `get_registry_public_key`: a signed document a third
    party checks offline with `python -m amr.verify_attestation`.
 5. `revoke_mandate(mandate_id, reason)`: the stop button; `verify_mandate` then answers
-   `authorized: false`.
+   `authorized: false`. Tokens and attestations already issued stay valid until they
+   expire.
 6. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
 
 The same flow, runnable and checked by the test suite, is in
@@ -253,7 +256,7 @@ The open-source registry stays free. The enforcement layer is the commercial pro
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-org/amr.git
+git clone https://github.com/JC7333/amr.git
 cd amr
 uv sync
 uv run amr

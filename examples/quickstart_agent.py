@@ -19,12 +19,13 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+TIMEOUT = 60  # seconds, per step
 SERVER_CODE = "from amr.server import main; main()"
 
 
 async def call(session: ClientSession, tool: str, **arguments) -> dict:
     """Call one AMR tool and return its JSON result."""
-    result = await session.call_tool(tool, arguments)
+    result = await asyncio.wait_for(session.call_tool(tool, arguments), TIMEOUT)
     text = result.content[0].text
     print(f"\n== {tool}\n{text[:600]}{'...' if len(text) > 600 else ''}")
     return json.loads(text)
@@ -38,14 +39,14 @@ def check(condition: bool, message: str) -> None:
 
 async def run(workdir: Path) -> None:
     env = {
-        **os.environ,
+        **{k: v for k, v in os.environ.items() if not k.startswith("AMR_")},
         "AMR_DB_PATH": str(workdir / "quickstart.db"),
         "AMR_SIGNING_KEY_PATH": str(workdir / "key.pem"),
         "AMR_PUBLIC_KEY_PATH": str(workdir / "key.pub"),
     }
     params = StdioServerParameters(command=sys.executable, args=["-c", SERVER_CODE], env=env)
     async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
-        await session.initialize()
+        await asyncio.wait_for(session.initialize(), TIMEOUT)
 
         mandate = await call(
             session,
@@ -62,6 +63,8 @@ async def run(workdir: Path) -> None:
         check(mandate.get("status") == "created", "create_mandate did not create")
         mandate_id = mandate["mandate_id"]
 
+        # verify_mandate only looks for an active mandate of this agent; the perimeter is
+        # enforced by issue_action_token, not here.
         verified = await call(
             session, "verify_mandate", agent_id="agent:scheduler-1", action="appointment.book"
         )
@@ -100,9 +103,12 @@ async def run(workdir: Path) -> None:
             "receiver:example",
             stdout=asyncio.subprocess.PIPE,
         )
-        out, _ = await offline.communicate()
+        out, _ = await asyncio.wait_for(offline.communicate(), TIMEOUT)
         print(f"\n== offline check (no registry call)\n{out.decode()[:300]}")
-        check(json.loads(out)["valid"] is True, "offline check should accept the attestation")
+        check(
+            offline.returncode == 0 and json.loads(out)["valid"] is True,
+            "offline check should accept the attestation",
+        )
 
         revoked = await call(
             session, "revoke_mandate", mandate_id=mandate_id, reason="quickstart: stop button"

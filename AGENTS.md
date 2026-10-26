@@ -24,10 +24,10 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 | Tool | Use it to |
 |---|---|
 | `create_mandate` | Register a mandate (principal, agent, scope, legal basis, duration, optional perimeter) |
-| `verify_mandate` | Ask whether an agent has an active, unexpired mandate for an action |
+| `verify_mandate` | Ask whether an agent has an active, unexpired mandate (does not check the action against the perimeter) |
 | `log_action` | Append an action to the chained journal of a mandate |
 | `get_proof` | Export the full audit bundle of a mandate |
-| `issue_action_token` | Get a signed token only if the mandate and its perimeter allow the action |
+| `issue_action_token` | Get a signed token only if the mandate and its perimeter allow the action (this is where the perimeter is enforced) |
 | `register_principal_key` | Register the principal's Ed25519 public key |
 | `prepare_mandate_signature` | Build the exact bytes a principal signs for a mandate |
 | `issue_mandate_attestation` | Issue a signed document a third party verifies offline |

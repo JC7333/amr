@@ -30,9 +30,9 @@ def test_agents_md_lists_every_tool_and_only_real_ones() -> None:
 def test_readme_quickstart_names_only_real_tools() -> None:
     start = README.index("## Quickstart for agents")
     section = README[start : README.index("## Why AMR?")]
-    numbered = re.findall(r"^\d\. `(\w+)", section, flags=re.MULTILINE)
-    assert numbered
-    assert set(numbered) <= REGISTERED_TOOLS
+    named = set(re.findall(r"(?:^\d\. |\+ )`(\w+)", section, flags=re.MULTILINE))
+    assert {"create_mandate", "get_registry_public_key", "get_proof"} <= named
+    assert named <= REGISTERED_TOOLS
 
 
 @pytest.mark.parametrize("text", [AGENTS, LLMS, README])
