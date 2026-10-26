@@ -8,7 +8,7 @@ requires-python = ">=3.12"
 authors = [{ name = "Audric Bugnard" }]
 keywords = ["mcp", "ai-agents", "mandate", "compliance", "ai-act", "eidas"]
 dependencies = [
-    "mcp[cli]>=1.2.0",
+    "mcp[cli]>=1.2.0,<2",
     "pydantic>=2.7.0",
     "pydantic-settings>=2.3.0",
     "aiosqlite>=0.20.0",
