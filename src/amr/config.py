@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 
 
@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     # docs/mandate-attestation-spec.md). Longest lifetime an attestation may have:
     # a revocation reaches a receiver that checks offline only when it expires.
     attestation_lifetime_seconds: int = Field(default=900, gt=0)
+
+    # report_issue (see docs/report-issue-spec.md). Without a token the tool makes no
+    # network call and returns a pre-filled link. With one, it creates the issue on
+    # issue_repository through the GitHub REST API: give it the narrowest scope
+    # (fine-grained token, Issues: write, on that repository only).
+    issue_token: SecretStr | None = None
+    issue_repository: str = Field(
+        default="JC7333/amr", pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    )
 
     model_config = {"env_prefix": "AMR_", "env_file": ".env", "extra": "ignore"}
 
