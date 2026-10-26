@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -33,14 +33,20 @@ class Settings(BaseSettings):
     # a revocation reaches a receiver that checks offline only when it expires.
     attestation_lifetime_seconds: int = Field(default=900, gt=0)
 
-    # report_issue (see docs/report-issue-spec.md). Without a token the tool makes no
-    # network call and returns a pre-filled link. With one, it creates the issue on
-    # issue_repository through the GitHub REST API: give it the narrowest scope
-    # (fine-grained token, Issues: write, on that repository only).
-    issue_token: SecretStr | None = None
+    # report_issue (see docs/report-issue-spec.md) files issues on this repository.
+    # Its token, AMR_ISSUE_TOKEN, is deliberately not a setting: report_issue reads it
+    # from the process environment only, never from a .env file.
     issue_repository: str = Field(
-        default="JC7333/amr", pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        default="JC7333/amr",
+        pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
     )
+
+    @field_validator("issue_repository")
+    @classmethod
+    def _no_dot_segments(cls, value: str) -> str:
+        if any(part.strip(".") == "" for part in value.split("/")):
+            raise ValueError("owner and name cannot be only dots")
+        return value
 
     model_config = {"env_prefix": "AMR_", "env_file": ".env", "extra": "ignore"}
 

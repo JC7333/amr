@@ -54,7 +54,8 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 
 Call `report_issue(title, description, version, context)`. Without `AMR_ISSUE_TOKEN` it
 returns `new_issue_url`, a pre-filled link to open; with it, it files the issue and
-returns its link. Text that looks like a private key or a signed token is refused.
+returns its link. PEM blocks, JWS-shaped tokens, GitHub tokens and bare Ed25519 private
+keys are refused; other secrets and personal data are not detected, so never write them.
 Or open an issue at https://github.com/JC7333/amr/issues with the version, the tool name,
 the arguments you sent and the error returned. Do not include real mandate contents,
 personal data, keys or tokens.
