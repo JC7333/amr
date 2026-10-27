@@ -45,7 +45,8 @@ src/amr/
 │   ├── create_mandate.py   # Tool: register a new agent mandate
 │   ├── verify_mandate.py   # Tool: check if an agent has an active mandate
 │   ├── log_action.py       # Tool: log an agent action under a mandate
-│   └── get_proof.py        # Tool: generate a Proof Pack (full audit bundle)
+│   ├── get_proof.py        # Tool: generate a Proof Pack (full audit bundle)
+│   └── report_issue.py     # Tool: report a problem with AMR (only network call, opt-in)
 └── proof/
     └── __init__.py    # Reserved for future proof format extensions
 tests/
@@ -61,7 +62,7 @@ tests/
 2. **Pydantic validation first** — All tool inputs are validated via Pydantic models before DB interaction.
 3. **Append-only tables** — `mandates` and `action_logs` are never UPDATEd or DELETEd. Status changes use `mandate_events`.
 4. **No secrets in code** — All config via env vars (prefix `AMR_`). Never hardcode credentials.
-5. **No network calls** — AMR is a local MCP server. Zero outbound HTTP from tools.
+5. **No network calls** — AMR is a local MCP server. Zero outbound HTTP from tools, with one exception: `report_issue` may send one HTTPS POST to the GitHub issues API, only when the operator sets `AMR_ISSUE_TOKEN` in the process environment (never read from `.env`), redirects refused; without it, it returns a pre-filled link and makes no call. No other tool may reach the network.
 6. **Chain hash linking** — Every mandate and action log entry is linked via SHA-256 to the previous entry.
 7. **ruff S rules** — Security linting enforced. `ruff check src/` must pass before any commit.
 8. **Algorithm confusion prevention** — EdDSA is hardcoded in both encode and decode. Never accept algorithm=None or RS256 substitution.
@@ -108,6 +109,7 @@ uv run python -c "from amr.config import settings; print(settings.server_name)"
 | `verify_mandate` | Check if an agent has an active, non-expired mandate |
 | `log_action` | Log an agent action under an active mandate (append-only, chained) |
 | `get_proof` | Generate a full Proof Pack JSON for a mandate (mandate + actions + integrity) |
+| `report_issue` | Report a problem with AMR itself: pre-filled GitHub link, or the issue filed when `AMR_ISSUE_TOKEN` is set (the only network call) |
 | `issue_action_token` | Issue a signed action token if and only if a valid mandate authorizes the action (hard-stop enforcement), inside its structured perimeter and along its whole delegation chain |
 
 ---

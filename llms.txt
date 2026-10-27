@@ -1,6 +1,6 @@
 # AMR (Agent Mandate Registry)
 
-> Open-source MCP server (Apache-2.0) that records which principal authorized which AI agent to do what, verifies it, and keeps a hash-chained, append-only journal of the agent's actions. Runs locally over stdio; makes no network call. Not legal advice; does not make anyone compliant.
+> Open-source MCP server (Apache-2.0) that records which principal authorized which AI agent to do what, verifies it, and keeps a hash-chained, append-only journal of the agent's actions. Runs locally over stdio; makes no network call (except report_issue, only when the operator sets AMR_ISSUE_TOKEN). Not legal advice; does not make anyone compliant.
 
 Install and run (needs uv; keep `--with "mcp<2"`, AMR is written for version 1 of the MCP Python SDK; AMR is not on PyPI):
 
@@ -17,6 +17,7 @@ Install and run (needs uv; keep `--with "mcp<2"`, AMR is written for version 1 o
 - [Mandate attestation (offline verification)](https://github.com/JC7333/amr/blob/main/docs/mandate-attestation-spec.md)
 - [Revocation](https://github.com/JC7333/amr/blob/main/docs/revocation-spec.md)
 - [Insurer dossier](https://github.com/JC7333/amr/blob/main/docs/insurer-dossier-spec.md)
+- [Reporting an issue](https://github.com/JC7333/amr/blob/main/docs/report-issue-spec.md)
 
 ## Support
-- [Issues](https://github.com/JC7333/amr/issues): include version, tool name, arguments and error; never real mandate contents, personal data, keys or tokens
+- Call the report_issue tool, or open [Issues](https://github.com/JC7333/amr/issues): include version, tool name, arguments and error; never real mandate contents, personal data, keys or tokens

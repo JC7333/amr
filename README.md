@@ -10,7 +10,8 @@ AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that regist
 
 This section is written so that an AI agent (Claude Code, Cursor, any MCP client) can
 install AMR and reach a first verified mandate on its own: no account, no email, no
-person to ask. Everything runs on your machine; AMR makes no network call.
+person to ask. Everything runs on your machine; AMR makes no network call (the one
+exception, `report_issue`, is off until the operator sets `AMR_ISSUE_TOKEN`).
 
 **1. Run the server** (needs [uv](https://docs.astral.sh/uv/)). The `--with "mcp<2"`
 part is required today: AMR is written for version 1 of the MCP Python SDK and a fresh
@@ -68,6 +69,10 @@ current directory of the client. Keep the `.pem` private key out of version cont
    `authorized: false`. Tokens and attestations already issued stay valid until they
    expire.
 6. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
+7. `report_issue(title, description, version, context)`: report a problem with AMR
+   itself. Without `AMR_ISSUE_TOKEN` it makes no network call and returns a pre-filled
+   link to open; with it, it files the issue on GitHub. See
+   [`docs/report-issue-spec.md`](docs/report-issue-spec.md).
 
 The same flow, runnable and checked by the test suite, is in
 [`examples/quickstart_agent.py`](examples/quickstart_agent.py):
@@ -78,8 +83,9 @@ uv run python examples/quickstart_agent.py   # prints every step, ends with "OK"
 ```
 
 Machine-readable summaries for agents: [`AGENTS.md`](AGENTS.md) and [`llms.txt`](llms.txt).
-To report a problem, open an issue at https://github.com/JC7333/amr/issues (never paste
-real mandate contents or personal data into it).
+To report a problem, call `report_issue` or open an issue at
+https://github.com/JC7333/amr/issues (never paste real mandate contents or personal data
+into it).
 
 ---
 
@@ -640,7 +646,7 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 
 4. **SHA-256 cryptographic chain** — Each mandate and each action log entry is linked to the previous one via a SHA-256 hash (git-style). Any tampering invalidates all subsequent hashes, making the trail tamper-evident.
 
-5. **stdio transport only** — AMR runs as a local MCP server over stdio. No listening port, no inbound network exposure, no outbound HTTP from tools. The attack surface is minimal.
+5. **stdio transport only** — AMR runs as a local MCP server over stdio. No listening port, no inbound network exposure, no outbound HTTP from tools, with one opt-in exception: `report_issue` sends one HTTPS request to the GitHub API, and only when the operator has set `AMR_ISSUE_TOKEN`. The attack surface is minimal.
 
 ---
 
@@ -706,6 +712,7 @@ src/amr/
 │   ├── get_proof.py
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
+│   ├── report_issue.py   # only network call, opt-in (AMR_ISSUE_TOKEN)
 │   └── export_insurer_dossier.py
 ├── attestation.py     # offline attestation verifier (no DB, no network)
 ├── verify_attestation.py  # python -m amr.verify_attestation
@@ -728,6 +735,8 @@ tests/
 | `AMR_SERVER_NAME` | `Agent Mandate Registry` | MCP server display name |
 | `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
+| `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
+| `AMR_ISSUE_REPOSITORY` | `JC7333/amr` | Repository `report_issue` files issues on (`owner/name`) |
 | `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
 
 ---

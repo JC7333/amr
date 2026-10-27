@@ -35,6 +35,7 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 | `export_insurer_dossier` | Export a signed, printable dossier of a mandate |
 | `revoke_mandate` | Cut a mandate and every sub-mandate below it, immediately |
 | `prepare_revocation_signature` | Build the exact bytes a principal signs to revoke |
+| `report_issue` | Report a problem with AMR itself (pre-filled link, or the issue filed when the operator set `AMR_ISSUE_TOKEN`) |
 
 ## What it does not do
 
@@ -44,12 +45,17 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
   its mandates (`register_principal_key`).
 - It does not host anything: there is no hosted service. The registry runs where you
   start it and trusts its own database file; protect that file.
-- It makes no network call. Tokens and attestations already issued stay valid until
+- It makes no network call, except `report_issue` when the operator set `AMR_ISSUE_TOKEN`
+  (one HTTPS request to the GitHub API). Tokens and attestations already issued stay valid until
   their expiry after a revocation (the revocation response counts the tokens).
 - Existing rows are never edited or deleted: status changes are new chained rows.
 
 ## Reporting a problem
 
-Open an issue at https://github.com/JC7333/amr/issues with the version, the tool name,
+Call `report_issue(title, description, version, context)`. Without `AMR_ISSUE_TOKEN` it
+returns `new_issue_url`, a pre-filled link to open; with it, it files the issue and
+returns its link. PEM blocks, JWS-shaped tokens, GitHub tokens and bare Ed25519 private
+keys are refused; other secrets and personal data are not detected, so never write them.
+Or open an issue at https://github.com/JC7333/amr/issues with the version, the tool name,
 the arguments you sent and the error returned. Do not include real mandate contents,
 personal data, keys or tokens.
