@@ -1,5 +1,7 @@
 """AMR database engine - async SQLite with WAL mode and append-only tables."""
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import aiosqlite
@@ -102,6 +104,19 @@ CREATE TABLE IF NOT EXISTS issued_attestations (
     claims_digest    TEXT NOT NULL
 );
 
+-- One row per (issued token, mandate of its delegation chain) for tokens whose action
+-- declares an amount (append-only). The cumulative ceiling of a mandate sums the rows
+-- of its own id, so spending by any sub-mandate below it counts too.
+CREATE TABLE IF NOT EXISTS token_amounts (
+    jti              TEXT NOT NULL REFERENCES issued_tokens(jti),
+    mandate_id       TEXT NOT NULL REFERENCES mandates(id),
+    amount           TEXT NOT NULL,
+    currency         TEXT NOT NULL,
+    issued_at        TEXT NOT NULL,
+    PRIMARY KEY (jti, mandate_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate ON token_amounts(mandate_id, currency);
 CREATE INDEX IF NOT EXISTS idx_issued_attestations_mandate ON issued_attestations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_mandate  ON issued_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_expires  ON issued_tokens(expires_at);
@@ -166,7 +181,8 @@ async def init_db(db_path: Path | str | None = None) -> None:
 
     Creates all tables and indexes if they do not already exist.
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
-    4: principal signatures, 5: issued attestations, 6: mandate revocations).
+    4: principal signatures, 5: issued attestations, 6: mandate revocations,
+    7: token amounts for cumulative ceilings).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -228,6 +244,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (6,),
+        )
+        # Schema v7: token_amounts, created by the script above, for cumulative amount
+        # ceilings. Tokens issued before v7 carry no amount row. Nothing else changes.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (7,),
         )
         await db.commit()
 
@@ -409,6 +431,41 @@ async def is_token_replay(
     )
     row = await cursor.fetchone()
     return row is not None
+
+
+async def record_token_amount(
+    db: aiosqlite.Connection,
+    jti: str,
+    mandate_ids: list[str],
+    amount: str,
+    currency: str,
+    issued_at: str,
+) -> None:
+    """Record the amount of an issued token against each mandate of its chain. No commit."""
+    for mandate_id in mandate_ids:
+        await db.execute(
+            "INSERT INTO token_amounts (jti, mandate_id, amount, currency, issued_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (jti, mandate_id, amount, currency, issued_at),
+        )
+
+
+async def get_period_spend(
+    db: aiosqlite.Connection, mandate_id: str, currency: str, since: datetime
+) -> Decimal:
+    """Total amount of the tokens issued under a mandate (or below it) after ``since``."""
+    cursor = await db.execute(
+        "SELECT amount, issued_at FROM token_amounts WHERE mandate_id = ? AND currency = ?",
+        (mandate_id, currency),
+    )
+    total = Decimal(0)
+    for row in await cursor.fetchall():
+        issued_at = datetime.fromisoformat(row["issued_at"])
+        if issued_at.tzinfo is None:
+            issued_at = issued_at.replace(tzinfo=UTC)
+        if issued_at > since:
+            total += Decimal(row["amount"])
+    return total
 
 
 async def get_issued_token(

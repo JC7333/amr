@@ -143,6 +143,15 @@ def _perimeter_rows(perimeter: dict[str, Any] | None) -> list[tuple[str, str]]:
             ),
         ),
         ("Actions bound by the amount limit", _e(perimeter.get("amount_actions"))),
+        (
+            "Cumulative amount limit",
+            (
+                f"{_e(perimeter.get('period_max_amount'))} {_e(perimeter.get('currency'))} "
+                f"per {_e(perimeter.get('period_days'))} days (rolling, whole branch)"
+                if perimeter.get("period_max_amount") is not None
+                else "none"
+            ),
+        ),
     ]
 
 
