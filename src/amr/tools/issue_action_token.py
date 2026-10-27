@@ -241,6 +241,13 @@ async def issue_action_token(
             link_expires = datetime.fromisoformat(link["expires_at"])
             if link_expires.tzinfo is None:
                 link_expires = link_expires.replace(tzinfo=UTC)
+            if int(link_expires.timestamp()) <= int(now.timestamp()):
+                return json.dumps({
+                    "denied": True,
+                    "reason": "mandate_expired",
+                    "mandate_id": str(req.mandate_id),
+                    "refused_by": link["id"],
+                })
             expires_at = min(expires_at, link_expires)
         scope_digest = _scope_digest(row["scope"])
         key_id = get_key_id()

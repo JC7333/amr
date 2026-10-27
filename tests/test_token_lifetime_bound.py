@@ -184,4 +184,14 @@ async def test_a_stored_expiry_without_timezone_is_read_as_utc(temp_db: Path) ->
     _set_expiry(temp_db, root["mandate_id"], ends.replace(tzinfo=None))
     token = await _token(root["mandate_id"])
     assert "token" in token, token
-    assert _expires(token) == ends.replace(microsecond=ends.microsecond)
+    assert _expires(token) == ends
+
+
+async def test_no_token_when_the_chain_ends_within_the_second(temp_db: Path) -> None:
+    root = await _root()
+    child = await _child(root["mandate_id"])
+    _set_expiry(temp_db, root["mandate_id"], datetime.now(UTC) + timedelta(milliseconds=300))
+    denied = await _token(child["mandate_id"], HELPER)
+    assert denied.get("denied") is True, denied
+    assert denied["reason"] == "mandate_expired"
+    assert denied["refused_by"] == root["mandate_id"]
