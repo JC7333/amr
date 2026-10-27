@@ -17,7 +17,7 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
 - `iss` (issuer): "amr://localhost" or configured issuer URI
 - `sub` (subject): agent_id
 - `aud` (audience): runtime/platform identifier where the token will be presented
-- `exp` (expiration): issued_at + configurable lifetime (default 300s)
+- `exp` (expiration): issued_at + configurable lifetime (default 300s), and never later than the expiry of the mandate or of any mandate above it in the delegation chain; a caller can shorten it, never lengthen it
 - `iat` (issued_at): UTC epoch
 - `nbf` (not before): iat
 - `jti` (JWT ID): UUIDv4, used for replay prevention

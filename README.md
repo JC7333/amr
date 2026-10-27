@@ -468,9 +468,12 @@ last expiry. Mandate attestations already issued also stay valid until their `ex
 }
 ```
 
-Known limit: `issue_action_token` still lets its caller ask a longer token lifetime
-(`lifetime_override_seconds`), which delays the end of outstanding tokens by as much.
-See `docs/revocation-spec.md`.
+A token lives at most `AMR_TOKEN_LIFETIME_SECONDS` (300 s by default) and never past the
+expiry of its mandate or of any mandate above it in the delegation chain. The caller's
+`lifetime_override_seconds` can only shorten it. Breaking change for callers that asked
+for a token longer than the default: they now get the default. After a revocation, the
+window in which an already issued token still works is therefore at most that lifetime,
+whatever the depth of the chain. See `docs/revocation-spec.md`.
 
 ---
 
