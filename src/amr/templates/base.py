@@ -175,7 +175,16 @@ class MandateTemplate(BaseModel):
                 )
             ceiling = parsed
         canonical = perimeter.canonical()
+        period = (
+            {
+                "period_max_amount": canonical["period_max_amount"],
+                "period_days": perimeter.period_days,
+            }
+            if perimeter.period_max_amount is not None
+            else {}
+        )
         return {
+            **period,
             "allowed_actions": canonical["allowed_actions"],
             "forbidden_actions": canonical["forbidden_actions"],
             "delegation_allowed": perimeter.delegation_allowed,
