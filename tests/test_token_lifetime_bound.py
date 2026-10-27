@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -190,7 +191,13 @@ async def test_a_stored_expiry_without_timezone_is_read_as_utc(temp_db: Path) ->
 async def test_no_token_when_the_chain_ends_within_the_second(temp_db: Path) -> None:
     root = await _root()
     child = await _child(root["mandate_id"])
-    _set_expiry(temp_db, root["mandate_id"], datetime.now(UTC) + timedelta(milliseconds=300))
+    # The root must end later in the same whole second as the request: start at the
+    # top of a second, so that a fixed +300 ms can never cross into the next one.
+    now = datetime.now(UTC)
+    if now.microsecond > 100_000:
+        time.sleep(1 - now.microsecond / 1_000_000)
+    second = datetime.now(UTC).replace(microsecond=0)
+    _set_expiry(temp_db, root["mandate_id"], second + timedelta(milliseconds=900))
     denied = await _token(child["mandate_id"], HELPER)
     assert denied.get("denied") is True, denied
     assert denied["reason"] == "mandate_expired"
