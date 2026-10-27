@@ -36,6 +36,8 @@ def _build_perimeter(
     max_amount: str | None,
     currency: str,
     amount_actions: list[str] | None,
+    period_max_amount: str | None = None,
+    period_days: int | None = None,
 ) -> Perimeter | None:
     """Build the structured perimeter, or None for a legacy free-text mandate.
 
@@ -47,6 +49,8 @@ def _build_perimeter(
         and forbidden_actions is None
         and amount_actions is None
         and max_amount is None
+        and period_max_amount is None
+        and period_days is None
         and not delegation_allowed
     ):
         return None
@@ -62,6 +66,8 @@ def _build_perimeter(
         max_amount=max_amount,  # type: ignore[arg-type]
         currency=currency,
         amount_actions=tuple(amount_actions or ()),
+        period_max_amount=period_max_amount,  # type: ignore[arg-type]
+        period_days=period_days,
     )
 
 
@@ -219,6 +225,8 @@ async def create_mandate(
     amount_actions: list[str] | None = None,
     principal_signature: str | None = None,
     signed_at: str | None = None,
+    period_max_amount: str | None = None,
+    period_days: int | None = None,
 ) -> str:
     """Create and register a new legal mandate authorizing an AI agent
     to act on behalf of a principal.
@@ -227,8 +235,9 @@ async def create_mandate(
     Each mandate is cryptographically linked to the previous one (SHA-256 chain).
 
     The optional structured perimeter (allowed_actions, forbidden_actions,
-    delegation_allowed, max_amount) is enforced by issue_action_token: an action
-    outside it gets no token. Without it, the mandate is a free-text scope only.
+    delegation_allowed, max_amount, period_max_amount) is enforced by
+    issue_action_token: an action outside it gets no token. Without it, the mandate is
+    a free-text scope only.
 
     The principal can sign the mandate with its own Ed25519 key (registered once with
     register_principal_key): build the exact bytes with prepare_mandate_signature, sign
@@ -288,6 +297,13 @@ async def create_mandate(
         signed_at: The ISO 8601 timestamp (with timezone) placed in the signed payload.
                    Must be within 15 minutes of the registry clock by default.
                    Example: "2026-10-18T20:30:00+00:00"
+        period_max_amount: Optional cumulative ceiling, same currency and same
+                           amount_actions as max_amount: the total of the amounts of the
+                           tokens issued under this mandate and every sub-mandate below
+                           it, over the last period_days days, stays at or below it.
+                           Plain decimal string. Example: "2000"
+        period_days: Length of the rolling window of period_max_amount, in whole days
+                     (1 to 366). Required with period_max_amount. Example: 30
 
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
@@ -313,6 +329,8 @@ async def create_mandate(
                 max_amount,
                 currency,
                 amount_actions,
+                period_max_amount,
+                period_days,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))

@@ -163,6 +163,8 @@ async def prepare_mandate_signature(
     currency: str = "EUR",
     amount_actions: list[str] | None = None,
     signed_at: str | None = None,
+    period_max_amount: str | None = None,
+    period_days: int | None = None,
 ) -> str:
     """Return the exact bytes a principal must sign to grant this mandate.
 
@@ -194,6 +196,8 @@ async def prepare_mandate_signature(
                 max_amount,
                 currency,
                 amount_actions,
+                period_max_amount,
+                period_days,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))

@@ -6,6 +6,7 @@ This is the enforcement layer: no valid mandate → no token → no action.
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from decimal import Context, Decimal, localcontext
 from uuid import UUID, uuid4
 
 import jwt
@@ -16,12 +17,14 @@ from amr.config import settings
 from amr.crypto.signing import ensure_signing_key_exists, get_key_id, load_signing_key
 from amr.db.engine import (
     get_db,
+    get_period_spend,
     init_db,
     is_token_replay,
     record_issued_token,
+    record_token_amount,
 )
 from amr.delegation import is_revoked, load_ancestors
-from amr.models.perimeter import Perimeter
+from amr.models.perimeter import Perimeter, parse_amount
 from amr.models.token import IssueTokenRequest
 
 
@@ -50,6 +53,15 @@ def _canonical_action_hash(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _declared_amount(metadata: dict[str, str]) -> tuple[str, str] | None:
+    """The (amount, currency) an action declares, or None if it declares no valid pair."""
+    amount = parse_amount(metadata.get("amount"))
+    currency = metadata.get("currency")
+    if amount is None or currency is None:
+        return None
+    return format(amount, "f"), currency
+
+
 def _scope_digest(scope: str) -> str:
     """SHA-256 of the mandate scope at issuance time."""
     return hashlib.sha256(scope.encode("utf-8")).hexdigest()
@@ -70,7 +82,10 @@ async def issue_action_token(
     When the mandate (or any mandate above it in a delegation chain) has a
     structured perimeter, the requested action_type must be allowed, must not be
     forbidden, and must respect the amount limit, at every level of the chain.
-    Every parent mandate must also still be active and unexpired.
+    A cumulative ceiling (period_max_amount over period_days) on any mandate of the
+    chain caps the total amount of the tokens issued under it and every sub-mandate
+    below it in the rolling window, this one included; an issued token counts whether
+    it is used or not. Every parent mandate must also still be active and unexpired.
     Returns a JSON string with either {token, jti, expires_at, key_id}
     on success, or {denied: true, reason: "...", mandate_id: "..."} on denial.
     Perimeter denials use reason "action_out_of_scope", with "detail" and
@@ -229,6 +244,33 @@ async def issue_action_token(
                 "mandate_id": str(req.mandate_id),
             })
 
+        # --- 4b. Cumulative ceilings: the branch's tokens in the window, plus this one ---
+        declared = _declared_amount(req.action_metadata)
+        capped = [
+            (link, link_perimeter)
+            for link in chain
+            if link["perimeter_json"]
+            for link_perimeter in [Perimeter.from_json(link["perimeter_json"])]
+            if link_perimeter.period_max_amount is not None
+        ]
+        if capped and declared is not None:
+            # One write transaction from this read to the insert below, so two issuers
+            # cannot both spend the same remainder.
+            await db.execute("BEGIN IMMEDIATE")
+            for link, link_perimeter in capped:
+                since = now - timedelta(days=link_perimeter.period_days or 0)
+                spent = await get_period_spend(db, link["id"], link_perimeter.currency, since)
+                with localcontext(Context(prec=80)):
+                    exceeded = spent + Decimal(declared[0]) > link_perimeter.period_max_amount
+                if exceeded:
+                    return json.dumps({
+                        "denied": True,
+                        "reason": "action_out_of_scope",
+                        "detail": link_perimeter.period_detail(),
+                        "mandate_id": str(req.mandate_id),
+                        "refused_by": link["id"],
+                    })
+
         # --- 5. Build JWS claims ---
         jti = uuid4()
         # The override can only shorten a token; the token never outlives the
@@ -298,6 +340,15 @@ async def issue_action_token(
                 "key_id": key_id,
             },
         )
+        if declared is not None:
+            await record_token_amount(
+                db,
+                str(jti),
+                [link["id"] for link in chain],
+                declared[0],
+                declared[1],
+                now.isoformat(),
+            )
         await db.commit()
 
         return json.dumps({

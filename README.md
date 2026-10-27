@@ -136,7 +136,22 @@ the mandate:
   prohibitions, and cannot outlive the parent;
 - every token issued under a sub-mandate re-checks the whole chain: revoke
   (`revoke_mandate`) or let expire the parent, and every sub-mandate below it stops
-  getting tokens.
+  getting tokens;
+- an optional **cumulative ceiling** (`period_max_amount` over a rolling window of
+  `period_days` days, same `currency` and `amount_actions`) caps the total of the
+  amounts of the tokens issued under the mandate **and every sub-mandate below it**
+  in the window: for the actions that carry an amount (those reached by
+  `amount_actions`, every action when it is empty, and any action that declares an
+  `amount`), an agent cannot split a large purchase into small ones, nor spend the
+  same budget again through a sub-agent (`detail:
+  "period_amount_above_limit:<max> <CUR>/<days>d"`, with the mandate whose budget is
+  spent in `refused_by`). A token counts as soon as it is issued, used or not; a
+  refused token counts for nothing. A sub-mandate's own ceiling may not exceed the
+  parent's. The parent's ceiling is not copied into the sub-mandate's perimeter (it
+  binds the sub-mandate all the same, at issuance): read the whole chain, as
+  `get_proof` and the attestation do, to see every ceiling that applies. A
+  sub-mandate that sets a ceiling under a parent with a per-action limit binds the
+  union of both `amount_actions` (an empty list on either side means every action).
 
 Example: an assistant agent told never to create sub-agents.
 
@@ -147,7 +162,13 @@ issue_action_token(..., action_type="agent.create")
 ```
 
 Root mandates without a perimeter keep working as before (free-text scope,
-existence and validity checks only, same hashes). Two changes are deliberate and
+existence and validity checks only, same hashes). Perimeters without a cumulative
+ceiling keep their exact canonical form, so their hashes, perimeter digests and
+principal signatures are unchanged; schema v7 only adds the `token_amounts` table.
+Limits of the cumulative ceiling: tokens issued before schema v7 carry no recorded
+amount and are not counted (an older AMR cannot issue tokens on a capped branch: it
+refuses the unknown perimeter fields); the ceiling binds one mandate and its branch,
+not every mandate of the same principal. Two changes are deliberate and
 breaking for sub-mandates: a new sub-mandate requires a parent that allows
 delegation (so a free-text parent can no longer delegate), and tokens under any
 sub-mandate, including ones created before v1.1, now require every parent to be
@@ -314,6 +335,8 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `max_amount` | str \| null | Ceiling per action, decimal string. E.g. `"500"` |
 | `currency` | str | ISO 4217 code of `max_amount` (default `"EUR"`) |
 | `amount_actions` | list[str] \| null | Actions that must carry an `amount` under the ceiling (empty: all) |
+| `period_max_amount` | str \| null | Cumulative ceiling over `period_days`, for this mandate and all its sub-mandates, decimal string. E.g. `"2000"` |
+| `period_days` | int \| null | Rolling window of `period_max_amount`, 1 to 366 days (required with it). E.g. `30` |
 | `principal_signature` | str \| null | Principal's base64url Ed25519 signature of the `prepare_mandate_signature` payload (required once the principal has a registered key) |
 | `signed_at` | str \| null | ISO 8601 timestamp with timezone placed in the signed payload (within 15 minutes of the registry clock) |
 

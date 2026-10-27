@@ -37,8 +37,10 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
 ## Perimeter Enforcement (v1.1)
 A mandate may carry a structured perimeter: `allowed_actions`, `forbidden_actions`
 (patterns: exact type `invoice.pay`, prefix `invoice.*`, or `*`), `delegation_allowed`,
-`max_amount` with `currency`, and `amount_actions`. Action types are dotted lowercase
-ASCII identifiers.
+`max_amount` with `currency`, `amount_actions`, and a cumulative ceiling
+`period_max_amount` with `period_days` (both or neither). Action types are dotted
+lowercase ASCII identifiers. The two cumulative keys appear in the canonical perimeter
+only when set, so perimeters without them keep their digest.
 
 Fail-safe pattern semantics: in `allowed_actions`, an exact pattern allows exactly that
 type and `invoice.*` allows the strict sub-types of `invoice`; in `forbidden_actions`
@@ -52,18 +54,29 @@ has a perimeter:
 1. the request must name an `action_type` (`action_type_required`);
 2. no forbidden pattern may reach it (`action_out_of_scope`, detail `forbidden:<pattern>`);
 3. an allowed pattern must match it (`action_out_of_scope`, detail `not_allowed:<type>`);
-4. if `max_amount` is set and the action is an amount action (or declares an `amount`),
+4. if `max_amount` or `period_max_amount` is set and the action is an amount action
+   (or declares an `amount`),
    the metadata must carry `amount` as a plain decimal (ASCII digits, optional dot and
    decimals: no sign, exponent, spaces or separators) at or below the ceiling, and
    `currency` equal to the perimeter's currency, exactly (`amount_required`,
    `amount_invalid`, `currency_required`, `currency_mismatch:<CUR>`,
-   `amount_above_limit:<max> <CUR>`). The ceiling applies per action, not cumulatively.
+   `amount_above_limit:<max> <CUR>`). `max_amount` applies per action;
+5. if `period_max_amount` is set, the amounts of the tokens already issued under this
+   mandate and every mandate below it, over the last `period_days` days (rolling,
+   from issuance time), plus this action's amount, must stay at or below it
+   (`period_amount_above_limit:<max> <CUR>/<days>d`). Every token whose action
+   declares a valid `amount` and `currency` is recorded in `token_amounts` against
+   each mandate of its chain; it counts once issued, used or not. The read and the
+   insert run in one `BEGIN IMMEDIATE` transaction, so concurrent issuers cannot spend
+   the same remainder.
 Perimeter denials carry `refused_by`, the id of the mandate whose perimeter refused.
 
 Sub-mandates are validated at creation: the parent must be active, unexpired, allow
 delegation, and have the sub-mandate's principal as its agent; the sub-mandate must
-declare `allowed_actions` covered by the parent's, a ceiling no higher than the
-parent's in the same currency, and an expiry no later than the parent's. It inherits
+declare `allowed_actions` covered by the parent's, a ceiling (per action or
+cumulative) no higher than the parent's in the same currency, and an expiry no later
+than the parent's. The parent's cumulative ceiling is not copied into the
+sub-mandate: rule 5 already applies it to the whole branch. It inherits
 the parent's forbidden patterns (and its ceiling when it sets none). Every mandate
 above the parent must be active and unexpired, and a chain is limited to 16 levels.
 

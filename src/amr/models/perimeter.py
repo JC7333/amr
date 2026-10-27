@@ -23,6 +23,13 @@ An amount ceiling (``max_amount``) applies to the actions reached by ``amount_ac
 ``currency`` metadata, the amount at or below the ceiling. Any other action that
 declares an amount is checked the same way. Amounts use plain decimal notation with
 a dot (``500``, ``120.50``): no sign, exponent, spaces, separators or non-ASCII digits.
+
+A cumulative ceiling (``period_max_amount`` over a rolling window of ``period_days``
+days, same ``currency``) caps the total of the amounts of the action tokens issued
+under the mandate and every sub-mandate below it within the window. The same actions
+must carry ``amount`` and ``currency``. The token issuer sums the issued tokens (used or
+not); this model only validates the ceiling. Perimeters without it keep their exact
+canonical form, so existing hashes and digests are unchanged.
 """
 
 import hashlib
@@ -31,12 +38,13 @@ import re
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 ACTION_TYPE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*", re.ASCII)
 AMOUNT_RE = re.compile(r"[0-9]{1,18}(?:\.[0-9]{1,18})?", re.ASCII)
 MAX_PATTERNS = 100
 MAX_ACTION_TYPE_LENGTH = 200
+MAX_PERIOD_DAYS = 366
 
 
 class PerimeterError(ValueError):
@@ -107,6 +115,13 @@ def pattern_covers(outer: str, inner: str) -> bool:
     return inner == outer
 
 
+def _union_limited(child: tuple[str, ...], parent: tuple[str, ...]) -> tuple[str, ...]:
+    """Actions bound by either limit; an empty list means every action is limited."""
+    if not child or not parent:
+        return ()
+    return tuple(set(child) | set(parent))
+
+
 def _canonical_amount(amount: Decimal) -> str:
     """Exact plain notation without trailing zeros (no rounding)."""
     text = format(amount, "f")
@@ -126,33 +141,57 @@ class Perimeter(BaseModel):
     max_amount: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
     currency: str = Field(default="EUR", pattern=r"^[A-Z]{3}$")
     amount_actions: tuple[str, ...] = Field(default=(), max_length=MAX_PATTERNS)
+    period_max_amount: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
+    period_days: int | None = Field(default=None, ge=1, le=MAX_PERIOD_DAYS, strict=True)
 
     @field_validator("allowed_actions", "forbidden_actions", "amount_actions")
     @classmethod
     def _normalize_patterns(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(sorted({_validate_pattern(p) for p in value}))
 
-    @field_validator("max_amount", mode="before")
+    @field_validator("max_amount", "period_max_amount", mode="before")
     @classmethod
-    def _plain_decimal(cls, value: object) -> object:
+    def _plain_decimal(cls, value: object, info: ValidationInfo) -> object:
         if value is None:
             return None
         parsed = parse_amount(value)
         if parsed is None:
-            raise ValueError("max_amount must be a plain decimal such as '500' or '120.50'")
+            raise ValueError(
+                f"{info.field_name} must be a plain decimal such as '500' or '120.50'"
+            )
         return parsed
 
     @model_validator(mode="after")
     def _amount_actions_need_a_limit(self) -> "Perimeter":
-        if self.amount_actions and self.max_amount is None:
-            raise ValueError("amount_actions requires max_amount")
+        if (self.period_max_amount is None) != (self.period_days is None):
+            raise ValueError("period_max_amount and period_days must be given together")
+        if self.amount_actions and not self.has_amount_limit:
+            raise ValueError("amount_actions requires max_amount or period_max_amount")
         return self
+
+    @property
+    def has_amount_limit(self) -> bool:
+        """True if the perimeter has a per-action or a cumulative amount ceiling."""
+        return self.max_amount is not None or self.period_max_amount is not None
+
+    def period_detail(self) -> str:
+        """Denial detail when the cumulative ceiling would be exceeded."""
+        if self.period_max_amount is None or self.period_days is None:
+            raise ValueError("this perimeter has no cumulative ceiling")
+        return (
+            f"period_amount_above_limit:{_canonical_amount(self.period_max_amount)} "
+            f"{self.currency}/{self.period_days}d"
+        )
 
     # --- serialization ---------------------------------------------------------
 
     def canonical(self) -> dict[str, Any]:
-        """Canonical dict, stable across runs (used in hashes, storage and proofs)."""
-        return {
+        """Canonical dict, stable across runs (used in hashes, storage and proofs).
+
+        The cumulative ceiling keys appear only when it is set, so a perimeter without
+        one keeps the exact form (and hashes) it had before the ceiling existed.
+        """
+        canonical: dict[str, Any] = {
             "allowed_actions": list(self.allowed_actions),
             "forbidden_actions": list(self.forbidden_actions),
             "delegation_allowed": self.delegation_allowed,
@@ -160,6 +199,10 @@ class Perimeter(BaseModel):
             "currency": self.currency,
             "amount_actions": list(self.amount_actions),
         }
+        if self.period_max_amount is not None:
+            canonical["period_max_amount"] = _canonical_amount(self.period_max_amount)
+            canonical["period_days"] = self.period_days
+        return canonical
 
     def to_json(self) -> str:
         """Canonical JSON (sorted keys, compact separators)."""
@@ -183,7 +226,7 @@ class Perimeter(BaseModel):
                 return f"forbidden:{pattern}"
         if not any(pattern_matches(p, action_type) for p in self.allowed_actions):
             return f"not_allowed:{action_type}"
-        if self.max_amount is not None:
+        if self.has_amount_limit:
             raw = metadata.get("amount")
             if raw is None:
                 limited = not self.amount_actions or any(
@@ -198,8 +241,10 @@ class Perimeter(BaseModel):
                 return "currency_required"
             if currency != self.currency:
                 return f"currency_mismatch:{self.currency}"
-            if amount > self.max_amount:
+            if self.max_amount is not None and amount > self.max_amount:
                 return f"amount_above_limit:{_canonical_amount(self.max_amount)} {self.currency}"
+            if self.period_max_amount is not None and amount > self.period_max_amount:
+                return self.period_detail()
         return None
 
     def narrowed_by(self, parent: "Perimeter") -> "Perimeter":
@@ -207,7 +252,10 @@ class Perimeter(BaseModel):
 
         Every allowed pattern must lie inside the parent's allowed patterns. The parent's
         forbidden patterns are inherited. The parent's amount ceiling is inherited when the
-        child sets none, and a child ceiling may never exceed it.
+        child sets none, and a child ceiling may never exceed it. A child cumulative
+        ceiling may never exceed the parent's; the parent's own cumulative ceiling is not
+        copied into the child because the token issuer already applies it to the whole
+        branch below the parent. Both limits must use the same currency.
         """
         for pattern in self.allowed_actions:
             if not any(pattern_covers(outer, pattern) for outer in parent.allowed_actions):
@@ -218,25 +266,36 @@ class Perimeter(BaseModel):
         forbidden = tuple(sorted(set(self.forbidden_actions) | set(parent.forbidden_actions)))
         max_amount, currency = self.max_amount, self.currency
         amount_actions = self.amount_actions
+        if self.has_amount_limit and parent.has_amount_limit and currency != parent.currency:
+            raise PerimeterError(
+                "limit_exceeds_parent",
+                f"currency {currency} differs from the parent mandate's {parent.currency}",
+            )
+        if (
+            self.period_max_amount is not None
+            and parent.period_max_amount is not None
+            and self.period_max_amount > parent.period_max_amount
+        ):
+            raise PerimeterError(
+                "limit_exceeds_parent",
+                f"period_max_amount {_canonical_amount(self.period_max_amount)} is above the "
+                f"parent mandate's {_canonical_amount(parent.period_max_amount)}",
+            )
         if parent.max_amount is not None:
             if max_amount is None:
                 max_amount, currency = parent.max_amount, parent.currency
-                amount_actions = parent.amount_actions
-            elif currency != parent.currency:
-                raise PerimeterError(
-                    "limit_exceeds_parent",
-                    f"currency {currency} differs from the parent mandate's {parent.currency}",
-                )
+                if self.period_max_amount is None:
+                    amount_actions = parent.amount_actions
+                else:
+                    amount_actions = _union_limited(amount_actions, parent.amount_actions)
             elif max_amount > parent.max_amount:
                 raise PerimeterError(
                     "limit_exceeds_parent",
                     f"max_amount {_canonical_amount(max_amount)} is above the parent mandate's "
                     f"{_canonical_amount(parent.max_amount)}",
                 )
-            elif not amount_actions or not parent.amount_actions:
-                amount_actions = ()  # an empty list means every action is limited
             else:
-                amount_actions = tuple(set(amount_actions) | set(parent.amount_actions))
+                amount_actions = _union_limited(amount_actions, parent.amount_actions)
         try:
             return Perimeter(
                 allowed_actions=self.allowed_actions,
@@ -245,6 +304,8 @@ class Perimeter(BaseModel):
                 max_amount=max_amount,
                 currency=currency,
                 amount_actions=amount_actions,
+                period_max_amount=self.period_max_amount,
+                period_days=self.period_days,
             )
         except ValueError as exc:
             raise PerimeterError("perimeter_invalid", str(exc)) from exc
