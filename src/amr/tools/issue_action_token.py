@@ -6,7 +6,7 @@ This is the enforcement layer: no valid mandate → no token → no action.
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import Context, Decimal, localcontext
 from uuid import UUID, uuid4
 
 import jwt
@@ -260,7 +260,9 @@ async def issue_action_token(
             for link, link_perimeter in capped:
                 since = now - timedelta(days=link_perimeter.period_days or 0)
                 spent = await get_period_spend(db, link["id"], link_perimeter.currency, since)
-                if spent + Decimal(declared[0]) > link_perimeter.period_max_amount:
+                with localcontext(Context(prec=80)):
+                    exceeded = spent + Decimal(declared[0]) > link_perimeter.period_max_amount
+                if exceeded:
                     return json.dumps({
                         "denied": True,
                         "reason": "action_out_of_scope",

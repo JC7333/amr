@@ -1,7 +1,7 @@
 """AMR database engine - async SQLite with WAL mode and append-only tables."""
 
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
+from decimal import Context, Decimal, localcontext
 from pathlib import Path
 
 import aiosqlite
@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS token_amounts (
     PRIMARY KEY (jti, mandate_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate ON token_amounts(mandate_id, currency);
+CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate
+    ON token_amounts(mandate_id, currency, issued_at);
 CREATE INDEX IF NOT EXISTS idx_issued_attestations_mandate ON issued_attestations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_mandate  ON issued_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_issued_tokens_expires  ON issued_tokens(expires_at);
@@ -453,18 +454,25 @@ async def record_token_amount(
 async def get_period_spend(
     db: aiosqlite.Connection, mandate_id: str, currency: str, since: datetime
 ) -> Decimal:
-    """Total amount of the tokens issued under a mandate (or below it) after ``since``."""
+    """Total amount of the tokens issued under a mandate (or below it) after ``since``.
+
+    The SQL filter only narrows the rows (issued_at is a UTC ISO string, compared with a
+    one-second margin); the exact window is applied on the parsed timestamps. The sum is
+    exact: amounts have at most 18 + 18 digits, far below the 80-digit context.
+    """
     cursor = await db.execute(
-        "SELECT amount, issued_at FROM token_amounts WHERE mandate_id = ? AND currency = ?",
-        (mandate_id, currency),
+        "SELECT amount, issued_at FROM token_amounts "
+        "WHERE mandate_id = ? AND currency = ? AND issued_at > ?",
+        (mandate_id, currency, (since - timedelta(seconds=1)).isoformat()),
     )
-    total = Decimal(0)
-    for row in await cursor.fetchall():
-        issued_at = datetime.fromisoformat(row["issued_at"])
-        if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=UTC)
-        if issued_at > since:
-            total += Decimal(row["amount"])
+    with localcontext(Context(prec=80)):
+        total = Decimal(0)
+        for row in await cursor.fetchall():
+            issued_at = datetime.fromisoformat(row["issued_at"])
+            if issued_at.tzinfo is None:
+                issued_at = issued_at.replace(tzinfo=UTC)
+            if issued_at > since:
+                total += Decimal(row["amount"])
     return total
 
 

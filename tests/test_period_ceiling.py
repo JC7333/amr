@@ -545,3 +545,37 @@ def test_template_kwargs_carry_a_cumulative_ceiling() -> None:
     kwargs = capped.create_mandate_kwargs()
     assert kwargs["period_max_amount"] == "300"
     assert kwargs["period_days"] == 30
+
+
+
+async def test_tiny_amounts_cannot_slip_past_a_huge_ceiling_by_rounding() -> None:
+    root = await _root(period_max_amount="100000000000000000")
+    _ok(await _spend(root["mandate_id"], "100000000000000000"))
+    _refused(
+        await _spend(root["mandate_id"], "0.000000000000000001"),
+        root["mandate_id"],
+        "period_amount_above_limit:100000000000000000 EUR/30d",
+    )
+
+
+async def test_a_v6_database_upgrades_and_enforces_the_ceiling(temp_db: Path) -> None:
+    await init_db(temp_db)
+    # Test-only: bring the database back to schema v6 (no token_amounts table).
+    with sqlite3.connect(temp_db) as conn:
+        conn.execute("DROP TABLE token_amounts")
+        conn.execute("DELETE FROM schema_version WHERE version = 7")
+    root = await _root()
+    _ok(await _spend(root["mandate_id"], "100"))
+    _refused(await _spend(root["mandate_id"], "1"), root["mandate_id"])
+    with sqlite3.connect(temp_db) as conn:
+        assert 7 in {row[0] for row in conn.execute("SELECT version FROM schema_version")}
+
+
+async def test_the_recorded_spending_is_summed_without_rounding() -> None:
+    root = await _root(period_max_amount="100000000000000000")
+    _ok(await _spend(root["mandate_id"], "50000000000000000.000000000000000001"))
+    _refused(
+        await _spend(root["mandate_id"], "50000000000000000"),
+        root["mandate_id"],
+        "period_amount_above_limit:100000000000000000 EUR/30d",
+    )

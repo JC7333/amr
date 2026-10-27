@@ -140,12 +140,18 @@ the mandate:
 - an optional **cumulative ceiling** (`period_max_amount` over a rolling window of
   `period_days` days, same `currency` and `amount_actions`) caps the total of the
   amounts of the tokens issued under the mandate **and every sub-mandate below it**
-  in the window: an agent cannot split a large purchase into small ones, nor spend
-  the same budget again through a sub-agent (`detail:
+  in the window: for the actions that carry an amount (those reached by
+  `amount_actions`, every action when it is empty, and any action that declares an
+  `amount`), an agent cannot split a large purchase into small ones, nor spend the
+  same budget again through a sub-agent (`detail:
   "period_amount_above_limit:<max> <CUR>/<days>d"`, with the mandate whose budget is
   spent in `refused_by`). A token counts as soon as it is issued, used or not; a
   refused token counts for nothing. A sub-mandate's own ceiling may not exceed the
-  parent's.
+  parent's. The parent's ceiling is not copied into the sub-mandate's perimeter (it
+  binds the sub-mandate all the same, at issuance): read the whole chain, as
+  `get_proof` and the attestation do, to see every ceiling that applies. A
+  sub-mandate that sets a ceiling under a parent with a per-action limit binds the
+  union of both `amount_actions` (an empty list on either side means every action).
 
 Example: an assistant agent told never to create sub-agents.
 
@@ -159,9 +165,10 @@ Root mandates without a perimeter keep working as before (free-text scope,
 existence and validity checks only, same hashes). Perimeters without a cumulative
 ceiling keep their exact canonical form, so their hashes, perimeter digests and
 principal signatures are unchanged; schema v7 only adds the `token_amounts` table.
-Limits of the cumulative ceiling: tokens issued before schema v7 (or by an older
-AMR on the same database) carry no recorded amount and are not counted; the ceiling
-binds one mandate and its branch, not every mandate of the same principal. Two changes are deliberate and
+Limits of the cumulative ceiling: tokens issued before schema v7 carry no recorded
+amount and are not counted (an older AMR cannot issue tokens on a capped branch: it
+refuses the unknown perimeter fields); the ceiling binds one mandate and its branch,
+not every mandate of the same principal. Two changes are deliberate and
 breaking for sub-mandates: a new sub-mandate requires a parent that allows
 delegation (so a free-text parent can no longer delegate), and tokens under any
 sub-mandate, including ones created before v1.1, now require every parent to be
