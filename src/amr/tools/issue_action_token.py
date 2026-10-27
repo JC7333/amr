@@ -82,8 +82,10 @@ async def issue_action_token(
         action: Description of the action to be authorized.
         audience: Where the token will be presented (runtime/platform URL or id).
         action_metadata_json: Optional JSON-encoded dict of additional action metadata.
-        lifetime_override_seconds: Optional override for token lifetime.
-            Intended for tests only. If None, uses settings.token_lifetime_seconds.
+        lifetime_override_seconds: Optional shorter token lifetime. It can only
+            shorten: the lifetime is never above settings.token_lifetime_seconds.
+            Whatever is asked, the token expires no later than the mandate and
+            every mandate above it in the delegation chain.
         action_type: Dotted action type checked against the mandate perimeter,
             e.g. "invoice.pay" or "agent.create". Required when the mandate (or a
             mandate above it) has a structured perimeter; sealed into the token as
@@ -229,12 +231,24 @@ async def issue_action_token(
 
         # --- 5. Build JWS claims ---
         jti = uuid4()
-        lifetime = (
-            lifetime_override_seconds
-            if lifetime_override_seconds is not None
-            else settings.token_lifetime_seconds
-        )
+        # The override can only shorten a token; the token never outlives the
+        # mandate it rests on, nor any mandate above it in the delegation chain.
+        lifetime = settings.token_lifetime_seconds
+        if lifetime_override_seconds is not None:
+            lifetime = min(lifetime, lifetime_override_seconds)
         expires_at = now + timedelta(seconds=lifetime)
+        for link in chain:
+            link_expires = datetime.fromisoformat(link["expires_at"])
+            if link_expires.tzinfo is None:
+                link_expires = link_expires.replace(tzinfo=UTC)
+            if int(link_expires.timestamp()) <= int(now.timestamp()):
+                return json.dumps({
+                    "denied": True,
+                    "reason": "mandate_expired",
+                    "mandate_id": str(req.mandate_id),
+                    "refused_by": link["id"],
+                })
+            expires_at = min(expires_at, link_expires)
         scope_digest = _scope_digest(row["scope"])
         key_id = get_key_id()
 

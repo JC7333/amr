@@ -342,7 +342,7 @@ async def test_outstanding_tokens_are_reported() -> None:
     root = await _create()
     child = await _sub(root["mandate_id"])
     first = await _token(root["mandate_id"])
-    second = await _token(child["mandate_id"], HELPER, lifetime_override_seconds=600)
+    second = await _token(child["mandate_id"], HELPER, lifetime_override_seconds=120)
     result = await _revoke(root["mandate_id"])
     outstanding = result["outstanding_tokens"]
     assert outstanding["still_valid"] == 2

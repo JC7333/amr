@@ -89,10 +89,12 @@ revocation record (record deleted); `null` otherwise.
 
 - The `revoke_mandate` response counts outstanding action tokens only, not mandate
   attestations still within their lifetime (`issued_attestations`).
-- `issue_action_token` still accepts `lifetime_override_seconds` from its caller, with
-  no upper bound: a token asked with a long lifetime outlives a revocation by as much.
-  Bounding token lifetime by the mandate's expiry, and removing that parameter from what
-  agents can call, is a separate, queued change.
+- A token lives at most `AMR_TOKEN_LIFETIME_SECONDS` (default 300 s) after it is issued,
+  and never past the expiry of its mandate or of any mandate above it in the chain.
+  `lifetime_override_seconds` can only shorten it. A token issued before a revocation
+  stays valid until that expiry: the window after a revocation is at most one token
+  lifetime, it does not add up along a chain of delegations (each token carries its own
+  expiry, none is renewed by another).
 - An unsigned revocation proves nothing about who revoked; a principal that registers
   its key afterwards does not make it signed (`revocation_signature_valid` stays null).
 - `verify_mandate` looks only at the agent's most recent active, unexpired, unrevoked
