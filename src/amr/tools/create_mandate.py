@@ -3,6 +3,7 @@
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import aiosqlite
 from pydantic import ValidationError
@@ -38,6 +39,7 @@ def _build_perimeter(
     amount_actions: list[str] | None,
     period_max_amount: str | None = None,
     period_days: int | None = None,
+    risk_classes: list[dict[str, Any]] | None = None,
 ) -> Perimeter | None:
     """Build the structured perimeter, or None for a legacy free-text mandate.
 
@@ -51,6 +53,7 @@ def _build_perimeter(
         and max_amount is None
         and period_max_amount is None
         and period_days is None
+        and risk_classes is None
         and not delegation_allowed
     ):
         return None
@@ -68,6 +71,7 @@ def _build_perimeter(
         amount_actions=tuple(amount_actions or ()),
         period_max_amount=period_max_amount,  # type: ignore[arg-type]
         period_days=period_days,
+        risk_classes=tuple(risk_classes or ()),  # type: ignore[arg-type]
     )
 
 
@@ -227,6 +231,7 @@ async def create_mandate(
     signed_at: str | None = None,
     period_max_amount: str | None = None,
     period_days: int | None = None,
+    risk_classes: list[dict[str, Any]] | None = None,
 ) -> str:
     """Create and register a new legal mandate authorizing an AI agent
     to act on behalf of a principal.
@@ -235,7 +240,7 @@ async def create_mandate(
     Each mandate is cryptographically linked to the previous one (SHA-256 chain).
 
     The optional structured perimeter (allowed_actions, forbidden_actions,
-    delegation_allowed, max_amount, period_max_amount) is enforced by
+    delegation_allowed, max_amount, period_max_amount, risk_classes) is enforced by
     issue_action_token: an action outside it gets no token. Without it, the mandate is
     a free-text scope only.
 
@@ -304,6 +309,13 @@ async def create_mandate(
                            Plain decimal string. Example: "2000"
         period_days: Length of the rolling window of period_max_amount, in whole days
                      (1 to 366). Required with period_max_amount. Example: 30
+        risk_classes: Optional risk classes bounding the lifetime of action tokens:
+                      each {"name", "actions", "max_token_seconds"}. A class reaches its
+                      action patterns and their sub-types; a token for an action it
+                      reaches lives at most max_token_seconds (1 to 86400), the
+                      shortest class winning, in this mandate and every sub-mandate
+                      below it. Example: [{"name": "irreversible",
+                      "actions": ["invoice.pay"], "max_token_seconds": 30}]
 
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
@@ -331,6 +343,7 @@ async def create_mandate(
                 amount_actions,
                 period_max_amount,
                 period_days,
+                risk_classes,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))

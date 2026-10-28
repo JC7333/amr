@@ -30,6 +30,14 @@ under the mandate and every sub-mandate below it within the window. The same act
 must carry ``amount`` and ``currency``. The token issuer sums the issued tokens (used or
 not); this model only validates the ceiling. Perimeters without it keep their exact
 canonical form, so existing hashes and digests are unchanged.
+
+Risk classes (``risk_classes``) let the principal bound the lifetime of the action
+tokens by how much is at stake: each class names the action types it reaches (broad
+match, like ``forbidden_actions``) and the longest lifetime, in seconds, of a token for
+them, for example a short window for irreversible actions. An action reached by several
+classes gets the shortest. The token issuer applies the classes of every mandate in the
+delegation chain, so a sub-mandate can shorten a window but never lengthen one.
+Perimeters without classes keep their exact canonical form.
 """
 
 import hashlib
@@ -45,6 +53,9 @@ AMOUNT_RE = re.compile(r"[0-9]{1,18}(?:\.[0-9]{1,18})?", re.ASCII)
 MAX_PATTERNS = 100
 MAX_ACTION_TYPE_LENGTH = 200
 MAX_PERIOD_DAYS = 366
+MAX_RISK_CLASSES = 20
+MAX_TOKEN_SECONDS = 86400
+RISK_CLASS_NAME_RE = r"^[a-z][a-z0-9_-]{0,39}$"
 
 
 class PerimeterError(ValueError):
@@ -122,12 +133,65 @@ def _union_limited(child: tuple[str, ...], parent: tuple[str, ...]) -> tuple[str
     return tuple(set(child) | set(parent))
 
 
+def _inherit_risk_classes(
+    child: tuple["RiskClass", ...], parent: tuple["RiskClass", ...]
+) -> tuple["RiskClass", ...]:
+    """Child classes plus the parent's; a shared name keeps the shorter, wider class."""
+    merged = {rc.name: rc for rc in parent}
+    for rc in child:
+        inherited = merged.get(rc.name)
+        if inherited is None:
+            merged[rc.name] = rc
+            continue
+        if rc.max_token_seconds > inherited.max_token_seconds:
+            raise PerimeterError(
+                "limit_exceeds_parent",
+                f"risk class '{rc.name}' allows {rc.max_token_seconds} s, above the parent "
+                f"mandate's {inherited.max_token_seconds} s",
+            )
+        try:
+            merged[rc.name] = RiskClass(
+                name=rc.name,
+                actions=tuple(set(rc.actions) | set(inherited.actions)),
+                max_token_seconds=rc.max_token_seconds,
+            )
+        except ValueError as exc:
+            raise PerimeterError("perimeter_invalid", str(exc)) from exc
+    return tuple(merged.values())
+
+
 def _canonical_amount(amount: Decimal) -> str:
     """Exact plain notation without trailing zeros (no rounding)."""
     text = format(amount, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return text
+
+
+class RiskClass(BaseModel):
+    """A class of actions whose tokens live at most ``max_token_seconds``."""
+
+    model_config = {"extra": "forbid", "frozen": True}
+
+    name: str = Field(..., pattern=RISK_CLASS_NAME_RE)
+    actions: tuple[str, ...] = Field(..., min_length=1, max_length=MAX_PATTERNS)
+    max_token_seconds: int = Field(..., ge=1, le=MAX_TOKEN_SECONDS, strict=True)
+
+    @field_validator("actions")
+    @classmethod
+    def _normalize_patterns(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(sorted({_validate_pattern(p) for p in value}))
+
+    def reaches(self, action_type: str) -> bool:
+        """True if this class applies to ``action_type`` (the type and all its sub-types)."""
+        return any(pattern_reaches(p, action_type) for p in self.actions)
+
+    def canonical(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "actions": list(self.actions),
+            "max_token_seconds": self.max_token_seconds,
+        }
 
 
 class Perimeter(BaseModel):
@@ -143,11 +207,20 @@ class Perimeter(BaseModel):
     amount_actions: tuple[str, ...] = Field(default=(), max_length=MAX_PATTERNS)
     period_max_amount: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
     period_days: int | None = Field(default=None, ge=1, le=MAX_PERIOD_DAYS, strict=True)
+    risk_classes: tuple[RiskClass, ...] = Field(default=(), max_length=MAX_RISK_CLASSES)
 
     @field_validator("allowed_actions", "forbidden_actions", "amount_actions")
     @classmethod
     def _normalize_patterns(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(sorted({_validate_pattern(p) for p in value}))
+
+    @field_validator("risk_classes")
+    @classmethod
+    def _unique_risk_classes(cls, value: tuple[RiskClass, ...]) -> tuple[RiskClass, ...]:
+        names = [risk_class.name for risk_class in value]
+        if len(names) != len(set(names)):
+            raise ValueError("risk class names must be unique")
+        return tuple(sorted(value, key=lambda risk_class: risk_class.name))
 
     @field_validator("max_amount", "period_max_amount", mode="before")
     @classmethod
@@ -183,13 +256,27 @@ class Perimeter(BaseModel):
             f"{self.currency}/{self.period_days}d"
         )
 
+    def token_lifetime_cap(self, action_type: str) -> tuple[int | None, tuple[str, ...]]:
+        """Shortest ``max_token_seconds`` of the risk classes reaching ``action_type``.
+
+        Returns (None, ()) when no class reaches it, else (seconds, class names).
+        """
+        matched = [rc for rc in self.risk_classes if rc.reaches(action_type)]
+        if not matched:
+            return None, ()
+        return (
+            min(rc.max_token_seconds for rc in matched),
+            tuple(rc.name for rc in matched),
+        )
+
     # --- serialization ---------------------------------------------------------
 
     def canonical(self) -> dict[str, Any]:
         """Canonical dict, stable across runs (used in hashes, storage and proofs).
 
-        The cumulative ceiling keys appear only when it is set, so a perimeter without
-        one keeps the exact form (and hashes) it had before the ceiling existed.
+        The cumulative ceiling keys appear only when it is set, and ``risk_classes`` only
+        when there is at least one, so a perimeter without them keeps the exact form (and
+        hashes) it had before they existed.
         """
         canonical: dict[str, Any] = {
             "allowed_actions": list(self.allowed_actions),
@@ -202,6 +289,8 @@ class Perimeter(BaseModel):
         if self.period_max_amount is not None:
             canonical["period_max_amount"] = _canonical_amount(self.period_max_amount)
             canonical["period_days"] = self.period_days
+        if self.risk_classes:
+            canonical["risk_classes"] = [rc.canonical() for rc in self.risk_classes]
         return canonical
 
     def to_json(self) -> str:
@@ -256,6 +345,11 @@ class Perimeter(BaseModel):
         ceiling may never exceed the parent's; the parent's own cumulative ceiling is not
         copied into the child because the token issuer already applies it to the whole
         branch below the parent. Both limits must use the same currency.
+        The parent's risk classes are inherited, so the child's stored perimeter shows
+        every lifetime bound that applies to it. A child class may reuse a parent class
+        name only with a ``max_token_seconds`` no higher than the parent's; it then also
+        reaches the parent class's actions. The issuer still applies every class of
+        the chain.
         """
         for pattern in self.allowed_actions:
             if not any(pattern_covers(outer, pattern) for outer in parent.allowed_actions):
@@ -296,6 +390,7 @@ class Perimeter(BaseModel):
                 )
             else:
                 amount_actions = _union_limited(amount_actions, parent.amount_actions)
+        risk_classes = _inherit_risk_classes(self.risk_classes, parent.risk_classes)
         try:
             return Perimeter(
                 allowed_actions=self.allowed_actions,
@@ -306,6 +401,7 @@ class Perimeter(BaseModel):
                 amount_actions=amount_actions,
                 period_max_amount=self.period_max_amount,
                 period_days=self.period_days,
+                risk_classes=risk_classes,
             )
         except ValueError as exc:
             raise PerimeterError("perimeter_invalid", str(exc)) from exc
