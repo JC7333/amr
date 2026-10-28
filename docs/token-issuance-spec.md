@@ -99,13 +99,18 @@ name, so perimeters without classes keep their digest and the mandates their has
 When a token is issued, its lifetime is the smallest of: `AMR_TOKEN_LIFETIME_SECONDS`,
 `lifetime_override_seconds` if given, and `max_token_seconds` of every class reaching
 the action type in every perimeter of the delegation chain; it never ends after the
-expiry of any mandate in the chain. A class never lengthens a token. A sub-mandate's
-classes are its own, the parent's are not copied into it, yet they bind it all the
-same at issuance: a sub-mandate can shorten a window, never lengthen one, even with a
-class of the same name. The matched class names are sealed in `amr_risk_classes`.
+expiry of any mandate in the chain. A class never lengthens a token. A sub-mandate
+inherits the parent's classes into its stored perimeter, so `verify_mandate`, the
+Proof Pack, the attestation and the insurer dossier show every bound that applies to
+it. It may add its own classes, and reuse a parent class name only with a
+`max_token_seconds` no higher than the parent's (else `limit_exceeds_parent`); the
+merged class then reaches the actions of both. A sub-mandate can shorten a window,
+never lengthen one. The issuer still applies the classes of every perimeter in the
+chain. The matched class names are sealed in `amr_risk_classes`.
 
-Classes bound the window during which an issued token stays usable, including after a
-revocation. They do not make the consumer re-check the registry before an
+A class whose patterns reach no allowed action bounds nothing: patterns are not
+checked against `allowed_actions`. Classes bound the window during which an issued
+token stays usable, including after a revocation. They do not make the consumer re-check the registry before an
 irreversible action; that is a separate step, not in v1.2.
 
 ## Replay Prevention

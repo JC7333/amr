@@ -133,6 +133,33 @@ def _union_limited(child: tuple[str, ...], parent: tuple[str, ...]) -> tuple[str
     return tuple(set(child) | set(parent))
 
 
+def _inherit_risk_classes(
+    child: tuple["RiskClass", ...], parent: tuple["RiskClass", ...]
+) -> tuple["RiskClass", ...]:
+    """Child classes plus the parent's; a shared name keeps the shorter, wider class."""
+    merged = {rc.name: rc for rc in parent}
+    for rc in child:
+        inherited = merged.get(rc.name)
+        if inherited is None:
+            merged[rc.name] = rc
+            continue
+        if rc.max_token_seconds > inherited.max_token_seconds:
+            raise PerimeterError(
+                "limit_exceeds_parent",
+                f"risk class '{rc.name}' allows {rc.max_token_seconds} s, above the parent "
+                f"mandate's {inherited.max_token_seconds} s",
+            )
+        try:
+            merged[rc.name] = RiskClass(
+                name=rc.name,
+                actions=tuple(set(rc.actions) | set(inherited.actions)),
+                max_token_seconds=rc.max_token_seconds,
+            )
+        except ValueError as exc:
+            raise PerimeterError("perimeter_invalid", str(exc)) from exc
+    return tuple(merged.values())
+
+
 def _canonical_amount(amount: Decimal) -> str:
     """Exact plain notation without trailing zeros (no rounding)."""
     text = format(amount, "f")
@@ -318,8 +345,11 @@ class Perimeter(BaseModel):
         ceiling may never exceed the parent's; the parent's own cumulative ceiling is not
         copied into the child because the token issuer already applies it to the whole
         branch below the parent. Both limits must use the same currency.
-        The child keeps its own risk classes; the parent's are not copied either,
-        for the same reason: the issuer applies every class of the chain.
+        The parent's risk classes are inherited, so the child's stored perimeter shows
+        every lifetime bound that applies to it. A child class may reuse a parent class
+        name only with a ``max_token_seconds`` no higher than the parent's; it then also
+        reaches the parent class's actions. The issuer still applies every class of
+        the chain.
         """
         for pattern in self.allowed_actions:
             if not any(pattern_covers(outer, pattern) for outer in parent.allowed_actions):
@@ -360,6 +390,7 @@ class Perimeter(BaseModel):
                 )
             else:
                 amount_actions = _union_limited(amount_actions, parent.amount_actions)
+        risk_classes = _inherit_risk_classes(self.risk_classes, parent.risk_classes)
         try:
             return Perimeter(
                 allowed_actions=self.allowed_actions,
@@ -370,7 +401,7 @@ class Perimeter(BaseModel):
                 amount_actions=amount_actions,
                 period_max_amount=self.period_max_amount,
                 period_days=self.period_days,
-                risk_classes=self.risk_classes,
+                risk_classes=risk_classes,
             )
         except ValueError as exc:
             raise PerimeterError("perimeter_invalid", str(exc)) from exc

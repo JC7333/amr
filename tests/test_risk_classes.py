@@ -16,7 +16,7 @@ from amr.attestation import verify_attestation
 from amr.crypto.chain import compute_hash
 from amr.crypto.principal import b64url_encode, key_registration_payload
 from amr.crypto.signing import generate_signing_key
-from amr.models.perimeter import MAX_RISK_CLASSES, Perimeter, RiskClass
+from amr.models.perimeter import MAX_RISK_CLASSES, Perimeter, PerimeterError, RiskClass
 from amr.templates import AGENT_SANTE_RGPD
 from amr.tools.create_mandate import create_mandate
 from amr.tools.export_insurer_dossier import export_insurer_dossier
@@ -28,6 +28,7 @@ from amr.tools.issue_mandate_attestation import (
 )
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
 from amr.tools.verify_mandate import verify_mandate
+from tests._helpers import insert_mandate_directly
 
 PRINCIPAL = "org:clinic"
 AGENT = "agent:billing"
@@ -118,7 +119,10 @@ def test_perimeter_without_classes_keeps_its_canonical_form() -> None:
         "currency",
         "amount_actions",
     }
-    # Digest of this perimeter before risk classes existed (frozen value).
+    # Digest of this perimeter on main before risk classes existed (frozen value).
+    assert perimeter.digest() == (
+        "a436b52970b68cea0b8d8598b0f0c00f100b7fb2aedfec33b82f027ec39e2e81"
+    )
     legacy = json.dumps(
         {
             "allowed_actions": ["invoice.*"],
@@ -244,14 +248,60 @@ def test_shortest_class_wins() -> None:
     assert perimeter.token_lifetime_cap("invoice.read") == (120, ("money",))
 
 
-def test_sub_mandate_keeps_its_own_classes() -> None:
+def test_sub_mandate_inherits_the_parent_classes() -> None:
     parent = Perimeter(
         allowed_actions=("invoice.*",), delegation_allowed=True,
         risk_classes=({"name": "parent", "actions": ["invoice.read"], "max_token_seconds": 20},),
     )
     child = Perimeter(allowed_actions=("invoice.pay",), risk_classes=(IRREVERSIBLE,))
     narrowed = child.narrowed_by(parent)
-    assert narrowed.risk_classes == child.risk_classes
+    assert [rc.canonical() for rc in narrowed.risk_classes] == [
+        IRREVERSIBLE,
+        {"name": "parent", "actions": ["invoice.read"], "max_token_seconds": 20},
+    ]
+
+
+def test_sub_mandate_same_name_shorter_class_widens_to_parent_actions() -> None:
+    parent = Perimeter(
+        allowed_actions=("invoice.*",), delegation_allowed=True, risk_classes=(IRREVERSIBLE,),
+    )
+    child = Perimeter(
+        allowed_actions=("invoice.*",),
+        risk_classes=({"name": "irreversible", "actions": ["invoice.cancel"],
+                       "max_token_seconds": 10},),
+    )
+    narrowed = child.narrowed_by(parent)
+    assert [rc.canonical() for rc in narrowed.risk_classes] == [
+        {"name": "irreversible", "actions": ["invoice.cancel", "invoice.pay"],
+         "max_token_seconds": 10},
+    ]
+
+
+def test_sub_mandate_same_name_longer_class_is_refused() -> None:
+    parent = Perimeter(
+        allowed_actions=("invoice.*",), delegation_allowed=True, risk_classes=(IRREVERSIBLE,),
+    )
+    child = Perimeter(
+        allowed_actions=("invoice.pay",),
+        risk_classes=({**IRREVERSIBLE, "max_token_seconds": 31},),
+    )
+    with pytest.raises(PerimeterError) as exc:
+        child.narrowed_by(parent)
+    assert exc.value.code == "limit_exceeds_parent"
+
+
+def test_sub_mandate_without_classes_shows_the_parent_classes() -> None:
+    parent = Perimeter(
+        allowed_actions=("invoice.*",), delegation_allowed=True, risk_classes=(IRREVERSIBLE,),
+    )
+    narrowed = Perimeter(allowed_actions=("invoice.pay",)).narrowed_by(parent)
+    assert narrowed.canonical()["risk_classes"] == [IRREVERSIBLE]
+
+
+def test_sub_mandate_without_classes_under_a_parent_without_keeps_its_form() -> None:
+    parent = Perimeter(allowed_actions=("invoice.*",), delegation_allowed=True)
+    child = Perimeter(allowed_actions=("invoice.pay",))
+    assert child.narrowed_by(parent).to_json() == child.to_json()
 
 
 # --- Token issuance -------------------------------------------------------------------
@@ -294,12 +344,68 @@ async def test_parent_class_binds_a_sub_mandate_without_classes() -> None:
 
 async def test_sub_mandate_cannot_lengthen_a_parent_class() -> None:
     root = await _root(delegation_allowed=True, risk_classes=[IRREVERSIBLE])
-    child = await _child(
-        root["mandate_id"],
+    result = json.loads(await create_mandate(
+        principal_id=AGENT, agent_id=HELPER, scope="Pay invoices",
+        legal_basis_regulation="Service contract", legal_basis_article="Clause 4",
+        duration_hours=12.0, parent_mandate_id=root["mandate_id"],
+        allowed_actions=["invoice.pay"],
         risk_classes=[{**IRREVERSIBLE, "max_token_seconds": 3600}],
-    )
-    paid = await _token(child["mandate_id"], "invoice.pay", agent_id=HELPER)
+    ))
+    assert result.get("code") == "limit_exceeds_parent", result
+
+
+async def test_sub_mandate_perimeter_shows_the_inherited_bound() -> None:
+    root = await _root(delegation_allowed=True, risk_classes=[IRREVERSIBLE])
+    child = await _child(root["mandate_id"])
+    assert child["perimeter"]["risk_classes"] == [IRREVERSIBLE]
+    page = json.loads(await export_insurer_dossier(child["mandate_id"], format="html"))["html"]
+    assert "irreversible: invoice.pay at most 30 s" in page
+
+
+async def test_three_level_chain_applies_the_root_class() -> None:
+    root = await _root(delegation_allowed=True, risk_classes=[IRREVERSIBLE])
+    middle = await _child(root["mandate_id"], delegation_allowed=True)
+    leaf = json.loads(await create_mandate(
+        principal_id=HELPER, agent_id="agent:leaf", scope="Pay invoices",
+        legal_basis_regulation="Service contract", legal_basis_article="Clause 5",
+        duration_hours=6.0, parent_mandate_id=middle["mandate_id"],
+        allowed_actions=["invoice.pay"],
+    ))
+    assert leaf.get("status") == "created", leaf
+    assert leaf["perimeter"]["risk_classes"] == [IRREVERSIBLE]
+    paid = await _token(leaf["mandate_id"], "invoice.pay", agent_id="agent:leaf")
     assert _lifetime(paid) <= 30
+    assert _claims(paid)["amr_risk_classes"] == ["irreversible"]
+
+
+async def test_signed_sub_mandate_with_inherited_classes_verifies() -> None:
+    root = await _root(delegation_allowed=True, risk_classes=[IRREVERSIBLE])
+    key = ed25519.Ed25519PrivateKey.generate()
+    raw = key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    pub = b64url_encode(raw)
+    proof = b64url_encode(key.sign(key_registration_payload(AGENT, pub)))
+    assert "key_id" in json.loads(await register_principal_key(AGENT, pub, proof))
+    args = {
+        "principal_id": AGENT, "agent_id": HELPER, "scope": "Pay invoices",
+        "legal_basis_regulation": "Service contract", "legal_basis_article": "Clause 4",
+        "duration_hours": 12.0, "parent_mandate_id": root["mandate_id"],
+        "allowed_actions": ["invoice.pay"],
+        "risk_classes": [{"name": "strict", "actions": ["invoice.pay"],
+                          "max_token_seconds": 10}],
+    }
+    prepared = json.loads(await prepare_mandate_signature(**args))
+    signature = b64url_encode(key.sign(prepared["payload"].encode("utf-8")))
+    child = json.loads(await create_mandate(
+        **args, principal_signature=signature, signed_at=prepared["signed_at"]
+    ))
+    assert child.get("status") == "created", child
+    assert [rc["name"] for rc in child["perimeter"]["risk_classes"]] == [
+        "irreversible", "strict",
+    ]
+    pack = json.loads(await get_proof(child["mandate_id"]))
+    assert pack["chain_integrity"]["principal_signature_valid"] is True
 
 
 async def test_sub_mandate_can_shorten_with_its_own_class(monkeypatch) -> None:
@@ -463,3 +569,40 @@ def test_template_passes_its_classes_to_create_mandate() -> None:
     )
     template = AGENT_SANTE_RGPD.model_copy(update={"perimeter": classed})
     assert template.create_mandate_kwargs()["risk_classes"] == [IRREVERSIBLE]
+
+
+def test_merged_class_too_wide_is_refused_cleanly() -> None:
+    wide = [f"invoice.a{i}" for i in range(60)]
+    other = [f"invoice.b{i}" for i in range(60)]
+    parent = Perimeter(
+        allowed_actions=("invoice.*",), delegation_allowed=True,
+        risk_classes=({"name": "wide", "actions": wide, "max_token_seconds": 30},),
+    )
+    child = Perimeter(
+        allowed_actions=("invoice.*",),
+        risk_classes=({"name": "wide", "actions": other, "max_token_seconds": 30},),
+    )
+    with pytest.raises(PerimeterError) as exc:
+        child.narrowed_by(parent)
+    assert exc.value.code == "perimeter_invalid"
+
+
+async def test_issuer_applies_a_parent_class_missing_from_the_stored_child(
+    temp_db: Path,
+) -> None:
+    # Defence in depth: a sub-mandate stored without the parent's classes (written
+    # before inheritance, or by hand) is still bound by them at issuance.
+    root = await _root(delegation_allowed=True, risk_classes=[IRREVERSIBLE])
+    child_id = str(uuid4())
+    await insert_mandate_directly(
+        temp_db,
+        child_id,
+        principal_id=AGENT,
+        agent_id=HELPER,
+        perimeter_json=Perimeter(allowed_actions=("invoice.pay",)).to_json(),
+        parent_mandate_id=root["mandate_id"],
+        hours_until_expiry=6.0,
+    )
+    paid = await _token(child_id, "invoice.pay", agent_id=HELPER)
+    assert _lifetime(paid) <= 30
+    assert _claims(paid)["amr_risk_classes"] == ["irreversible"]

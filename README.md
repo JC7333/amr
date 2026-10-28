@@ -158,7 +158,9 @@ the mandate:
   `{"name": "irreversible", "actions": ["invoice.pay"], "max_token_seconds": 30}`.
   A token for an action reached by a class lives at most that long; the shortest
   class wins, in the mandate and in every mandate above it in the delegation chain,
-  so a sub-mandate can shorten the window, never lengthen it. The matched class
+  so a sub-mandate can shorten the window, never lengthen it: it inherits the
+  parent's classes (shown in its own perimeter) and may reuse a class name only with
+  a shorter or equal `max_token_seconds` (else `limit_exceeds_parent`). The matched class
   names are sealed in the token as `amr_risk_classes`. A class never lengthens a
   token beyond `AMR_TOKEN_LIFETIME_SECONDS`. Mandates without classes keep their
   exact hash and tokens. Re-checking the registry at execution time for
