@@ -151,7 +151,20 @@ the mandate:
   binds the sub-mandate all the same, at issuance): read the whole chain, as
   `get_proof` and the attestation do, to see every ceiling that applies. A
   sub-mandate that sets a ceiling under a parent with a per-action limit binds the
-  union of both `amount_actions` (an empty list on either side means every action).
+  union of both `amount_actions` (an empty list on either side means every action);
+- optional **risk classes** (`risk_classes`) bound how long a token stays usable,
+  by what is at stake: each class names action types (reached with their sub-types,
+  like `forbidden_actions`) and a `max_token_seconds` from 1 to 86400, for example
+  `{"name": "irreversible", "actions": ["invoice.pay"], "max_token_seconds": 30}`.
+  A token for an action reached by a class lives at most that long; the shortest
+  class wins, in the mandate and in every mandate above it in the delegation chain,
+  so a sub-mandate can shorten the window, never lengthen it: it inherits the
+  parent's classes (shown in its own perimeter) and may reuse a class name only with
+  a shorter or equal `max_token_seconds` (else `limit_exceeds_parent`). The matched class
+  names are sealed in the token as `amr_risk_classes`. A class never lengthens a
+  token beyond `AMR_TOKEN_LIFETIME_SECONDS`. Mandates without classes keep their
+  exact hash and tokens. Re-checking the registry at execution time for
+  irreversible actions is not done yet.
 
 Example: an assistant agent told never to create sub-agents.
 
@@ -337,6 +350,7 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `amount_actions` | list[str] \| null | Actions that must carry an `amount` under the ceiling (empty: all) |
 | `period_max_amount` | str \| null | Cumulative ceiling over `period_days`, for this mandate and all its sub-mandates, decimal string. E.g. `"2000"` |
 | `period_days` | int \| null | Rolling window of `period_max_amount`, 1 to 366 days (required with it). E.g. `30` |
+| `risk_classes` | list[dict] \| null | Classes `{name, actions, max_token_seconds}` bounding the token lifetime of the actions they reach, here and in every sub-mandate. E.g. `[{"name": "irreversible", "actions": ["invoice.pay"], "max_token_seconds": 30}]` |
 | `principal_signature` | str \| null | Principal's base64url Ed25519 signature of the `prepare_mandate_signature` payload (required once the principal has a registered key) |
 | `signed_at` | str \| null | ISO 8601 timestamp with timezone placed in the signed payload (within 15 minutes of the registry clock) |
 
@@ -492,8 +506,9 @@ last expiry. Mandate attestations already issued also stay valid until their `ex
 ```
 
 A token lives at most `AMR_TOKEN_LIFETIME_SECONDS` (300 s by default) and never past the
-expiry of its mandate or of any mandate above it in the delegation chain. The caller's
-`lifetime_override_seconds` can only shorten it. Breaking change for callers that asked
+expiry of its mandate or of any mandate above it in the delegation chain, nor beyond
+the shortest risk class (`risk_classes`) that reaches its action type in that chain.
+The caller's `lifetime_override_seconds` can only shorten it. Breaking change for callers that asked
 for a token longer than the default: they now get the default. After a revocation, the
 window in which an already issued token still works is therefore at most that lifetime,
 whatever the depth of the chain. See `docs/revocation-spec.md`.

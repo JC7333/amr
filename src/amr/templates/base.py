@@ -183,8 +183,12 @@ class MandateTemplate(BaseModel):
             if perimeter.period_max_amount is not None
             else {}
         )
+        risk = (
+            {"risk_classes": canonical["risk_classes"]} if perimeter.risk_classes else {}
+        )
         return {
             **period,
+            **risk,
             "allowed_actions": canonical["allowed_actions"],
             "forbidden_actions": canonical["forbidden_actions"],
             "delegation_allowed": perimeter.delegation_allowed,

@@ -1,5 +1,6 @@
-# Token Issuance Specification v1.1
+# Token Issuance Specification v1.2
 
+v1.2 (28/10/2026): risk classes bound the token lifetime by action type.
 v1.1 (14/10/2026): structured mandate perimeter and delegation chain checks.
 Tokens issued under a root mandate without a perimeter are unchanged from v1.0
 (same claims, same action hash). Breaking for sub-mandates: tokens under any
@@ -17,7 +18,7 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
 - `iss` (issuer): "amr://localhost" or configured issuer URI
 - `sub` (subject): agent_id
 - `aud` (audience): runtime/platform identifier where the token will be presented
-- `exp` (expiration): issued_at + configurable lifetime (default 300s), and never later than the expiry of the mandate or of any mandate above it in the delegation chain; a caller can shorten it, never lengthen it
+- `exp` (expiration): issued_at + configurable lifetime (default 300s), and never later than the expiry of the mandate or of any mandate above it in the delegation chain, and never above the shortest risk class reaching the action (Risk Classes); a caller can shorten it, never lengthen it
 - `iat` (issued_at): UTC epoch
 - `nbf` (not before): iat
 - `jti` (JWT ID): UUIDv4, used for replay prevention
@@ -33,6 +34,9 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
 - `amr_perimeter_digest`: SHA-256 of the mandate's canonical perimeter JSON,
   present when the mandate has a structured perimeter. A consumer that relies on
   perimeter enforcement MUST require this claim (and `amr_action_type`).
+- `amr_risk_classes`: sorted names of the risk classes that reached `amr_action_type`
+  in any perimeter of the delegation chain, present only when at least one did. The
+  token's lifetime was bounded by the shortest of them (see Risk Classes).
 
 ## Perimeter Enforcement (v1.1)
 A mandate may carry a structured perimeter: `allowed_actions`, `forbidden_actions`
@@ -83,6 +87,31 @@ above the parent must be active and unexpired, and a chain is limited to 16 leve
 Revocation is read from the mandate's `status` column, as in v1.0; there is no
 revocation tool yet. Mandate creation is not authenticated: `create_mandate` must be
 exposed to principals only, never to the agents they govern.
+
+## Risk Classes (v1.2)
+A perimeter may carry `risk_classes`: at most 20 objects `{name, actions,
+max_token_seconds}`. `name` is unique in the perimeter (lowercase, `^[a-z][a-z0-9_-]{0,39}$`);
+`actions` are patterns read broadly, like `forbidden_actions` (`invoice.pay` reaches
+`invoice.pay.partial`); `max_token_seconds` is an integer from 1 to 86400. The key
+appears in the canonical perimeter only when there is at least one class, sorted by
+name, so perimeters without classes keep their digest and the mandates their hash.
+
+When a token is issued, its lifetime is the smallest of: `AMR_TOKEN_LIFETIME_SECONDS`,
+`lifetime_override_seconds` if given, and `max_token_seconds` of every class reaching
+the action type in every perimeter of the delegation chain; it never ends after the
+expiry of any mandate in the chain. A class never lengthens a token. A sub-mandate
+inherits the parent's classes into its stored perimeter, so `verify_mandate`, the
+Proof Pack, the attestation and the insurer dossier show every bound that applies to
+it. It may add its own classes, and reuse a parent class name only with a
+`max_token_seconds` no higher than the parent's (else `limit_exceeds_parent`); the
+merged class then reaches the actions of both. A sub-mandate can shorten a window,
+never lengthen one. The issuer still applies the classes of every perimeter in the
+chain. The matched class names are sealed in `amr_risk_classes`.
+
+A class whose patterns reach no allowed action bounds nothing: patterns are not
+checked against `allowed_actions`. Classes bound the window during which an issued
+token stays usable, including after a revocation. They do not make the consumer re-check the registry before an
+irreversible action; that is a separate step, not in v1.2.
 
 ## Replay Prevention
 The `issued_tokens` table stores every issued jti with its expiration.
