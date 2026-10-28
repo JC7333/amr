@@ -86,6 +86,8 @@ async def issue_action_token(
     chain caps the total amount of the tokens issued under it and every sub-mandate
     below it in the rolling window, this one included; an issued token counts whether
     it is used or not. Every parent mandate must also still be active and unexpired.
+    Risk classes of the chain shorten the token's lifetime; the matched class names
+    are sealed into the token as amr_risk_classes.
     Returns a JSON string with either {token, jti, expires_at, key_id}
     on success, or {denied: true, reason: "...", mandate_id: "..."} on denial.
     Perimeter denials use reason "action_out_of_scope", with "detail" and
@@ -100,7 +102,9 @@ async def issue_action_token(
         lifetime_override_seconds: Optional shorter token lifetime. It can only
             shorten: the lifetime is never above settings.token_lifetime_seconds.
             Whatever is asked, the token expires no later than the mandate and
-            every mandate above it in the delegation chain.
+            every mandate above it in the delegation chain, and lives no longer
+            than the shortest risk class (risk_classes) reaching action_type in
+            any perimeter of the chain.
         action_type: Dotted action type checked against the mandate perimeter,
             e.g. "invoice.pay" or "agent.create". Required when the mandate (or a
             mandate above it) has a structured perimeter; sealed into the token as
@@ -274,10 +278,22 @@ async def issue_action_token(
         # --- 5. Build JWS claims ---
         jti = uuid4()
         # The override can only shorten a token; the token never outlives the
-        # mandate it rests on, nor any mandate above it in the delegation chain.
+        # mandate it rests on, nor any mandate above it in the delegation chain,
+        # nor the shortest risk class that reaches the action anywhere in the chain.
         lifetime = settings.token_lifetime_seconds
         if lifetime_override_seconds is not None:
             lifetime = min(lifetime, lifetime_override_seconds)
+        risk_classes: set[str] = set()
+        if req.action_type is not None:
+            for link in chain:
+                if not link["perimeter_json"]:
+                    continue
+                cap, names = Perimeter.from_json(link["perimeter_json"]).token_lifetime_cap(
+                    req.action_type
+                )
+                if cap is not None:
+                    lifetime = min(lifetime, cap)
+                    risk_classes.update(names)
         expires_at = now + timedelta(seconds=lifetime)
         for link in chain:
             link_expires = datetime.fromisoformat(link["expires_at"])
@@ -310,6 +326,8 @@ async def issue_action_token(
             claims["amr_action_type"] = req.action_type
         if perimeter is not None:
             claims["amr_perimeter_digest"] = perimeter.digest()
+        if risk_classes:
+            claims["amr_risk_classes"] = sorted(risk_classes)
 
         # Load key and serialize to PEM bytes (pyjwt expects bytes or str for EdDSA)
         private_key = load_signing_key()

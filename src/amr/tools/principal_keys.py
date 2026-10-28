@@ -6,6 +6,7 @@ grants must carry its signature (see create_mandate).
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 import aiosqlite
 from pydantic import BaseModel, Field, ValidationError
@@ -165,6 +166,7 @@ async def prepare_mandate_signature(
     signed_at: str | None = None,
     period_max_amount: str | None = None,
     period_days: int | None = None,
+    risk_classes: list[dict[str, Any]] | None = None,
 ) -> str:
     """Return the exact bytes a principal must sign to grant this mandate.
 
@@ -198,6 +200,7 @@ async def prepare_mandate_signature(
                 amount_actions,
                 period_max_amount,
                 period_days,
+                risk_classes,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))
