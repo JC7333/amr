@@ -87,7 +87,9 @@ async def issue_action_token(
     below it in the rolling window, this one included; an issued token counts whether
     it is used or not. Every parent mandate must also still be active and unexpired.
     Risk classes of the chain shorten the token's lifetime; the matched class names
-    are sealed into the token as amr_risk_classes.
+    are sealed into the token as amr_risk_classes. When one of them sets
+    registry_check, the token carries amr_registry_check: true, and the receiver
+    must re-check it with check_action_token at the moment of acting.
     Returns a JSON string with either {token, jti, expires_at, key_id}
     on success, or {denied: true, reason: "...", mandate_id: "..."} on denial.
     Perimeter denials use reason "action_out_of_scope", with "detail" and
@@ -284,16 +286,18 @@ async def issue_action_token(
         if lifetime_override_seconds is not None:
             lifetime = min(lifetime, lifetime_override_seconds)
         risk_classes: set[str] = set()
+        registry_check = False
         if req.action_type is not None:
             for link in chain:
                 if not link["perimeter_json"]:
                     continue
-                cap, names = Perimeter.from_json(link["perimeter_json"]).token_lifetime_cap(
-                    req.action_type
-                )
+                link_perimeter = Perimeter.from_json(link["perimeter_json"])
+                cap, names = link_perimeter.token_lifetime_cap(req.action_type)
                 if cap is not None:
                     lifetime = min(lifetime, cap)
                     risk_classes.update(names)
+                if link_perimeter.requires_registry_check(req.action_type):
+                    registry_check = True
         expires_at = now + timedelta(seconds=lifetime)
         for link in chain:
             link_expires = datetime.fromisoformat(link["expires_at"])
@@ -328,6 +332,8 @@ async def issue_action_token(
             claims["amr_perimeter_digest"] = perimeter.digest()
         if risk_classes:
             claims["amr_risk_classes"] = sorted(risk_classes)
+        if registry_check:
+            claims["amr_registry_check"] = True
 
         # Load key and serialize to PEM bytes (pyjwt expects bytes or str for EdDSA)
         private_key = load_signing_key()

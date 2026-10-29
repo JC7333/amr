@@ -6,6 +6,7 @@ Run with: uv run amr
 from mcp.server.fastmcp import FastMCP
 
 from amr.config import settings
+from amr.tools.check_action_token import check_action_token
 from amr.tools.create_mandate import create_mandate
 from amr.tools.export_insurer_dossier import export_insurer_dossier
 from amr.tools.get_proof import get_proof
@@ -28,6 +29,7 @@ mcp.tool()(verify_mandate)
 mcp.tool()(log_action)
 mcp.tool()(get_proof)
 mcp.tool()(issue_action_token)
+mcp.tool()(check_action_token)
 mcp.tool()(register_principal_key)
 mcp.tool()(prepare_mandate_signature)
 mcp.tool()(issue_mandate_attestation)

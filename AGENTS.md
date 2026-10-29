@@ -28,6 +28,7 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 | `log_action` | Append an action to the chained journal of a mandate |
 | `get_proof` | Export the full audit bundle of a mandate |
 | `issue_action_token` | Get a signed token only if the mandate and its perimeter allow the action (this is where the perimeter is enforced) |
+| `check_action_token` | For the receiver: re-check a token with the registry at the moment of acting (mandate and whole chain still active, not revoked, not expired) |
 | `register_principal_key` | Register the principal's Ed25519 public key |
 | `prepare_mandate_signature` | Build the exact bytes a principal signs for a mandate |
 | `issue_mandate_attestation` | Issue a signed document a third party verifies offline |
@@ -47,7 +48,8 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
   start it and trusts its own database file; protect that file.
 - It makes no network call, except `report_issue` when the operator set `AMR_ISSUE_TOKEN`
   (one HTTPS request to the GitHub API). Tokens and attestations already issued stay valid until
-  their expiry after a revocation (the revocation response counts the tokens).
+  their expiry after a revocation (the revocation response counts the tokens), unless the
+  receiver re-checks the token with `check_action_token` when it acts.
 - Existing rows are never edited or deleted: status changes are new chained rows.
 
 ## Reporting a problem

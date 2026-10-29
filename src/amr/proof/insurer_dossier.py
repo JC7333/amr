@@ -158,6 +158,7 @@ def _perimeter_rows(perimeter: dict[str, Any] | None) -> list[tuple[str, str]]:
                 "; ".join(
                     f"{_e(rc.get('name'))}: {_e(rc.get('actions'))} "
                     f"at most {_e(rc.get('max_token_seconds'))} s"
+                    + (", registry re-checked at execution" if rc.get("registry_check") else "")
                     for rc in perimeter["risk_classes"]
                 )
                 if perimeter.get("risk_classes")
