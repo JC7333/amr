@@ -371,6 +371,17 @@ async def test_missing_database_is_never_created(temp_db: Path) -> None:
     assert not temp_db.exists()
 
 
+async def test_database_is_opened_read_only(temp_db: Path) -> None:
+    await init_db(temp_db)
+    db = await check_module._open_read_only()
+    assert db is not None
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="readonly"):
+            await db.execute("CREATE TABLE intruder (a TEXT)")
+    finally:
+        await db.close()
+
+
 async def test_internal_error_has_a_fixed_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     root = await _root(risk_classes=[CHECKED])
     token = await _token(root["mandate_id"], "invoice.pay")
