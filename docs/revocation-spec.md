@@ -79,7 +79,11 @@ revocation record (record deleted); `null` otherwise.
   that checks only the signature accepts them until their `exp`. The response says
   exactly how many are still valid and until when (`outstanding_tokens.still_valid`,
   `outstanding_tokens.last_expires_at`), counting the mandate and its sub-mandates. The
-  default token lifetime is `AMR_TOKEN_LIFETIME_SECONDS` = 300 seconds.
+  default token lifetime is `AMR_TOKEN_LIFETIME_SECONDS` = 300 seconds. A consumer
+  that re-checks the token with `check_action_token` when it acts gets
+  `valid: false` (`mandate_status_revoked` or `parent_mandate_revoked`) as soon as the
+  revocation is recorded; a risk class with `registry_check` asks it to (see
+  `docs/token-issuance-spec.md`, Registry Check at Execution).
 - Mandate attestations already issued (`issue_mandate_attestation`) are signed JWS too:
   a receiver that checks them offline accepts them until their `exp`. The default
   attestation lifetime is `AMR_ATTESTATION_LIFETIME_SECONDS` = 900 seconds. They are not

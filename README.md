@@ -67,7 +67,7 @@ current directory of the client. Keep the `.pem` private key out of version cont
    party checks offline with `python -m amr.verify_attestation`.
 5. `revoke_mandate(mandate_id, reason)`: the stop button; `verify_mandate` then answers
    `authorized: false`. Tokens and attestations already issued stay valid until they
-   expire.
+   expire, except for a receiver that re-checks the token with `check_action_token`.
 6. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
 7. `report_issue(title, description, version, context)`: report a problem with AMR
    itself. Without `AMR_ISSUE_TOKEN` it makes no network call and returns a pre-filled
@@ -163,8 +163,11 @@ the mandate:
   a shorter or equal `max_token_seconds` (else `limit_exceeds_parent`). The matched class
   names are sealed in the token as `amr_risk_classes`. A class never lengthens a
   token beyond `AMR_TOKEN_LIFETIME_SECONDS`. Mandates without classes keep their
-  exact hash and tokens. Re-checking the registry at execution time for
-  irreversible actions is not done yet.
+  exact hash and tokens. A class may also set `"registry_check": true`: its tokens
+  then carry `amr_registry_check: true`, and the receiver re-checks them with
+  `check_action_token` at the moment of acting, so a revocation in the meantime is
+  seen. A sub-mandate inherits the flag and cannot drop it. Classes without it keep
+  their exact form and hash.
 
 Example: an assistant agent told never to create sub-agents.
 
@@ -350,7 +353,7 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `amount_actions` | list[str] \| null | Actions that must carry an `amount` under the ceiling (empty: all) |
 | `period_max_amount` | str \| null | Cumulative ceiling over `period_days`, for this mandate and all its sub-mandates, decimal string. E.g. `"2000"` |
 | `period_days` | int \| null | Rolling window of `period_max_amount`, 1 to 366 days (required with it). E.g. `30` |
-| `risk_classes` | list[dict] \| null | Classes `{name, actions, max_token_seconds}` bounding the token lifetime of the actions they reach, here and in every sub-mandate. E.g. `[{"name": "irreversible", "actions": ["invoice.pay"], "max_token_seconds": 30}]` |
+| `risk_classes` | list[dict] \| null | Classes `{name, actions, max_token_seconds, registry_check?}` bounding the token lifetime of the actions they reach, here and in every sub-mandate; `registry_check: true` asks the receiver to re-check with `check_action_token`. E.g. `[{"name": "irreversible", "actions": ["invoice.pay"], "max_token_seconds": 30, "registry_check": true}]` |
 | `principal_signature` | str \| null | Principal's base64url Ed25519 signature of the `prepare_mandate_signature` payload (required once the principal has a registered key) |
 | `signed_at` | str \| null | ISO 8601 timestamp with timezone placed in the signed payload (within 15 minutes of the registry clock) |
 
@@ -488,7 +491,8 @@ refuse the mandate (`mandate_status_revoked`) and every sub-mandate below it
 `verify_mandate` no longer returns it; no sub-mandate can be created under it;
 `log_action` refuses it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
 called back and stay valid until their `exp`: the response gives their number and the
-last expiry. Mandate attestations already issued also stay valid until their `exp`
+last expiry, unless the receiver re-checks the token with `check_action_token` when it
+acts (see below). Mandate attestations already issued also stay valid until their `exp`
 (15 minutes by default) and are not counted in the response.
 
 **Returns:**
@@ -512,6 +516,43 @@ The caller's `lifetime_override_seconds` can only shorten it. Breaking change fo
 for a token longer than the default: they now get the default. After a revocation, the
 window in which an already issued token still works is therefore at most that lifetime,
 whatever the depth of the chain. See `docs/revocation-spec.md`.
+
+---
+
+### `check_action_token`
+
+For the receiver of an agent's action: re-check a token with the registry at the moment
+of acting, before an irreversible step. Required when the token carries
+`amr_registry_check: true` (a risk class with `registry_check`); possible for any token.
+Read only.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `token` | str | The JWS returned by `issue_action_token` |
+| `audience` | str | Who you are; must equal the token's `aud` |
+| `expected_action_hash` | str \| null | SHA-256 of the canonical action you are about to perform; must equal `amr_action_hash` |
+| `max_token_age_seconds` | int \| null | Your own, stricter bound (1 to 86400): refuse a token issued longer ago. Never extends `exp` |
+
+It verifies the signature (EdDSA only, this registry's key), `iss`, `aud`, `exp`, `nbf`,
+that the token is one the registry issued, then that the mandate and every mandate
+above it are still active, not revoked and not expired.
+
+```json
+{"valid": true, "reason": "ok", "jti": "...", "mandate_id": "...", "agent_id": "agent:billing",
+ "action_type": "invoice.pay", "registry_check_required": true,
+ "expires_at": "2026-10-29T21:30:30+00:00", "checked_at": "2026-10-29T21:30:12.400000+00:00"}
+```
+```json
+{"valid": false, "reason": "mandate_status_revoked", "jti": "...", "mandate_id": "...",
+ "checked_at": "2026-10-29T21:30:14.100000+00:00"}
+```
+
+The registry opens its database read-only and writes nothing for a check, and the
+answer is not signed: it is not evidence that anyone checked. Call the registry over
+your own channel; never accept a check result relayed by the agent whose token it is.
+Once a mandate with `registry_check` exists, an older AMR version cannot read its
+perimeter (it fails closed). See `docs/token-issuance-spec.md`, Registry Check at
+Execution.
 
 ---
 
@@ -751,6 +792,7 @@ src/amr/
 │   ├── verify_mandate.py
 │   ├── log_action.py
 │   ├── get_proof.py
+│   ├── check_action_token.py          # receiver re-checks a token when it acts
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
 │   ├── report_issue.py   # only network call, opt-in (AMR_ISSUE_TOKEN)

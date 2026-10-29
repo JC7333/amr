@@ -37,7 +37,11 @@ match, like ``forbidden_actions``) and the longest lifetime, in seconds, of a to
 them, for example a short window for irreversible actions. An action reached by several
 classes gets the shortest. The token issuer applies the classes of every mandate in the
 delegation chain, so a sub-mandate can shorten a window but never lengthen one.
-Perimeters without classes keep their exact canonical form.
+A class may also set ``registry_check``: its tokens then carry ``amr_registry_check``,
+telling the receiver to ask the registry (check_action_token) at the moment of acting
+whether the mandate and its whole chain still stand. A sub-mandate inherits the flag
+and cannot drop it. Perimeters without classes, and classes without the flag, keep
+their exact canonical form.
 """
 
 import hashlib
@@ -154,6 +158,7 @@ def _inherit_risk_classes(
                 name=rc.name,
                 actions=tuple(set(rc.actions) | set(inherited.actions)),
                 max_token_seconds=rc.max_token_seconds,
+                registry_check=rc.registry_check or inherited.registry_check,
             )
         except ValueError as exc:
             raise PerimeterError("perimeter_invalid", str(exc)) from exc
@@ -169,13 +174,18 @@ def _canonical_amount(amount: Decimal) -> str:
 
 
 class RiskClass(BaseModel):
-    """A class of actions whose tokens live at most ``max_token_seconds``."""
+    """A class of actions whose tokens live at most ``max_token_seconds``.
+
+    With ``registry_check``, the receiver of such a token must re-check the registry
+    when it acts (check_action_token), not only the token's signature.
+    """
 
     model_config = {"extra": "forbid", "frozen": True}
 
     name: str = Field(..., pattern=RISK_CLASS_NAME_RE)
     actions: tuple[str, ...] = Field(..., min_length=1, max_length=MAX_PATTERNS)
     max_token_seconds: int = Field(..., ge=1, le=MAX_TOKEN_SECONDS, strict=True)
+    registry_check: bool = Field(default=False, strict=True)
 
     @field_validator("actions")
     @classmethod
@@ -187,11 +197,16 @@ class RiskClass(BaseModel):
         return any(pattern_reaches(p, action_type) for p in self.actions)
 
     def canonical(self) -> dict[str, Any]:
-        return {
+        """Canonical dict; ``registry_check`` appears only when set, so older classes
+        keep their exact form (and the mandates their hash)."""
+        canonical: dict[str, Any] = {
             "name": self.name,
             "actions": list(self.actions),
             "max_token_seconds": self.max_token_seconds,
         }
+        if self.registry_check:
+            canonical["registry_check"] = True
+        return canonical
 
 
 class Perimeter(BaseModel):
@@ -267,6 +282,12 @@ class Perimeter(BaseModel):
         return (
             min(rc.max_token_seconds for rc in matched),
             tuple(rc.name for rc in matched),
+        )
+
+    def requires_registry_check(self, action_type: str) -> bool:
+        """True if a risk class reaching ``action_type`` sets ``registry_check``."""
+        return any(
+            rc.registry_check and rc.reaches(action_type) for rc in self.risk_classes
         )
 
     # --- serialization ---------------------------------------------------------

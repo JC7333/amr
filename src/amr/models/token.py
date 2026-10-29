@@ -24,6 +24,17 @@ class IssueTokenRequest(BaseModel):
     )
 
 
+class CheckTokenRequest(BaseModel):
+    """Input for re-checking an action token at execution time. Strictly validated."""
+
+    model_config = {"extra": "forbid"}
+
+    token: str = Field(..., min_length=1, max_length=8000)
+    audience: str = Field(..., min_length=1, max_length=500)
+    expected_action_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    max_token_age_seconds: int | None = Field(default=None, ge=1, le=86400, strict=True)
+
+
 class TokenIssueResult(BaseModel):
     """Result of a successful token issuance."""
 
