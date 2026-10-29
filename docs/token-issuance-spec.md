@@ -1,5 +1,7 @@
-# Token Issuance Specification v1.2
+# Token Issuance Specification v1.3
 
+v1.3 (29/10/2026): a risk class may require a registry check at execution
+(`registry_check`, claim `amr_registry_check`, tool `check_action_token`).
 v1.2 (28/10/2026): risk classes bound the token lifetime by action type.
 v1.1 (14/10/2026): structured mandate perimeter and delegation chain checks.
 Tokens issued under a root mandate without a perimeter are unchanged from v1.0
@@ -37,6 +39,10 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
 - `amr_risk_classes`: sorted names of the risk classes that reached `amr_action_type`
   in any perimeter of the delegation chain, present only when at least one did. The
   token's lifetime was bounded by the shortest of them (see Risk Classes).
+- `amr_registry_check` (v1.3): `true` when a risk class reaching `amr_action_type`
+  in any perimeter of the chain sets `registry_check`; absent otherwise. The consumer
+  MUST then re-check the token with the registry when it acts (Registry Check at
+  Execution).
 
 ## Perimeter Enforcement (v1.1)
 A mandate may carry a structured perimeter: `allowed_actions`, `forbidden_actions`
@@ -110,8 +116,41 @@ chain. The matched class names are sealed in `amr_risk_classes`.
 
 A class whose patterns reach no allowed action bounds nothing: patterns are not
 checked against `allowed_actions`. Classes bound the window during which an issued
-token stays usable, including after a revocation. They do not make the consumer re-check the registry before an
-irreversible action; that is a separate step, not in v1.2.
+token stays usable, including after a revocation; to close that window for the actions
+that matter, a class sets `registry_check` (next section).
+
+## Registry Check at Execution (v1.3)
+A risk class may carry `registry_check: true` (strict boolean, default `false`). It
+appears in the canonical class only when `true`, so classes without it keep their
+form, perimeters their digest and mandates their hash. A sub-mandate inherits it with
+the parent's classes; when it reuses a parent class name, the merged class keeps
+`registry_check` if either side sets it: a sub-mandate cannot drop it.
+
+A token whose action type is reached by such a class, in any perimeter of the chain,
+carries `amr_registry_check: true`. Its receiver MUST, at the moment of acting and
+after its own offline checks, call `check_action_token(token, audience,
+expected_action_hash?, max_token_age_seconds?)` and act only on `valid: true`. Any
+receiver MAY call it for any token. The check, read only, verifies in order:
+1. header `alg` is EdDSA (`wrong_algorithm`) and `kid` is this registry's key
+   (`key_mismatch`); signature (`bad_signature`); `iss` (`wrong_issuer`); `aud` equals
+   the given audience (`wrong_audience`); `exp` (`token_expired`); `nbf`
+   (`token_not_yet_valid`); the claims of the Required Claims list that the check
+   reads are present (`missing_claim`);
+2. the `jti` is in `issued_tokens` (`unknown_token`) with the same mandate, agent,
+   action hash and audience (`token_record_mismatch`);
+3. `expected_action_hash`, if given, equals `amr_action_hash` (`action_mismatch`);
+4. `max_token_age_seconds`, if given (1 to 86400), is not exceeded since `iat`
+   (`token_too_old`): the receiver can make the check stricter than the mandate's
+   classes, never looser, since `exp` is always enforced;
+5. the mandate exists (`mandate_not_found`), is held by the token's `sub`
+   (`agent_mismatch`), is active (`mandate_status_<status>`), not revoked
+   (`mandate_status_revoked`) and not expired (`mandate_expired`), and every mandate
+   above it is too (`parent_mandate_*`, `delegation_chain_too_deep`, with
+   `refused_by`).
+The answer carries `checked_at`. A revocation recorded before the check is seen by
+it. The registry writes nothing for a check: it is not evidence that the receiver
+checked. The receiver that wants that evidence keeps the answer. The flag cannot
+force a receiver to call: it tells the receiver that the principal asked for it.
 
 ## Replay Prevention
 The `issued_tokens` table stores every issued jti with its expiration.

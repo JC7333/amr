@@ -314,8 +314,11 @@ async def create_mandate(
                       action patterns and their sub-types; a token for an action it
                       reaches lives at most max_token_seconds (1 to 86400), the
                       shortest class winning, in this mandate and every sub-mandate
-                      below it. Example: [{"name": "irreversible",
-                      "actions": ["invoice.pay"], "max_token_seconds": 30}]
+                      below it. A class may add "registry_check": true: its tokens
+                      then carry amr_registry_check, and the receiver re-checks the
+                      registry with check_action_token when it acts. Example:
+                      [{"name": "irreversible", "actions": ["invoice.pay"],
+                      "max_token_seconds": 30, "registry_check": true}]
 
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
