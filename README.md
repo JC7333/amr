@@ -547,8 +547,12 @@ above it are still active, not revoked and not expired.
  "checked_at": "2026-10-29T21:30:14.100000+00:00"}
 ```
 
-The registry writes nothing for a check: keep the answer if you need evidence that you
-checked. See `docs/token-issuance-spec.md`, Registry Check at Execution.
+The registry opens its database read-only and writes nothing for a check, and the
+answer is not signed: it is not evidence that anyone checked. Call the registry over
+your own channel; never accept a check result relayed by the agent whose token it is.
+Once a mandate with `registry_check` exists, an older AMR version cannot read its
+perimeter (it fails closed). See `docs/token-issuance-spec.md`, Registry Check at
+Execution.
 
 ---
 

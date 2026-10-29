@@ -15,11 +15,13 @@ from pydantic import ValidationError
 
 from amr.config import settings
 from amr.crypto.signing import generate_signing_key, get_key_id, load_signing_key
+from amr.db.engine import init_db
 from amr.models.perimeter import Perimeter, PerimeterError, RiskClass
 from amr.server import mcp
 from amr.tools import check_action_token as check_module
 from amr.tools.check_action_token import check_action_token
 from amr.tools.create_mandate import create_mandate
+from amr.tools.export_insurer_dossier import export_insurer_dossier
 from amr.tools.issue_action_token import _canonical_action_hash, issue_action_token
 from amr.tools.issue_mandate_attestation import issue_mandate_attestation
 from amr.tools.revoke_mandate import revoke_mandate
@@ -342,13 +344,45 @@ async def test_unflagged_token_can_be_checked_too() -> None:
     assert result["registry_check_required"] is False
 
 
+def _db_files(db_path: Path) -> dict[str, str]:
+    return {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in db_path.parent.glob(db_path.name + "*")
+    }
+
+
 async def test_check_writes_nothing(temp_db: Path) -> None:
     root = await _root(risk_classes=[CHECKED])
     token = await _token(root["mandate_id"], "invoice.pay")
     before = _db_counts(temp_db)
+    files_before = _db_files(temp_db)
     assert (await _check(token))["valid"] is True
     assert (await _check(token, audience="runtime://other"))["valid"] is False
+    revoked_token = _forge(_fresh_claims())
+    assert (await _check(revoked_token))["valid"] is False
     assert _db_counts(temp_db) == before
+    assert _db_files(temp_db) == files_before
+
+
+async def test_missing_database_is_never_created(temp_db: Path) -> None:
+    assert not temp_db.exists()
+    result = await _check(_forge(_fresh_claims()))
+    assert result["reason"] == "registry_unavailable"
+    assert not temp_db.exists()
+
+
+async def test_internal_error_has_a_fixed_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    root = await _root(risk_classes=[CHECKED])
+    token = await _token(root["mandate_id"], "invoice.pay")
+
+    async def broken(*_args: object) -> None:
+        raise RuntimeError("disk on fire")
+
+    monkeypatch.setattr(check_module, "get_issued_token", broken)
+    result = await _check(token)
+    assert result["valid"] is False
+    assert result["reason"] == "internal_error"
+    assert result["detail"] == "disk on fire"
 
 
 async def test_same_token_can_be_checked_twice() -> None:
@@ -380,7 +414,6 @@ async def test_parent_revocation_after_issuance_is_seen() -> None:
     await revoke_mandate(root["mandate_id"], "principal withdrew")
     result = await _check(token)
     assert result["valid"] is False
-    assert result["reason"] in {"mandate_status_revoked", "parent_mandate_revoked"}
     # The child carries no revocation row of its own: the cut comes from the parent.
     assert result["reason"] == "parent_mandate_revoked"
     assert result["refused_by"] == root["mandate_id"]
@@ -548,7 +581,8 @@ async def test_missing_claim_is_refused(claim: str) -> None:
     assert (await _check(_forge(claims)))["reason"] == "missing_claim"
 
 
-async def test_token_the_registry_never_issued_is_refused() -> None:
+async def test_token_the_registry_never_issued_is_refused(temp_db: Path) -> None:
+    await init_db(temp_db)
     # Signed with the registry key, but no issued_tokens row: e.g. a leaked key.
     result = await _check(_forge(_fresh_claims()))
     assert result["valid"] is False
@@ -581,7 +615,8 @@ async def test_attestation_is_not_an_action_token() -> None:
     )
     result = await _check(attestation["attestation"])
     assert result["valid"] is False
-    assert result["reason"] in {"missing_claim", "unknown_token", "malformed"}
+    # It has no amr_action_hash: refused before any database read.
+    assert result["reason"] == "missing_claim"
 
 
 # --- check_action_token: what the receiver adds -------------------------------------
@@ -643,6 +678,15 @@ async def test_empty_audience_is_invalid_input() -> None:
     root = await _root(risk_classes=[CHECKED])
     token = await _token(root["mandate_id"], "invoice.pay")
     assert (await _check(token, audience=""))["reason"] == "invalid_input"
+
+
+async def test_insurer_dossier_shows_the_flag() -> None:
+    flagged = await _root(risk_classes=[CHECKED])
+    plain = await _root(risk_classes=[UNCHECKED])
+    page = json.loads(await export_insurer_dossier(flagged["mandate_id"], format="html"))["html"]
+    assert "registry re-checked at execution" in page
+    page = json.loads(await export_insurer_dossier(plain["mandate_id"], format="html"))["html"]
+    assert "registry re-checked at execution" not in page
 
 
 async def test_tool_is_registered() -> None:

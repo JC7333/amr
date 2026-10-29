@@ -136,7 +136,8 @@ receiver MAY call it for any token. The check, read only, verifies in order:
    the given audience (`wrong_audience`); `exp` (`token_expired`); `nbf`
    (`token_not_yet_valid`); the claims of the Required Claims list that the check
    reads are present (`missing_claim`);
-2. the `jti` is in `issued_tokens` (`unknown_token`) with the same mandate, agent,
+2. the registry database exists (`registry_unavailable`; it is opened read-only and
+   never created by the check), and the `jti` is in `issued_tokens` (`unknown_token`) with the same mandate, agent,
    action hash and audience (`token_record_mismatch`);
 3. `expected_action_hash`, if given, equals `amr_action_hash` (`action_mismatch`);
 4. `max_token_age_seconds`, if given (1 to 86400), is not exceeded since `iat`
@@ -147,10 +148,20 @@ receiver MAY call it for any token. The check, read only, verifies in order:
    (`mandate_status_revoked`) and not expired (`mandate_expired`), and every mandate
    above it is too (`parent_mandate_*`, `delegation_chain_too_deep`, with
    `refused_by`).
-The answer carries `checked_at`. A revocation recorded before the check is seen by
-it. The registry writes nothing for a check: it is not evidence that the receiver
-checked. The receiver that wants that evidence keeps the answer. The flag cannot
-force a receiver to call: it tells the receiver that the principal asked for it.
+An unexpected error gives `internal_error`, with the text in `detail`. The answer
+carries `checked_at`. A revocation recorded before the check is seen by it. Status
+values other than `active` (`mandate_status_<status>`) are checked defensively: no
+tool writes them today, revocation goes through `mandate_revocations`.
+
+The answer is unsigned JSON and the registry writes nothing for a check: it is not
+evidence that the receiver checked. The receiver MUST call the registry over its own
+channel and MUST NOT accept a check result relayed by the agent whose token it is.
+The flag cannot force a receiver to call: it tells the receiver that the principal
+asked for it.
+
+Downgrade: an AMR version before v1.3 rejects a risk class carrying `registry_check`
+(`extra="forbid"`), so once such a mandate exists, rolling back fails closed for it
+(no token, no verification) rather than ignoring the flag.
 
 ## Replay Prevention
 The `issued_tokens` table stores every issued jti with its expiration.

@@ -4,19 +4,20 @@ A token is signed for a short window. Between issuance and execution the mandate
 mandate above it) may be revoked, suspended or expire; the signature alone cannot say
 so. Before an irreversible action, the receiver asks the registry: is this token one
 the registry issued, and do its mandate and the whole delegation chain still stand?
-Read only: the check writes nothing.
+Read only: the database is opened read-only and the check writes nothing.
 """
 
 import json
 from datetime import UTC, datetime
 from typing import Any
 
+import aiosqlite
 import jwt
 from pydantic import ValidationError
 
 from amr.config import settings
 from amr.crypto.signing import get_key_id, load_public_key
-from amr.db.engine import get_db, get_issued_token, init_db
+from amr.db.engine import get_issued_token
 from amr.delegation import is_expired, is_revoked, load_ancestors
 from amr.models.token import CheckTokenRequest
 
@@ -71,6 +72,16 @@ def _decode(token: str, audience: str) -> tuple[dict[str, Any] | None, str, str 
     return claims, "ok", None
 
 
+async def _open_read_only() -> aiosqlite.Connection | None:
+    """The registry database, read-only; None if it does not exist (never created here)."""
+    path = settings.db_path.resolve()
+    if not path.is_file():
+        return None
+    db = await aiosqlite.connect(f"{path.as_uri()}?mode=ro", uri=True)
+    db.row_factory = aiosqlite.Row
+    return db
+
+
 async def check_action_token(
     token: str,
     audience: str,
@@ -89,7 +100,9 @@ async def check_action_token(
     audience match the issued_tokens record); the action hash, if you give one; the
     token's age, if you set a maximum; then the mandate is still active, not revoked,
     not expired and held by the token's agent, and so is every mandate above it in the
-    delegation chain. Read only: nothing is written.
+    delegation chain. Read only: the database is opened read-only, nothing is written,
+    and the answer is not signed. Call the registry over your own channel: never accept
+    a check result relayed by the agent whose token it is.
 
     Args:
         token: The compact JWS returned by issue_action_token.
@@ -106,11 +119,12 @@ async def check_action_token(
         Refused: {valid: false, reason, detail?, jti?, mandate_id?, refused_by?,
         checked_at}. Reasons: invalid_input, malformed, wrong_algorithm,
         key_mismatch, bad_signature, wrong_issuer, wrong_audience, token_expired,
-        token_not_yet_valid, missing_claim, unknown_token, token_record_mismatch,
+        token_not_yet_valid, missing_claim, registry_unavailable, unknown_token,
+        token_record_mismatch,
         action_mismatch, token_too_old, mandate_not_found, agent_mismatch,
         mandate_status_<status>, mandate_status_revoked, mandate_expired,
         parent_mandate_<status>, parent_mandate_revoked, parent_mandate_expired,
-        parent_mandate_not_found, delegation_chain_too_deep.
+        parent_mandate_not_found, delegation_chain_too_deep, internal_error.
     """
     now = datetime.now(UTC)
     db = None
@@ -131,8 +145,16 @@ async def check_action_token(
         jti = str(claims["jti"])
         mandate_id = str(claims["amr_mandate_id"])
 
-        await init_db(settings.db_path)
-        db = await get_db(settings.db_path)
+        db = await _open_read_only()
+        if db is None:
+            return _result(
+                False,
+                "registry_unavailable",
+                now,
+                detail="no registry database at the configured path",
+                jti=jti,
+                mandate_id=mandate_id,
+            )
 
         record = await get_issued_token(db, jti)
         if record is None:
@@ -200,7 +222,7 @@ async def check_action_token(
         )
 
     except Exception as exc:
-        return _result(False, f"internal_error: {exc}", now)
+        return _result(False, "internal_error", now, detail=str(exc))
     finally:
         if db is not None:
             await db.close()
