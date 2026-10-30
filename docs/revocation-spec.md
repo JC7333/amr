@@ -29,7 +29,9 @@ mandate with a revocation row as revoked:
 | `issue_mandate_attestation` | `{"denied": true, "reason": "mandate_status_revoked"}` |
 | `issue_mandate_attestation` on any sub-mandate below | `parent_mandate_revoked`, `refused_by` = the revoked mandate |
 | `log_action` | refused: no action is logged after the revocation |
+| `log_action` on any sub-mandate below | refused, `reason` = `parent_mandate_revoked`, `refused_by` = the revoked mandate |
 | `get_proof` | `mandate.status = "revoked"` (the stored value stays in `mandate.stored_status`), `mandate.revocation`, `chain_integrity.revocation_signature_valid` |
+| `get_proof` on any sub-mandate below | `delegation_chain = {"broken": true, "reason": "parent_mandate_revoked", "refused_by": <the revoked mandate>}`; the sub-mandate's own `mandate.status` is unchanged |
 | `export_insurer_dossier` | not in force, `mandate_revoked`; its whole branch is cut; `status.stored_status` keeps the stored value; `integrity.revocation_signature_valid` |
 
 ## What triggers it, and who
@@ -74,7 +76,8 @@ revocation record (record deleted); `null` otherwise.
 ## How fast
 
 - Every check made after `revoke_mandate` returns sees the revocation: no new token,
-  no new attestation, no positive `verify_mandate`, no new sub-mandate, for the mandate and its whole branch.
+  no new attestation, no positive `verify_mandate`, no new sub-mandate, no new entry in
+  the action journal (`log_action`), for the mandate and its whole branch.
 - Action tokens already issued are signed JWS: they cannot be called back. A consumer
   that checks only the signature accepts them until their `exp`. The response says
   exactly how many are still valid and until when (`outstanding_tokens.still_valid`,

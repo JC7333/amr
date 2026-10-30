@@ -464,6 +464,13 @@ Log an agent action under an active mandate. Cryptographically chained to previo
 }
 ```
 
+The mandate must be active, not revoked and not expired. For a sub-mandate, so must
+every mandate above it: revoke or let expire a parent and its whole branch stops
+logging. The refusal then says why and which mandate broke the chain:
+`{"error": "...", "reason": "parent_mandate_revoked", "refused_by": "<parent id>"}`
+(also `parent_mandate_expired`, `parent_mandate_<status>`, `parent_mandate_not_found`,
+`delegation_chain_too_deep`).
+
 ---
 
 ### `revoke_mandate`
@@ -489,7 +496,7 @@ with `prepare_revocation_signature(mandate_id, reason, signed_at=None)`.
 refuse the mandate (`mandate_status_revoked`) and every sub-mandate below it
 (`parent_mandate_revoked`);
 `verify_mandate` no longer returns it; no sub-mandate can be created under it;
-`log_action` refuses it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
+`log_action` refuses it and every sub-mandate below it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
 called back and stay valid until their `exp`: the response gives their number and the
 last expiry, unless the receiver re-checks the token with `check_action_token` when it
 acts (see below). Mandate attestations already issued also stay valid until their `exp`
@@ -599,6 +606,13 @@ Once `revoke_mandate` has run, `mandate.status` reads `"revoked"` (the stored va
 stays in `mandate.stored_status`) and `mandate.revocation` holds `revoked_at`, `reason`, the principal's signature
 of the revocation (or `null`) and its chain hash; `revocation_signature_valid` re-checks
 that signature against the principal's key (`null` when there is nothing to check).
+
+`delegation_chain` says whether the chain above a sub-mandate still holds:
+`{"broken": true, "reason": "parent_mandate_revoked", "refused_by": "<parent id>"}`
+when a mandate above it is revoked, expired, not active or missing (the sub-mandate's
+own `mandate.status` does not change: the cut is above it);
+`{"broken": false, "reason": null, "refused_by": null}` otherwise, and always for a root
+mandate.
 
 ---
 

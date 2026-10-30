@@ -7,7 +7,7 @@ from uuid import UUID
 from amr.config import settings
 from amr.crypto.chain import compute_hash
 from amr.db.engine import get_db, get_last_action_hash, init_db
-from amr.delegation import is_revoked
+from amr.delegation import is_revoked, load_ancestors
 
 
 async def log_action(
@@ -20,7 +20,8 @@ async def log_action(
 
     Each action log entry is cryptographically linked to the previous action (SHA-256 chain),
     creating a tamper-evident audit trail. The mandate must be active, not revoked and
-    not expired.
+    not expired; for a sub-mandate, so must every mandate above it in the delegation
+    chain (revoking or letting expire a parent stops the logging of its whole branch).
 
     Args:
         mandate_id: UUID of the mandate under which the action was performed.
@@ -34,7 +35,10 @@ async def log_action(
 
     Returns:
         JSON string with keys: status, action_id, mandate_id, action, chain_hash.
-        On error (invalid mandate): {"error": "..."}.
+        On error (invalid mandate): {"error": "..."}; when a mandate above a
+        sub-mandate breaks the chain, also "reason" (parent_mandate_revoked,
+        parent_mandate_expired, parent_mandate_<status>, parent_mandate_not_found or
+        delegation_chain_too_deep) and "refused_by" (the mandate that broke it, or null).
     """
     db = None
     try:
@@ -52,7 +56,7 @@ async def log_action(
         # Verify mandate exists, is active, and not expired
         cursor = await db.execute(
             """
-            SELECT id, agent_id, status, expires_at
+            SELECT id, agent_id, status, expires_at, parent_mandate_id
             FROM mandates
             WHERE id = ?
             """,
@@ -88,6 +92,20 @@ async def log_action(
         if now > expires_at:
             return json.dumps(
                 {"error": f"Mandate '{mandate_id}' has expired at {expires_at_str}"}
+            )
+
+        # A sub-mandate is only in force while every mandate above it is.
+        _, refusal = await load_ancestors(db, mandate_row["parent_mandate_id"], now)
+        if refusal is not None:
+            return json.dumps(
+                {
+                    "error": (
+                        f"Mandate '{mandate_id}' is not in force: "
+                        f"delegation chain broken ({refusal.reason})"
+                    ),
+                    "reason": refusal.reason,
+                    "refused_by": refusal.refused_by,
+                }
             )
 
         agent_id = mandate_row["agent_id"]
