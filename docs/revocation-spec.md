@@ -109,5 +109,9 @@ revocation record (record deleted); `null` otherwise.
   broken" even when the agent holds another, older valid mandate.
 - Two revocations written at the same instant by two processes could chain to the same
   previous hash (no exclusive transaction), as for the other chains of the registry.
+- `log_action` checks the mandate and the chain above it, then writes, without one
+  exclusive transaction: a revocation committed by another process between the check
+  and the write lets that one action through (same window as for the mandate's own
+  revocation before this check covered the chain).
 - There is no revocation list for consumers: a token consumer that wants revocation
   faster than `exp` must ask the registry (`verify_mandate`) before acting.

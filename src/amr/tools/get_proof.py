@@ -295,9 +295,8 @@ async def get_proof(
                 revocation_valid = False
 
         # The chain above a sub-mandate: its own status does not show a cut parent.
-        _, refusal = await load_ancestors(
-            db, mandate_row["parent_mandate_id"], datetime.now(UTC)
-        )
+        generated_at = datetime.now(UTC)
+        _, refusal = await load_ancestors(db, mandate_row["parent_mandate_id"], generated_at)
         delegation_chain = {
             "broken": refusal is not None,
             "reason": refusal.reason if refusal is not None else None,
@@ -340,7 +339,7 @@ async def get_proof(
 
         proof_pack = {
             "proof_pack_version": "0.1.0",
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": generated_at.isoformat(),
             "mandate": mandate_dict,
             "delegation_chain": delegation_chain,
             "actions": actions,

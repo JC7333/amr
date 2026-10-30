@@ -580,6 +580,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
   "proof_pack_version": "0.1.0",
   "generated_at": "2026-04-13T18:00:00+00:00",
   "mandate": { "...": "full mandate details" },
+  "delegation_chain": {"broken": false, "reason": null, "refused_by": null},
   "actions": [ "...list of all logged actions..." ],
   "events": [],
   "chain_integrity": {
