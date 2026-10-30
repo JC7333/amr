@@ -19,6 +19,7 @@ from amr.crypto.principal import (
     verify,
 )
 from amr.db.engine import get_db, get_principal_key, get_revocation, init_db
+from amr.delegation import load_ancestors
 from amr.models.organ_decision import recorded_organ_decision
 from amr.models.perimeter import Perimeter
 from amr.tools.revoke_mandate import revocation_signature_valid
@@ -172,6 +173,12 @@ async def get_proof(
             authorized the agent, or null), status ("revoked" once revoke_mandate ran,
             whatever the stored status, which stays in stored_status) and revocation
             ({revoked_at, reason, principal_signature, chain_hash} or null)
+          - delegation_chain: dict with broken (bool: true when a mandate above this
+            sub-mandate is revoked, expired, not active or missing, so the mandate is
+            not in force whatever its own status), reason (parent_mandate_revoked,
+            parent_mandate_expired, parent_mandate_<status>, parent_mandate_not_found,
+            delegation_chain_too_deep, or null) and refused_by (the mandate that broke
+            the chain, or null); always unbroken for a root mandate
           - actions: list of action log entries
           - events: list of mandate events
           - chain_integrity: dict with actions_chain_valid (bool),
@@ -287,6 +294,15 @@ async def get_proof(
             if await cursor.fetchone() is not None:
                 revocation_valid = False
 
+        # The chain above a sub-mandate: its own status does not show a cut parent.
+        generated_at = datetime.now(UTC)
+        _, refusal = await load_ancestors(db, mandate_row["parent_mandate_id"], generated_at)
+        delegation_chain = {
+            "broken": refusal is not None,
+            "reason": refusal.reason if refusal is not None else None,
+            "refused_by": refusal.refused_by if refusal is not None else None,
+        }
+
         # Fetch all action logs for this mandate
         actions_cursor = await db.execute(
             """
@@ -323,8 +339,9 @@ async def get_proof(
 
         proof_pack = {
             "proof_pack_version": "0.1.0",
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": generated_at.isoformat(),
             "mandate": mandate_dict,
+            "delegation_chain": delegation_chain,
             "actions": actions,
             "events": events,
             "chain_integrity": {
