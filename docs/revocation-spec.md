@@ -89,13 +89,16 @@ revocation record (record deleted); `null` otherwise.
   `docs/token-issuance-spec.md`, Registry Check at Execution).
 - Mandate attestations already issued (`issue_mandate_attestation`) are signed JWS too:
   a receiver that checks them offline accepts them until their `exp`. The default
-  attestation lifetime is `AMR_ATTESTATION_LIFETIME_SECONDS` = 900 seconds. They are not
-  counted in the `revoke_mandate` response (see Known limits).
+  attestation lifetime is `AMR_ATTESTATION_LIFETIME_SECONDS` = 900 seconds. The response
+  says how many are still valid and until when (`outstanding_attestations.still_valid`,
+  `outstanding_attestations.last_expires_at`), counting the mandate and its
+  sub-mandates, from the `issued_attestations` table.
 
 ## Known limits
 
-- The `revoke_mandate` response counts outstanding action tokens only, not mandate
-  attestations still within their lifetime (`issued_attestations`).
+- The outstanding counts come from the registry's own records (`issued_tokens`,
+  `issued_attestations`): a token or an attestation whose record was deleted from the
+  database is not counted, although its signature still verifies until its `exp`.
 - A token lives at most `AMR_TOKEN_LIFETIME_SECONDS` (default 300 s) after it is issued,
   and never past the expiry of its mandate or of any mandate above it in the chain.
   `lifetime_override_seconds` can only shorten it. A token issued before a revocation

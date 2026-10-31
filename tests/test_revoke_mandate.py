@@ -357,6 +357,116 @@ async def test_expired_tokens_are_not_outstanding() -> None:
     assert result["outstanding_tokens"] == {"still_valid": 0, "last_expires_at": None}
 
 
+# --- Outstanding attestations: same honest answer for the offline proof ------------
+
+
+async def _attest(mandate_id: str, agent_id: str = AGENT, **kw: object) -> dict:
+    result = json.loads(await issue_mandate_attestation(mandate_id, agent_id, **kw))
+    assert "attestation" in result, result
+    return result
+
+
+async def test_outstanding_attestations_are_reported_for_the_branch() -> None:
+    root = await _create()
+    child = await _sub(root["mandate_id"], delegation_allowed=True)
+    grandchild = await _sub(
+        child["mandate_id"], principal_id=HELPER, agent_id="agent:reader", duration_hours=6.0
+    )
+    assert grandchild.get("status") == "created", grandchild
+    first = await _attest(root["mandate_id"], lifetime_seconds=30)
+    second = await _attest(child["mandate_id"], HELPER, lifetime_seconds=120)
+    third = await _attest(grandchild["mandate_id"], "agent:reader", lifetime_seconds=60)
+    result = await _revoke(root["mandate_id"])
+    outstanding = result["outstanding_attestations"]
+    assert outstanding["still_valid"] == 3
+    assert outstanding["last_expires_at"] == max(
+        first["expires_at"], second["expires_at"], third["expires_at"]
+    )
+
+
+async def test_the_latest_attestation_expiry_is_the_one_reported() -> None:
+    root = await _create()
+    child = await _sub(root["mandate_id"])
+    await _attest(root["mandate_id"], lifetime_seconds=30)
+    longest = await _attest(child["mandate_id"], HELPER)
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_attestations"]["last_expires_at"] == longest["expires_at"]
+
+
+async def test_expired_attestations_are_not_outstanding(temp_db: Path) -> None:
+    root = await _create()
+    await _attest(root["mandate_id"])
+    past = (datetime.now(UTC) - timedelta(seconds=5)).isoformat()
+    _sql(temp_db, "UPDATE issued_attestations SET expires_at = ?", (past,))
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_attestations"] == {"still_valid": 0, "last_expires_at": None}
+
+
+async def test_naive_attestation_expiry_reads_as_utc(temp_db: Path) -> None:
+    root = await _create()
+    await _attest(root["mandate_id"])
+    future = (datetime.now(UTC) + timedelta(seconds=600)).replace(tzinfo=None)
+    _sql(temp_db, "UPDATE issued_attestations SET expires_at = ?", (future.isoformat(),))
+    result = await _revoke(root["mandate_id"])
+    outstanding = result["outstanding_attestations"]
+    assert outstanding["still_valid"] == 1
+    assert outstanding["last_expires_at"] == future.replace(tzinfo=UTC).isoformat()
+
+
+async def test_outstanding_counts_stop_at_the_delegation_depth_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = await _create()
+    child = await _sub(root["mandate_id"], delegation_allowed=True)
+    grandchild = await _sub(
+        child["mandate_id"], principal_id=HELPER, agent_id="agent:reader", duration_hours=6.0
+    )
+    assert grandchild.get("status") == "created", grandchild
+    await _attest(child["mandate_id"], HELPER)
+    await _attest(grandchild["mandate_id"], "agent:reader")
+    await _token(child["mandate_id"], HELPER)
+    await _token(grandchild["mandate_id"], "agent:reader")
+    # Same bound as on main: levels 0..MAX_DELEGATION_DEPTH below the revoked mandate.
+    monkeypatch.setattr("amr.tools.revoke_mandate.MAX_DELEGATION_DEPTH", 1)
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_attestations"]["still_valid"] == 1
+    assert result["outstanding_tokens"]["still_valid"] == 1
+
+
+async def test_no_attestation_means_zero_outstanding() -> None:
+    root = await _create()
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_attestations"] == {"still_valid": 0, "last_expires_at": None}
+
+
+async def test_tokens_and_attestations_are_counted_apart() -> None:
+    root = await _create()
+    token = await _token(root["mandate_id"])
+    attestation = await _attest(root["mandate_id"])
+    await _attest(root["mandate_id"], lifetime_seconds=30)
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_tokens"] == {
+        "still_valid": 1,
+        "last_expires_at": token["expires_at"],
+    }
+    assert result["outstanding_attestations"] == {
+        "still_valid": 2,
+        "last_expires_at": attestation["expires_at"],
+    }
+
+
+async def test_attestations_outside_the_branch_are_not_counted() -> None:
+    root = await _create()
+    child = await _sub(root["mandate_id"])
+    other = await _create(agent_id="agent:other")
+    await _attest(root["mandate_id"])
+    await _attest(other["mandate_id"], "agent:other")
+    result = await _revoke(child["mandate_id"])
+    assert result["outstanding_attestations"] == {"still_valid": 0, "last_expires_at": None}
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_attestations"]["still_valid"] == 1
+
+
 # --- Proof Pack and insurer dossier -------------------------------------------------
 
 
