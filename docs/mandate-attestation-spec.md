@@ -157,7 +157,9 @@ attestation does not carry.
 - **Status at issuance, not now.** The receiver learns that the chain was active at
   `iat`. A revocation made later (`revoke_mandate`) reaches it only when the attestation expires (15
   minutes by default). For an important act, ask the agent for a fresh attestation,
-  with a short `lifetime_seconds` and your `audience`.
+  with a short `lifetime_seconds` and your `audience`. The `revoke_mandate` response
+  tells the principal how many attestations of the branch are still valid and until
+  when (`outstanding_attestations`).
 - **Bearer document.** Whoever holds the attestation can show it. It names the agent
   (`sub`), but proving that the party in front of you is that agent is outside v1.
 - **Trust in the registry key.** The receiver trusts the operator's key. The
