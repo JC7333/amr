@@ -500,7 +500,8 @@ refuse the mandate (`mandate_status_revoked`) and every sub-mandate below it
 called back and stay valid until their `exp`: the response gives their number and the
 last expiry, unless the receiver re-checks the token with `check_action_token` when it
 acts (see below). Mandate attestations already issued also stay valid until their `exp`
-(15 minutes by default) and are not counted in the response.
+(15 minutes by default) for a receiver that checks them offline: the response gives
+their number and last expiry too, for the mandate and its sub-mandates.
 
 **Returns:**
 ```json
@@ -512,7 +513,8 @@ acts (see below). Mandate attestations already issued also stay valid until thei
   "revoked_at": "2026-10-23T20:30:01.123456+00:00",
   "principal_signature": null,
   "chain_hash": "a3f1...",
-  "outstanding_tokens": {"still_valid": 1, "last_expires_at": "2026-10-23T20:34:12+00:00"}
+  "outstanding_tokens": {"still_valid": 1, "last_expires_at": "2026-10-23T20:34:12+00:00"},
+  "outstanding_attestations": {"still_valid": 0, "last_expires_at": null}
 }
 ```
 

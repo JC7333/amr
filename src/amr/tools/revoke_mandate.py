@@ -154,37 +154,53 @@ async def _check_revocation_signature(
     }
 
 
-async def _outstanding_tokens(
-    db: aiosqlite.Connection, mandate_id: str, now: datetime
-) -> dict[str, Any]:
-    """Tokens already issued under the mandate or its sub-mandates and not yet expired.
+# Fixed queries, one per kind of signed credential the registry has handed out. Each
+# reads the expiry of every credential issued under one mandate id.
+_EXPIRY_QUERIES = {
+    "tokens": "SELECT expires_at FROM issued_tokens WHERE mandate_id = ?",
+    "attestations": "SELECT expires_at FROM issued_attestations WHERE mandate_id = ?",
+}
 
-    A JWS cannot be called back: those tokens stay valid for their consumers until
-    their exp. Returned so the principal knows exactly until when.
-    """
-    count = 0
-    last: datetime | None = None
+
+async def _branch_ids(db: aiosqlite.Connection, mandate_id: str) -> list[str]:
+    """The mandate and every sub-mandate below it, down to MAX_DELEGATION_DEPTH."""
+    found = [mandate_id]
     frontier = [mandate_id]
     depth = 0
-    while frontier and depth <= MAX_DELEGATION_DEPTH:
+    while frontier and depth < MAX_DELEGATION_DEPTH:
         next_frontier: list[str] = []
         for one_id in frontier:
-            cursor = await db.execute(
-                "SELECT expires_at FROM issued_tokens WHERE mandate_id = ?", (one_id,)
-            )
-            for row in await cursor.fetchall():
-                expires = datetime.fromisoformat(row["expires_at"])
-                if expires.tzinfo is None:
-                    expires = expires.replace(tzinfo=UTC)
-                if expires > now:
-                    count += 1
-                    last = expires if last is None or expires > last else last
             cursor = await db.execute(
                 "SELECT id FROM mandates WHERE parent_mandate_id = ?", (one_id,)
             )
             next_frontier.extend(row["id"] for row in await cursor.fetchall())
+        found.extend(next_frontier)
         frontier = next_frontier
         depth += 1
+    return found
+
+
+async def _outstanding(
+    db: aiosqlite.Connection, branch: list[str], kind: str, now: datetime
+) -> dict[str, Any]:
+    """Credentials of one kind issued under the branch and not yet expired.
+
+    A JWS cannot be called back: an action token or a mandate attestation stays valid
+    for a receiver that checks it offline until its exp. Returned so the principal
+    knows exactly how many and until when.
+    """
+    query = _EXPIRY_QUERIES[kind]
+    count = 0
+    last: datetime | None = None
+    for one_id in branch:
+        cursor = await db.execute(query, (one_id,))
+        for row in await cursor.fetchall():
+            expires = datetime.fromisoformat(row["expires_at"])
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires > now:
+                count += 1
+                last = expires if last is None or expires > last else last
     return {
         "still_valid": count,
         "last_expires_at": last.isoformat() if last is not None else None,
@@ -270,8 +286,9 @@ async def revoke_mandate(
 
     Effect, from the moment this returns: no new token for the mandate or any
     sub-mandate below it, verify_mandate no longer returns it, and no sub-mandate can
-    be created under it. Tokens already issued cannot be called back: they stay valid
-    until their exp, given in outstanding_tokens.
+    be created under it. Tokens and mandate attestations already issued cannot be
+    called back: they stay valid until their exp, given in outstanding_tokens and
+    outstanding_attestations (the mandate and its sub-mandates).
 
     Args:
         mandate_id: UUID of the mandate to revoke.
@@ -283,7 +300,8 @@ async def revoke_mandate(
     Returns:
         JSON string with keys: status ("revoked"), mandate_id, principal_id, reason,
         revoked_at, principal_signature ({key_id, signed_at} or null), chain_hash,
-        outstanding_tokens ({still_valid, last_expires_at}).
+        outstanding_tokens ({still_valid, last_expires_at}),
+        outstanding_attestations ({still_valid, last_expires_at}).
         On error: {"error": "...", "code": "..."} with code mandate_not_found,
         mandate_already_revoked, invalid_input or a principal signature code.
     """
@@ -361,7 +379,9 @@ async def revoke_mandate(
             """,
             (canonical_id, "revoked", revoked_at, req.reason),
         )
-        outstanding = await _outstanding_tokens(db, canonical_id, now)
+        branch = await _branch_ids(db, canonical_id)
+        outstanding = await _outstanding(db, branch, "tokens", now)
+        outstanding_attestations = await _outstanding(db, branch, "attestations", now)
         await db.commit()
 
         return json.dumps(
@@ -378,6 +398,7 @@ async def revoke_mandate(
                 ),
                 "chain_hash": chain_hash,
                 "outstanding_tokens": outstanding,
+                "outstanding_attestations": outstanding_attestations,
             }
         )
 
