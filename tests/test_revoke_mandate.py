@@ -373,7 +373,7 @@ async def test_outstanding_attestations_are_reported_for_the_branch() -> None:
         child["mandate_id"], principal_id=HELPER, agent_id="agent:reader", duration_hours=6.0
     )
     assert grandchild.get("status") == "created", grandchild
-    first = await _attest(root["mandate_id"])
+    first = await _attest(root["mandate_id"], lifetime_seconds=30)
     second = await _attest(child["mandate_id"], HELPER, lifetime_seconds=120)
     third = await _attest(grandchild["mandate_id"], "agent:reader", lifetime_seconds=60)
     result = await _revoke(root["mandate_id"])
@@ -411,6 +411,26 @@ async def test_naive_attestation_expiry_reads_as_utc(temp_db: Path) -> None:
     outstanding = result["outstanding_attestations"]
     assert outstanding["still_valid"] == 1
     assert outstanding["last_expires_at"] == future.replace(tzinfo=UTC).isoformat()
+
+
+async def test_outstanding_counts_stop_at_the_delegation_depth_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = await _create()
+    child = await _sub(root["mandate_id"], delegation_allowed=True)
+    grandchild = await _sub(
+        child["mandate_id"], principal_id=HELPER, agent_id="agent:reader", duration_hours=6.0
+    )
+    assert grandchild.get("status") == "created", grandchild
+    await _attest(child["mandate_id"], HELPER)
+    await _attest(grandchild["mandate_id"], "agent:reader")
+    await _token(child["mandate_id"], HELPER)
+    await _token(grandchild["mandate_id"], "agent:reader")
+    # Same bound as on main: levels 0..MAX_DELEGATION_DEPTH below the revoked mandate.
+    monkeypatch.setattr("amr.tools.revoke_mandate.MAX_DELEGATION_DEPTH", 1)
+    result = await _revoke(root["mandate_id"])
+    assert result["outstanding_attestations"]["still_valid"] == 1
+    assert result["outstanding_tokens"]["still_valid"] == 1
 
 
 async def test_no_attestation_means_zero_outstanding() -> None:
