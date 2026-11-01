@@ -36,6 +36,9 @@ uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 | `export_insurer_dossier` | Export a signed, printable dossier of a mandate |
 | `revoke_mandate` | Cut a mandate and every sub-mandate below it, immediately |
 | `prepare_revocation_signature` | Build the exact bytes a principal signs to revoke |
+| `contest_action` | Record that a principal disputes an act already logged, with a response deadline the operator chooses |
+| `prepare_contest_signature` | Build the exact bytes a principal signs to contest an act |
+| `list_action_contests` | The reminder: contested acts with the days left before their response deadline |
 | `report_issue` | Report a problem with AMR itself (pre-filled link, or the issue filed when the operator set `AMR_ISSUE_TOKEN`) |
 
 ## What it does not do

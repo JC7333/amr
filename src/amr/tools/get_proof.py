@@ -22,6 +22,13 @@ from amr.db.engine import get_db, get_principal_key, get_revocation, init_db
 from amr.delegation import load_ancestors
 from amr.models.organ_decision import recorded_organ_decision
 from amr.models.perimeter import Perimeter
+from amr.tools.contest_action import (
+    CONTEST_EVENT,
+    contest_hash_valid,
+    contest_record,
+    contest_signature_valid,
+    mandate_contests,
+)
 from amr.tools.revoke_mandate import revocation_signature_valid
 
 
@@ -181,13 +188,23 @@ async def get_proof(
             the chain, or null); always unbroken for a root mandate
           - actions: list of action log entries
           - events: list of mandate events
+          - action_contests: list of the actions contested under this mandate
+            (contest_action), oldest first, each with action_id, action_chain_hash,
+            contested_by, reason, response_days, contested_at, reminder {respond_by,
+            days_left, deadline_passed}, principal_signature, chain_hash and
+            principal_signature_valid (null when unsigned and the contesting principal
+            had no key then); empty when nothing is contested
           - chain_integrity: dict with actions_chain_valid (bool),
             principal_signature_valid (bool; null for an unsigned mandate whose
             principal had no key when it was created), revocation_signature_valid
             (bool; null when the mandate is not revoked or was revoked without a
             signature by a principal that had no key; false when a "revoked" event
             has lost its revocation record),
-            total_actions, total_events
+            contests_intact (bool: false when an "action_contested" event has lost
+            its contest record, when a contest's chain_hash does not recompute from
+            its row and the previous contest, when a contest names an action that is
+            not in this mandate's log or whose hash changed, or when a contest
+            signature does not verify), total_actions, total_events
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -329,6 +346,43 @@ async def get_proof(
         event_rows = await events_cursor.fetchall()
         events = [dict(row) for row in event_rows]
 
+        # Contested actions (contest_action), each re-checked against its action and
+        # the contesting principal's key.
+        contests_intact = True
+        action_hashes = {action["id"]: action["chain_hash"] for action in actions}
+        action_contests: list[dict[str, Any]] = []
+        for row, previous_hash in await mandate_contests(db, mandate_row["id"]):
+            record = contest_record(row, generated_at)
+            contest = dict(row)
+            if not contest_hash_valid(contest, mandate_row["chain_hash"], previous_hash):
+                contests_intact = False
+            contester_key = await get_principal_key(db, contest["contested_by"])
+            signature_ok: bool | None = None
+            if contest["principal_signature"] is not None:
+                signature_ok = (
+                    contester_key is not None
+                    and contester_key["key_id"] == contest["principal_key_id"]
+                    and _key_row_valid(contester_key)
+                    and contest_signature_valid(contest, contester_key["public_key"])
+                )
+            elif contester_key is not None and _aware(
+                contester_key["registered_at"]
+            ) <= _aware(contest["contested_at"]):
+                # The contesting principal had a key, so the contest was signed.
+                signature_ok = False
+            record["principal_signature_valid"] = signature_ok
+            if signature_ok is False:
+                contests_intact = False
+            if action_hashes.get(contest["action_id"]) != contest["action_chain_hash"]:
+                contests_intact = False
+            action_contests.append(record)
+        contested_ids = {record["action_id"] for record in action_contests}
+        for event in events:
+            if event["event_type"] == CONTEST_EVENT:
+                named = str(event["reason"]).split(":", 1)[0].removeprefix("action ")
+                if named not in contested_ids:
+                    contests_intact = False
+
         # Verify the action chain integrity
         # Action chains are anchored to the mandate's chain_hash (not "")
         actions_chain_valid = verify_chain(
@@ -344,10 +398,12 @@ async def get_proof(
             "delegation_chain": delegation_chain,
             "actions": actions,
             "events": events,
+            "action_contests": action_contests,
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,
                 "revocation_signature_valid": revocation_valid,
+                "contests_intact": contests_intact,
                 "total_actions": len(actions),
                 "total_events": len(events),
             },
