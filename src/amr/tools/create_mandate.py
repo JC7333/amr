@@ -201,11 +201,28 @@ async def _check_parent(
         if not ancestor["perimeter_json"]:
             continue
         limit = Perimeter.from_json(ancestor["perimeter_json"]).max_delegation_depth
-        if limit is not None and distance > limit:
+        if limit is None:
+            continue
+        if distance > limit:
             raise PerimeterError(
                 "delegation_depth_exceeded",
                 f"mandate '{ancestor['id']}' allows at most {limit} delegation level(s) "
                 f"below it; this sub-mandate would be level {distance}",
+            )
+        # Levels still open below the new sub-mandate. What it declares must not claim more.
+        remaining = limit - distance
+        declared = perimeter.max_delegation_depth if perimeter is not None else None
+        if perimeter is not None and perimeter.delegation_allowed and remaining < 1:
+            raise PerimeterError(
+                "delegation_depth_exceeded",
+                f"mandate '{ancestor['id']}' leaves no delegation level below this "
+                "sub-mandate, so it cannot allow delegation",
+            )
+        if declared is not None and declared > remaining:
+            raise PerimeterError(
+                "delegation_depth_exceeded",
+                f"max_delegation_depth {declared} is above the {remaining} level(s) "
+                f"left by mandate '{ancestor['id']}'",
             )
     if principal_id != parent["agent_id"]:
         raise PerimeterError(
