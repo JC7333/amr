@@ -216,6 +216,11 @@ def render_html(dossier: dict[str, Any], digest: str, key_id: str) -> str:
         ("Principal key id", _e(integrity["principal_key_id"])),
         ("Last action chain hash", f'<span class="mono">{_e(integrity["chain_head"])}</span>'),
         ("Actions recorded (whole mandate)", _e(integrity["total_actions"])),
+        ("Contested actions (contest_action)", _e(integrity.get("contested_actions", 0))),
+        (
+            "Contest records intact",
+            _check(integrity.get("contests_intact", True), ""),
+        ),
     ]
     sub_rows = [
         [

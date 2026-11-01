@@ -353,10 +353,11 @@ async def test_grandparent_principal_contests_a_leaf_act() -> None:
     action = await _log(leaf["mandate_id"])
     result = await _contest(leaf["mandate_id"], action["action_id"], contested_by=PRINCIPAL)
     assert result["status"] == "contested"
+    fresh = await _log(leaf["mandate_id"], "another order")
     sideways = await _contest(
-        leaf["mandate_id"], action["action_id"], contested_by="agent:leaf"
+        leaf["mandate_id"], fresh["action_id"], contested_by="agent:leaf"
     )
-    assert sideways["code"] in {"contester_not_in_chain", "action_already_contested"}
+    assert sideways["code"] == "contester_not_in_chain"
 
 
 async def test_a_sub_principal_cannot_contest_the_parent_act() -> None:
@@ -640,7 +641,7 @@ async def test_deleted_contest_is_detected(temp_db: Path) -> None:
     assert proof["chain_integrity"]["contests_intact"] is False
 
 
-async def test_changed_action_hash_is_detected(temp_db: Path) -> None:
+async def test_changed_recorded_action_hash_breaks_the_contest_hash(temp_db: Path) -> None:
     root = await _create()
     action = await _log(root["mandate_id"])
     await _contest(root["mandate_id"], action["action_id"])
@@ -686,9 +687,22 @@ async def test_moved_respond_by_is_detected_when_signed(temp_db: Path) -> None:
     action = await _log(root["mandate_id"])
     signature = await _signature(key, root["mandate_id"], action["action_id"])
     await _contest(root["mandate_id"], action["action_id"], **signature)
-    _sql(temp_db, "UPDATE action_contests SET response_days = ?", (60,))
+    later = (datetime.now(UTC) + timedelta(days=60)).isoformat()
+    _sql(temp_db, "UPDATE action_contests SET respond_by = ?", (later,))
     proof = await _proof(root["mandate_id"])
     assert proof["chain_integrity"]["contests_intact"] is False
+
+
+async def test_changed_response_days_breaks_the_signature(temp_db: Path) -> None:
+    key = ed25519.Ed25519PrivateKey.generate()
+    await _register(key)
+    root = await _signed_root(key)
+    action = await _log(root["mandate_id"])
+    signature = await _signature(key, root["mandate_id"], action["action_id"])
+    await _contest(root["mandate_id"], action["action_id"], **signature)
+    _sql(temp_db, "UPDATE action_contests SET response_days = ?", (60,))
+    proof = await _proof(root["mandate_id"])
+    assert proof["action_contests"][0]["principal_signature_valid"] is False
 
 
 # --- Schema and compatibility ---------------------------------------------------------
@@ -783,3 +797,100 @@ async def test_database_allows_one_contest_per_action(temp_db: Path) -> None:
             "SELECT action_id, mandate_id, action_chain_hash, contested_by, reason, "
             "response_days, contested_at, respond_by, chain_hash FROM action_contests",
         )
+
+
+async def test_concurrent_contests_keep_the_chain_intact() -> None:
+    import asyncio
+
+    root = await _create()
+    actions = [await _log(root["mandate_id"], f"order {i}") for i in range(6)]
+    results = await asyncio.gather(
+        *(_contest(root["mandate_id"], a["action_id"]) for a in actions)
+    )
+    assert all(r.get("status") == "contested" for r in results), results
+    proof = await _proof(root["mandate_id"])
+    assert len(proof["action_contests"]) == 6
+    assert proof["chain_integrity"]["contests_intact"] is True
+
+
+async def test_concurrent_double_contest_records_one() -> None:
+    import asyncio
+
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    results = await asyncio.gather(
+        *(_contest(root["mandate_id"], action["action_id"]) for _ in range(4))
+    )
+    assert sum(r.get("status") == "contested" for r in results) == 1
+    assert {r.get("code") for r in results if "code" in r} == {"action_already_contested"}
+
+
+async def test_key_registered_after_an_unsigned_contest_reads_null() -> None:
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    await _contest(root["mandate_id"], action["action_id"])
+    await _register(ed25519.Ed25519PrivateKey.generate())
+    proof = await _proof(root["mandate_id"])
+    assert proof["action_contests"][0]["principal_signature_valid"] is None
+    assert proof["chain_integrity"]["contests_intact"] is True
+
+
+async def test_contest_whose_event_was_deleted_is_detected(temp_db: Path) -> None:
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    await _contest(root["mandate_id"], action["action_id"])
+    _sql(temp_db, "DELETE FROM mandate_events WHERE event_type = 'action_contested'")
+    proof = await _proof(root["mandate_id"])
+    assert proof["chain_integrity"]["contests_intact"] is False
+
+
+async def test_prepare_refuses_an_action_already_contested() -> None:
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    await _contest(root["mandate_id"], action["action_id"])
+    prepared = json.loads(
+        await prepare_contest_signature(root["mandate_id"], action["action_id"], REASON, 14)
+    )
+    assert prepared["code"] == "action_already_contested"
+
+
+async def test_insurer_dossier_reports_contests() -> None:
+    from amr.tools.export_insurer_dossier import export_insurer_dossier
+
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    await _contest(root["mandate_id"], action["action_id"])
+    result = json.loads(await export_insurer_dossier(root["mandate_id"]))
+    assert "error" not in result, result
+    text = json.dumps(result)
+    assert '"contested_actions": 1' in text
+    assert '"contests_intact": true' in text
+
+
+async def test_v7_database_migrates_without_changing_hashes(temp_db: Path) -> None:
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    # Make it a v7 database again: no contest table, no v8 row.
+    _sql(temp_db, "DROP TABLE action_contests")
+    _sql(temp_db, "DELETE FROM schema_version WHERE version = 8")
+    mandates = _sql(temp_db, "SELECT * FROM mandates")
+    logs = _sql(temp_db, "SELECT * FROM action_logs")
+    await init_db(temp_db)
+    assert 8 in {row[0] for row in _sql(temp_db, "SELECT version FROM schema_version")}
+    assert _sql(temp_db, "SELECT * FROM mandates") == mandates
+    assert _sql(temp_db, "SELECT * FROM action_logs") == logs
+    proof = await _proof(root["mandate_id"])
+    assert proof["action_contests"] == []
+    assert proof["chain_integrity"]["contests_intact"] is True
+    assert (await _contest(root["mandate_id"], action["action_id"]))["status"] == "contested"
+
+
+async def test_insurer_dossier_reports_a_broken_contest(temp_db: Path) -> None:
+    from amr.tools.export_insurer_dossier import export_insurer_dossier
+
+    root = await _create()
+    action = await _log(root["mandate_id"])
+    await _contest(root["mandate_id"], action["action_id"])
+    _sql(temp_db, "UPDATE action_contests SET reason = ?", ("softened",))
+    text = json.dumps(json.loads(await export_insurer_dossier(root["mandate_id"])))
+    assert '"contests_intact": false' in text

@@ -201,7 +201,8 @@ async def get_proof(
             signature by a principal that had no key; false when a "revoked" event
             has lost its revocation record),
             contests_intact (bool: false when an "action_contested" event has lost
-            its contest record, when a contest's chain_hash does not recompute from
+            its contest record or a contest record has lost its event, when a
+            contest's chain_hash does not recompute from
             its row and the previous contest, when a contest names an action that is
             not in this mandate's log or whose hash changed, or when a contest
             signature does not verify), total_actions, total_events
@@ -377,11 +378,16 @@ async def get_proof(
                 contests_intact = False
             action_contests.append(record)
         contested_ids = {record["action_id"] for record in action_contests}
+        event_ids: set[str] = set()
         for event in events:
             if event["event_type"] == CONTEST_EVENT:
                 named = str(event["reason"]).split(":", 1)[0].removeprefix("action ")
+                event_ids.add(named)
                 if named not in contested_ids:
                     contests_intact = False
+        if contested_ids - event_ids:
+            # contest_action writes the record and its event together.
+            contests_intact = False
 
         # Verify the action chain integrity
         # Action chains are anchored to the mandate's chain_hash (not "")

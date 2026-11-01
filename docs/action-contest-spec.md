@@ -46,7 +46,9 @@ The signed payload (`prepare_contest_signature`) is the canonical JSON of
 `{context: "amr.action_contest.v1", mandate_id, action_id, contested_by, reason,
 response_days, signed_at}`. `signed_at` must be within
 `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` of the registry clock; a signature records
-one contest only (`principal_signature_replayed`).
+one contest only (`principal_signature_replayed`, a defensive check: the payload names
+the action, so a replayed signature meets `action_already_contested` first).
+`prepare_contest_signature` also refuses an action already contested.
 
 ## The response deadline
 
@@ -69,7 +71,8 @@ including those already passed. At most 500 are returned (`truncated: true` beyo
 key at the time, `false` when the signature does not verify or is missing although
 the principal had a key) and `chain_integrity.contests_intact`, false when:
 
-- an `action_contested` event has no contest record (the record was deleted);
+- an `action_contested` event has no contest record, or a contest record has no
+  event (one of the two was deleted);
 - a contest's `chain_hash` does not recompute from its row, the mandate's
   `chain_hash` and the `chain_hash` of the contest recorded just before it in the
   registry (a field was edited, or a contest was removed from the middle);
@@ -81,7 +84,11 @@ the principal had a key) and `chain_integrity.contests_intact`, false when:
 
 Schema v8 only adds a table and two indexes. Existing mandates, action logs and their
 hashes are unchanged. The Proof Pack gains two keys (`action_contests`, empty when
-nothing is contested, and `chain_integrity.contests_intact`).
+nothing is contested, and `chain_integrity.contests_intact`); `proof_pack_version`
+stays `0.1.0` because nothing is removed or renamed. `events` and `total_events` now
+also count `action_contested` events: a consumer that read every event as a status
+change must skip this type. The insurer dossier gains `integrity.contested_actions`
+and `integrity.contests_intact`.
 
 ## Known limits
 
@@ -89,7 +96,10 @@ nothing is contested, and `chain_integrity.contests_intact`).
   counterparty or decide who bears a loss.
 - The contest chain proves the order and integrity of contests as long as the registry
   database is not rewritten as a whole; like every other table, the registry trusts
-  its own file.
+  its own file. Deleting the newest contest of the whole registry together with its
+  event leaves no trace in the chain (nothing comes after it to break).
+- Concurrent contests are serialized by a write transaction (`BEGIN IMMEDIATE`), so
+  two of them never chain to the same previous hash.
 - There is no "resolved" state yet: the outcome of a dispute is kept outside AMR.
 - The reminder is a query: AMR sends nothing by itself (no network call); the operator
   schedules `list_action_contests`.

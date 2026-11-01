@@ -330,10 +330,11 @@ _SELECT_CONTESTS = (
     "principal_signed_at, principal_key_id, principal_signed_payload, chain_hash "
     "FROM action_contests "
 )
+_LIST_ORDER = " AND respond_by <= ? ORDER BY respond_by ASC, rowid ASC LIMIT ?"
 _LIST_QUERIES = {
-    "both": _SELECT_CONTESTS + "WHERE mandate_id = ? AND contested_by = ?",
-    "mandate": _SELECT_CONTESTS + "WHERE mandate_id = ?",
-    "contester": _SELECT_CONTESTS + "WHERE contested_by = ?",
+    "both": _SELECT_CONTESTS + "WHERE mandate_id = ? AND contested_by = ?" + _LIST_ORDER,
+    "mandate": _SELECT_CONTESTS + "WHERE mandate_id = ?" + _LIST_ORDER,
+    "contester": _SELECT_CONTESTS + "WHERE contested_by = ?" + _LIST_ORDER,
 }
 _INSERT_CONTEST = (
     "INSERT INTO action_contests (mandate_id, action_id, action_chain_hash, "
@@ -414,7 +415,12 @@ async def prepare_contest_signature(
         resolved = await _resolve(db, req)
         if isinstance(resolved, str):
             return resolved
-        _, _, who = resolved
+        _, action, who = resolved
+        cursor = await db.execute(
+            "SELECT 1 FROM action_contests WHERE action_id = ?", (action["id"],)
+        )
+        if await cursor.fetchone() is not None:
+            return _error("action_already_contested", "this action is already contested")
         payload = contest_payload(
             mandate_id=str(req.mandate_id),
             action_id=str(req.action_id),
@@ -508,6 +514,9 @@ async def contest_action(
         await init_db(settings.db_path)
         db = await get_db(settings.db_path)
 
+        # One write transaction from these reads to the inserts below, so two
+        # concurrent contests cannot chain to the same previous contest hash.
+        await db.execute("BEGIN IMMEDIATE")
         resolved = await _resolve(db, req)
         if isinstance(resolved, str):
             return resolved
@@ -596,6 +605,8 @@ async def contest_action(
         if "action_contests.action_id" in str(exc):
             return _error("action_already_contested", "this action is already contested")
         if "principal_signature" in str(exc):
+            # Defensive only: the payload names the action, so a replayed signature
+            # meets action_already_contested first.
             return _error(
                 "principal_signature_replayed", "this signature already recorded a contest"
             )
@@ -651,19 +662,23 @@ async def list_action_contests(
 
         await init_db(settings.db_path)
         db = await get_db(settings.db_path)
+        # respond_by is stored as a UTC ISO string written by contest_action, so the
+        # string order is the time order. No horizon: the far end of the range.
+        horizon = (
+            (now + timedelta(days=req.due_within_days)).isoformat()
+            if req.due_within_days is not None
+            else "9999"
+        )
+        tail = (horizon, MAX_LISTED_CONTESTS + 1)
         if req.mandate_id is not None and req.contested_by is not None:
             cursor = await db.execute(
-                _LIST_QUERIES["both"], (str(req.mandate_id), req.contested_by)
+                _LIST_QUERIES["both"], (str(req.mandate_id), req.contested_by, *tail)
             )
         elif req.mandate_id is not None:
-            cursor = await db.execute(_LIST_QUERIES["mandate"], (str(req.mandate_id),))
+            cursor = await db.execute(_LIST_QUERIES["mandate"], (str(req.mandate_id), *tail))
         else:
-            cursor = await db.execute(_LIST_QUERIES["contester"], (req.contested_by,))
+            cursor = await db.execute(_LIST_QUERIES["contester"], (req.contested_by, *tail))
         rows = list(await cursor.fetchall())
-        if req.due_within_days is not None:
-            horizon = now + timedelta(days=req.due_within_days)
-            rows = [row for row in rows if _aware(row["respond_by"]) <= horizon]
-        rows.sort(key=lambda row: _aware(row["respond_by"]))
         truncated = len(rows) > MAX_LISTED_CONTESTS
         contests = [contest_record(row, now) for row in rows[:MAX_LISTED_CONTESTS]]
         return json.dumps(
