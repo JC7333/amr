@@ -40,6 +40,7 @@ def _build_perimeter(
     period_max_amount: str | None = None,
     period_days: int | None = None,
     risk_classes: list[dict[str, Any]] | None = None,
+    max_delegation_depth: int | None = None,
 ) -> Perimeter | None:
     """Build the structured perimeter, or None for a legacy free-text mandate.
 
@@ -54,6 +55,7 @@ def _build_perimeter(
         and period_max_amount is None
         and period_days is None
         and risk_classes is None
+        and max_delegation_depth is None
         and not delegation_allowed
     ):
         return None
@@ -66,6 +68,7 @@ def _build_perimeter(
         allowed_actions=tuple(allowed_actions),
         forbidden_actions=tuple(forbidden_actions or ()),
         delegation_allowed=delegation_allowed,
+        max_delegation_depth=max_delegation_depth,
         max_amount=max_amount,  # type: ignore[arg-type]
         currency=currency,
         amount_actions=tuple(amount_actions or ()),
@@ -194,6 +197,16 @@ async def _check_parent(
     parent_perimeter = Perimeter.from_json(parent["perimeter_json"])
     if not parent_perimeter.delegation_allowed:
         raise PerimeterError("delegation_not_allowed", "parent mandate forbids delegation")
+    for distance, ancestor in enumerate(ancestors, start=1):
+        if not ancestor["perimeter_json"]:
+            continue
+        limit = Perimeter.from_json(ancestor["perimeter_json"]).max_delegation_depth
+        if limit is not None and distance > limit:
+            raise PerimeterError(
+                "delegation_depth_exceeded",
+                f"mandate '{ancestor['id']}' allows at most {limit} delegation level(s) "
+                f"below it; this sub-mandate would be level {distance}",
+            )
     if principal_id != parent["agent_id"]:
         raise PerimeterError(
             "delegator_mismatch",
@@ -232,6 +245,7 @@ async def create_mandate(
     period_max_amount: str | None = None,
     period_days: int | None = None,
     risk_classes: list[dict[str, Any]] | None = None,
+    max_delegation_depth: int | None = None,
 ) -> str:
     """Create and register a new legal mandate authorizing an AI agent
     to act on behalf of a principal.
@@ -240,9 +254,9 @@ async def create_mandate(
     Each mandate is cryptographically linked to the previous one (SHA-256 chain).
 
     The optional structured perimeter (allowed_actions, forbidden_actions,
-    delegation_allowed, max_amount, period_max_amount, risk_classes) is enforced by
-    issue_action_token: an action outside it gets no token. Without it, the mandate is
-    a free-text scope only.
+    delegation_allowed, max_delegation_depth, max_amount, period_max_amount, risk_classes)
+    is enforced by issue_action_token: an action outside it gets no token. Without it,
+    the mandate is a free-text scope only.
 
     The principal can sign the mandate with its own Ed25519 key (registered once with
     register_principal_key): build the exact bytes with prepare_mandate_signature, sign
@@ -288,6 +302,11 @@ async def create_mandate(
                            Example: ["agent.create", "invoice.delete"]
         delegation_allowed: Whether the agent may grant sub-mandates to other agents.
                             Default False.
+        max_delegation_depth: Optional, with delegation_allowed: how many levels of
+                              sub-mandates may exist below this mandate (1 to 16).
+                              1 lets the agent delegate but not its sub-agents.
+                              Absent: no limit set by this mandate. Refused with
+                              delegation_depth_exceeded.
         max_amount: Optional ceiling per action, as a plain decimal string with a dot.
                     Example: "500" or "120.50"
         currency: ISO 4217 code of max_amount. Default "EUR".
@@ -347,6 +366,7 @@ async def create_mandate(
                 period_max_amount,
                 period_days,
                 risk_classes,
+                max_delegation_depth,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))

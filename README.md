@@ -348,6 +348,7 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `allowed_actions` | list[str] \| null | Action types the agent may request: `"invoice.pay"`, `"invoice.*"` or `"*"` |
 | `forbidden_actions` | list[str] \| null | Action types never allowed (win over `allowed_actions`). E.g. `["agent.create"]` |
 | `delegation_allowed` | bool | Whether the agent may grant sub-mandates (default `false`) |
+| `max_delegation_depth` | int \| null | With `delegation_allowed`: how many levels of sub-mandates may exist below this mandate, 1 to 16 (`1` = the agent may delegate, its sub-agents may not). A deeper sub-mandate is refused with `delegation_depth_exceeded`; every ancestor's limit is checked. Absent: no limit from this mandate. Added to the sealed perimeter only when set, so existing mandates keep their hash. Applies to sub-mandates created after the limit was set. |
 | `max_amount` | str \| null | Ceiling per action, decimal string. E.g. `"500"` |
 | `currency` | str | ISO 4217 code of `max_amount` (default `"EUR"`) |
 | `amount_actions` | list[str] \| null | Actions that must carry an `amount` under the ceiling (empty: all) |
