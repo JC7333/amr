@@ -48,9 +48,11 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
 A mandate may carry a structured perimeter: `allowed_actions`, `forbidden_actions`
 (patterns: exact type `invoice.pay`, prefix `invoice.*`, or `*`), `delegation_allowed`,
 `max_amount` with `currency`, `amount_actions`, and a cumulative ceiling
-`period_max_amount` with `period_days` (both or neither). Action types are dotted
-lowercase ASCII identifiers. The two cumulative keys appear in the canonical perimeter
-only when set, so perimeters without them keep their digest.
+`period_max_amount` with `period_days` (both or neither), and `max_delegation_depth`
+(1 to 16, requires `delegation_allowed`; creation of a deeper sub-mandate is refused with
+`delegation_depth_exceeded`). Action types are dotted lowercase ASCII identifiers. The
+three optional keys appear in the canonical perimeter only when set, so perimeters
+without them keep their digest.
 
 Fail-safe pattern semantics: in `allowed_actions`, an exact pattern allows exactly that
 type and `invoice.*` allows the strict sub-types of `invoice`; in `forbidden_actions`

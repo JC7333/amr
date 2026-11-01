@@ -52,6 +52,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from amr.delegation import MAX_DELEGATION_DEPTH
+
 ACTION_TYPE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*", re.ASCII)
 AMOUNT_RE = re.compile(r"[0-9]{1,18}(?:\.[0-9]{1,18})?", re.ASCII)
 MAX_PATTERNS = 100
@@ -217,6 +219,9 @@ class Perimeter(BaseModel):
     allowed_actions: tuple[str, ...] = Field(..., min_length=1, max_length=MAX_PATTERNS)
     forbidden_actions: tuple[str, ...] = Field(default=(), max_length=MAX_PATTERNS)
     delegation_allowed: bool = False
+    max_delegation_depth: int | None = Field(
+        default=None, ge=1, le=MAX_DELEGATION_DEPTH, strict=True
+    )
     max_amount: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
     currency: str = Field(default="EUR", pattern=r"^[A-Z]{3}$")
     amount_actions: tuple[str, ...] = Field(default=(), max_length=MAX_PATTERNS)
@@ -251,6 +256,8 @@ class Perimeter(BaseModel):
 
     @model_validator(mode="after")
     def _amount_actions_need_a_limit(self) -> "Perimeter":
+        if self.max_delegation_depth is not None and not self.delegation_allowed:
+            raise ValueError("max_delegation_depth requires delegation_allowed")
         if (self.period_max_amount is None) != (self.period_days is None):
             raise ValueError("period_max_amount and period_days must be given together")
         if self.amount_actions and not self.has_amount_limit:
@@ -295,9 +302,9 @@ class Perimeter(BaseModel):
     def canonical(self) -> dict[str, Any]:
         """Canonical dict, stable across runs (used in hashes, storage and proofs).
 
-        The cumulative ceiling keys appear only when it is set, and ``risk_classes`` only
-        when there is at least one, so a perimeter without them keeps the exact form (and
-        hashes) it had before they existed.
+        ``max_delegation_depth`` and the cumulative ceiling keys appear only when set, and
+        ``risk_classes`` only when there is at least one, so a perimeter without them keeps
+        the exact form (and hashes) it had before they existed.
         """
         canonical: dict[str, Any] = {
             "allowed_actions": list(self.allowed_actions),
@@ -307,6 +314,8 @@ class Perimeter(BaseModel):
             "currency": self.currency,
             "amount_actions": list(self.amount_actions),
         }
+        if self.max_delegation_depth is not None:
+            canonical["max_delegation_depth"] = self.max_delegation_depth
         if self.period_max_amount is not None:
             canonical["period_max_amount"] = _canonical_amount(self.period_max_amount)
             canonical["period_days"] = self.period_days
@@ -417,6 +426,7 @@ class Perimeter(BaseModel):
                 allowed_actions=self.allowed_actions,
                 forbidden_actions=forbidden,
                 delegation_allowed=self.delegation_allowed,
+                max_delegation_depth=self.max_delegation_depth,
                 max_amount=max_amount,
                 currency=currency,
                 amount_actions=amount_actions,
