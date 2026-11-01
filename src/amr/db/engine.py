@@ -116,6 +116,27 @@ CREATE TABLE IF NOT EXISTS token_amounts (
     PRIMARY KEY (jti, mandate_id)
 );
 
+-- One row per contested action (append-only; the PRIMARY KEY allows one contest per
+-- logged action). respond_by is the operator's own response deadline (response_days),
+-- never a legal deadline computed by AMR. Chained with SHA-256 like revocations.
+CREATE TABLE IF NOT EXISTS action_contests (
+    action_id                TEXT PRIMARY KEY REFERENCES action_logs(id),
+    mandate_id               TEXT NOT NULL REFERENCES mandates(id),
+    action_chain_hash        TEXT NOT NULL,
+    contested_by             TEXT NOT NULL,
+    reason                   TEXT NOT NULL,
+    response_days            INTEGER NOT NULL,
+    contested_at             TEXT NOT NULL,
+    respond_by               TEXT NOT NULL,
+    principal_signature      TEXT UNIQUE,
+    principal_signed_at      TEXT,
+    principal_key_id         TEXT,
+    principal_signed_payload TEXT,
+    chain_hash               TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_contests_mandate ON action_contests(mandate_id);
+CREATE INDEX IF NOT EXISTS idx_action_contests_contester ON action_contests(contested_by);
 CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate
     ON token_amounts(mandate_id, currency, issued_at);
 CREATE INDEX IF NOT EXISTS idx_issued_attestations_mandate ON issued_attestations(mandate_id);
@@ -183,7 +204,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
     Creates all tables and indexes if they do not already exist.
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
-    7: token amounts for cumulative ceilings).
+    7: token amounts for cumulative ceilings, 8: action contests).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -251,6 +272,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (7,),
+        )
+        # Schema v8: action_contests, created by the script above (contest_action).
+        # Existing mandates and action logs are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (8,),
         )
         await db.commit()
 

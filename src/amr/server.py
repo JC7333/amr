@@ -7,6 +7,11 @@ from mcp.server.fastmcp import FastMCP
 
 from amr.config import settings
 from amr.tools.check_action_token import check_action_token
+from amr.tools.contest_action import (
+    contest_action,
+    list_action_contests,
+    prepare_contest_signature,
+)
 from amr.tools.create_mandate import create_mandate
 from amr.tools.export_insurer_dossier import export_insurer_dossier
 from amr.tools.get_proof import get_proof
@@ -37,6 +42,9 @@ mcp.tool()(get_registry_public_key)
 mcp.tool()(export_insurer_dossier)
 mcp.tool()(revoke_mandate)
 mcp.tool()(prepare_revocation_signature)
+mcp.tool()(contest_action)
+mcp.tool()(prepare_contest_signature)
+mcp.tool()(list_action_contests)
 mcp.tool()(report_issue)
 
 
