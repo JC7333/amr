@@ -69,6 +69,9 @@ current directory of the client. Keep the `.pem` private key out of version cont
    `authorized: false`. Tokens and attestations already issued stay valid until they
    expire, except for a receiver that re-checks the token with `check_action_token`.
 6. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
+   If the agent already did something it should not have, `contest_action(mandate_id,
+   action_id, reason, response_days)` records that the act is disputed, and
+   `list_action_contests` reminds the deadline the operator chose.
 7. `report_issue(title, description, version, context)`: report a problem with AMR
    itself. Without `AMR_ISSUE_TOKEN` it makes no network call and returns a pre-filled
    link to open; with it, it files the issue on GitHub. See
@@ -529,6 +532,68 @@ whatever the depth of the chain. See `docs/revocation-spec.md`.
 
 ---
 
+### `contest_action`
+
+The agent has already acted, and the principal disputes the act. Revoking the mandate
+stops what comes next; `contest_action` records that one past act, logged with
+`log_action`, is contested, when, why, and by whom. Append-only: a chained row in
+`action_contests` (one per action; it cannot be withdrawn or edited) and an
+`action_contested` mandate event. The action log, the mandate and every hash already
+recorded stay as they are.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mandate_id` | str | UUID of the mandate the action was logged under |
+| `action_id` | str | `action_id` returned by `log_action` |
+| `reason` | str | Why the act is contested (1 to 500 characters) |
+| `response_days` | int | Days until `respond_by` (1 to 365), chosen by the operator |
+| `contested_by` | str \| null | The contesting principal; default: the mandate's principal |
+| `principal_signature` | str \| null | Ed25519 signature of the contest payload (required if the contesting principal has a registered key) |
+| `signed_at` | str \| null | The `signed_at` placed in the payload |
+
+`contested_by` may be the mandate's principal or the principal of any mandate above it
+in the delegation chain (an organization disputes what a sub-agent did), whatever the
+status of those mandates. Same signature policy as `create_mandate` and
+`revoke_mandate`; build the bytes with `prepare_contest_signature` (same arguments,
+plus `signed_at=None`).
+
+`respond_by = contested_at + response_days` is the operator's own deadline, for
+example the delay its counsel gives before keeping or using what was ordered could be
+read as accepting it. **AMR computes no legal deadline and asserts none.** A contest
+does not undo the act and does not revoke the mandate: call `revoke_mandate` for that.
+
+**Returns:**
+```json
+{
+  "status": "contested",
+  "mandate_id": "550e8400-e29b-41d4-a716-446655440000",
+  "action_id": "0b6f7c1e-3d0a-4c55-9a43-5d1f1f0e2a10",
+  "action_chain_hash": "9c2e...",
+  "contested_by": "org:clinic",
+  "reason": "order placed above the agreed quantity",
+  "response_days": 14,
+  "contested_at": "2026-11-01T21:30:00+00:00",
+  "reminder": {"respond_by": "2026-11-15T21:30:00+00:00", "days_left": 14, "deadline_passed": false},
+  "principal_signature": null,
+  "chain_hash": "5be0..."
+}
+```
+Errors (`code`): `invalid_input`, `mandate_not_found`, `action_not_found` (also when
+the action belongs to another mandate), `contester_not_in_chain`,
+`action_already_contested`, and the principal signature codes of `revoke_mandate`.
+
+**Reminder:** `list_action_contests(mandate_id=None, contested_by=None,
+due_within_days=None)` (read-only; give `mandate_id`, `contested_by` or both) returns
+the contests, nearest `respond_by` first, each with `reminder.days_left` (negative once
+passed) and `reminder.deadline_passed`. Call it on a schedule, for example each morning
+with `due_within_days=3`. `get_proof` lists the contests of a mandate in
+`action_contests` and re-checks them in `chain_integrity.contests_intact`. See
+[`docs/action-contest-spec.md`](docs/action-contest-spec.md).
+
+---
+
 ### `check_action_token`
 
 For the receiver of an agent's action: re-check a token with the registry at the moment
@@ -586,10 +651,12 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
   "delegation_chain": {"broken": false, "reason": null, "refused_by": null},
   "actions": [ "...list of all logged actions..." ],
   "events": [],
+  "action_contests": [],
   "chain_integrity": {
     "actions_chain_valid": true,
     "principal_signature_valid": null,
     "revocation_signature_valid": null,
+    "contests_intact": true,
     "total_actions": 5,
     "total_events": 0
   },
@@ -813,6 +880,7 @@ src/amr/
 │   ├── check_action_token.py          # receiver re-checks a token when it acts
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
+│   ├── contest_action.py   # contested acts and their response deadline (reminder)
 │   ├── report_issue.py   # only network call, opt-in (AMR_ISSUE_TOKEN)
 │   └── export_insurer_dossier.py
 ├── attestation.py     # offline attestation verifier (no DB, no network)

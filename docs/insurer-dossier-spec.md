@@ -19,7 +19,7 @@ chain hashes are unchanged.
 | `period` | `{start, end}`, both inclusive; defaults to the mandate's creation and `generated_at`. Only ISO 8601 date-times are accepted (a bare date or a number is refused); naive date-times read as UTC |
 | `mandate` | The mandate as stored (same object as in the Proof Pack), including its perimeter and, if any, the principal's signature |
 | `status` | `stored_status`, `in_force` at `generated_at`, `not_in_force_reason` |
-| `integrity` | `actions_chain_valid` and `total_actions` (whole mandate, not only the period), `principal_signature_valid` (`null` when the mandate is not signed by its principal), `principal_key_id`, `chain_head` (last action chain hash, or the mandate's chain hash when no action) |
+| `integrity` | `actions_chain_valid` and `total_actions` (whole mandate, not only the period), `principal_signature_valid` (`null` when the mandate is not signed by its principal), `principal_key_id`, `chain_head` (last action chain hash, or the mandate's chain hash when no action), `contested_actions` (number of actions of the mandate contested with `contest_action`) and `contests_intact` (as in the Proof Pack) |
 | `sub_mandates` | The delegation tree below the mandate, breadth first: `id`, `parent_mandate_id`, `depth`, `principal_id`, `agent_id`, `scope`, dates, `perimeter`, `status`, `integrity`, `actions_in_period` |
 | `sub_mandates_truncated` | `true` when the tree was cut at 500 sub-mandates or at the maximum delegation depth (16); the events and tokens of omitted sub-mandates are omitted too |
 | `events` | Status events (`mandate_events`) of the period, for the mandate and its sub-mandates |
