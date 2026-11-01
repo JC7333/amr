@@ -134,6 +134,11 @@ def _perimeter_rows(perimeter: dict[str, Any] | None) -> list[tuple[str, str]]:
         ("Allowed action types", _e(perimeter.get("allowed_actions"))),
         ("Forbidden action types", _e(perimeter.get("forbidden_actions"))),
         ("May delegate (sub-mandates)", _e(perimeter.get("delegation_allowed"))),
+        *(
+            [("Delegation depth limit", _e(perimeter.get("max_delegation_depth")))]
+            if perimeter.get("max_delegation_depth") is not None
+            else []
+        ),
         (
             "Amount limit per action",
             (
