@@ -2,7 +2,11 @@
 
 > Open-source MCP server (Apache-2.0) that records which principal authorized which AI agent to do what, verifies it, and keeps a hash-chained, append-only journal of the agent's actions. Runs locally over stdio; makes no network call (except report_issue, only when the operator sets AMR_ISSUE_TOKEN). Not legal advice; does not make anyone compliant.
 
-Install and run (needs uv; keep `--with "mcp<2"`, AMR is written for version 1 of the MCP Python SDK; AMR is not on PyPI):
+Install and run (needs uv; the PyPI package is `mandatia`, `uvx amr` installs a different project):
+
+    uvx mandatia
+
+If the package is not found (first release not out yet), run from the repository and keep `--with "mcp<2"` (AMR is written for version 1 of the MCP Python SDK):
 
     uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 
@@ -18,6 +22,7 @@ Install and run (needs uv; keep `--with "mcp<2"`, AMR is written for version 1 o
 - [Revocation](https://github.com/JC7333/amr/blob/main/docs/revocation-spec.md)
 - [Insurer dossier](https://github.com/JC7333/amr/blob/main/docs/insurer-dossier-spec.md)
 - [Reporting an issue](https://github.com/JC7333/amr/blob/main/docs/report-issue-spec.md)
+- [Releases (PyPI and MCP registry)](https://github.com/JC7333/amr/blob/main/docs/release.md)
 
 ## Support
 - Call the report_issue tool, or open [Issues](https://github.com/JC7333/amr/issues): include version, tool name, arguments and error; never real mandate contents, personal data, keys or tokens
