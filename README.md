@@ -15,31 +15,25 @@ install AMR and reach a first verified mandate on its own: no account, no email,
 person to ask. Everything runs on your machine; AMR makes no network call (the one
 exception, `report_issue`, is off until the operator sets `AMR_ISSUE_TOKEN`).
 
-**1. Run the server** (needs [uv](https://docs.astral.sh/uv/)).
-
-```bash
-uvx mandatia
-```
-
-The PyPI package is named `mandatia`; the Python module and the `amr` command keep their
-names. `uvx amr` installs a different, unrelated project: do not use it. If `uvx mandatia`
-answers that the package does not exist, its first release is not on PyPI yet; use the
-repository instead (the `--with "mcp<2"` part is required there: AMR is written for
-version 1 of the MCP Python SDK and a fresh install without it picks version 2, which
-fails at start with `No module named 'mcp.server.fastmcp'`):
+**1. Run the server** (needs [uv](https://docs.astral.sh/uv/)). The `--with "mcp<2"`
+part is a safety net: AMR is written for version 1 of the MCP Python SDK (its
+`pyproject.toml` already requires it), and version 2 fails at start with
+`No module named 'mcp.server.fastmcp'`.
 
 ```bash
 uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 ```
 
-Or clone the repository and run `uv sync && uv run amr`.
+AMR is not published on PyPI yet: `uvx amr` installs a different, unrelated project.
+Its package will be named `mandatia` ([release steps](https://github.com/JC7333/amr/blob/main/docs/release.md)).
+Until then, use the command above, or clone the repository and run `uv sync && uv run amr`.
 
 **2. Declare it in your MCP client.**
 
 Claude Code:
 
 ```bash
-claude mcp add amr -- uvx mandatia
+claude mcp add amr -- uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 ```
 
 Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
@@ -49,7 +43,7 @@ Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
   "mcpServers": {
     "amr": {
       "command": "uvx",
-      "args": ["mandatia"],
+      "args": ["--from", "git+https://github.com/JC7333/amr", "--with", "mcp<2", "amr"],
       "env": {
         "AMR_DB_PATH": "/absolute/path/amr_mandates.db",
         "AMR_SIGNING_KEY_PATH": "/absolute/path/amr_signing_key.pem",
@@ -60,8 +54,7 @@ Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
 }
 ```
 
-Before the first PyPI release, replace `uvx mandatia` with the repository command of
-step 1 in both. Set the three paths: by default AMR writes its database and its signing key in the
+Set the three paths: by default AMR writes its database and its signing key in the
 current directory of the client. Keep the `.pem` private key out of version control.
 
 **3. Reach a first verified mandate.** The tools, in the order an agent uses them:
@@ -85,17 +78,17 @@ current directory of the client. Keep the `.pem` private key out of version cont
 7. `report_issue(title, description, version, context)`: report a problem with AMR
    itself. Without `AMR_ISSUE_TOKEN` it makes no network call and returns a pre-filled
    link to open; with it, it files the issue on GitHub. See
-   [`docs/report-issue-spec.md`](docs/report-issue-spec.md).
+   [`docs/report-issue-spec.md`](https://github.com/JC7333/amr/blob/main/docs/report-issue-spec.md).
 
 The same flow, runnable and checked by the test suite, is in
-[`examples/quickstart_agent.py`](examples/quickstart_agent.py):
+[`examples/quickstart_agent.py`](https://github.com/JC7333/amr/blob/main/examples/quickstart_agent.py):
 
 ```bash
 git clone https://github.com/JC7333/amr.git && cd amr && uv sync
 uv run python examples/quickstart_agent.py   # prints every step, ends with "OK"
 ```
 
-Machine-readable summaries for agents: [`AGENTS.md`](AGENTS.md) and [`llms.txt`](llms.txt).
+Machine-readable summaries for agents: [`AGENTS.md`](https://github.com/JC7333/amr/blob/main/AGENTS.md) and [`llms.txt`](https://github.com/JC7333/amr/blob/main/llms.txt).
 To report a problem, call `report_issue` or open an issue at
 https://github.com/JC7333/amr/issues (never paste real mandate contents or personal data
 into it).
@@ -600,7 +593,7 @@ the contests, nearest `respond_by` first, each with `reminder.days_left` (negati
 passed) and `reminder.deadline_passed`. Call it on a schedule, for example each morning
 with `due_within_days=3`. `get_proof` lists the contests of a mandate in
 `action_contests` and re-checks them in `chain_integrity.contests_intact`. See
-[`docs/action-contest-spec.md`](docs/action-contest-spec.md).
+[`docs/action-contest-spec.md`](https://github.com/JC7333/amr/blob/main/docs/action-contest-spec.md).
 
 ---
 
@@ -922,7 +915,7 @@ tests/
 
 ## License
 
-Apache License 2.0 — See [LICENSE](LICENSE) for full terms.
+Apache License 2.0 — See [LICENSE](https://github.com/JC7333/amr/blob/main/LICENSE) for full terms.
 
 Free to use in commercial products. Compatible with EU AI Act open-source provisions.
 

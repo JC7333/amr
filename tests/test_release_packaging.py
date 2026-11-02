@@ -15,6 +15,10 @@ import pytest
 from amr.config import Settings
 
 ROOT = Path(__file__).resolve().parent.parent
+if not (ROOT / ".github" / "workflows" / "publish.yml").is_file():
+    # Running from the source archive published on PyPI, which carries no .github files.
+    pytest.skip("release files are only in the repository", allow_module_level=True)
+
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 PROJECT = PYPROJECT["project"]
 SERVER_JSON = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))
@@ -84,6 +88,11 @@ def test_server_json_respects_registry_schema_limits() -> None:
         assert re.fullmatch(r"\d+\.\d+\.\d+", version), version
 
 
+def test_auto_merge_waits_for_the_owner_on_server_json() -> None:
+    script = (ROOT / ".github" / "scripts" / "fusion-auto.sh").read_text(encoding="utf-8")
+    assert "|^server\\.json$|" in script
+
+
 def test_readme_carries_the_mcp_name_the_registry_checks() -> None:
     # The registry accepts a PyPI package only if its description contains this line.
     assert f"<!-- mcp-name: {SERVER_JSON['name']} -->" in README
@@ -102,9 +111,13 @@ def test_server_json_environment_variables_are_real_settings() -> None:
 
 
 @pytest.mark.parametrize("text", [README, AGENTS, LLMS], ids=["README", "AGENTS", "llms"])
-def test_uvx_mandatia_is_the_first_install_command(text: str) -> None:
+def test_docs_do_not_send_agents_to_pypi_before_the_first_release(text: str) -> None:
+    # Until "mandatia" is uploaded, anyone could register the name: the documentation must
+    # not tell agents to run it. A separate pull request switches it after the release.
     commands = re.findall(r"^[ \t]*(uvx [^\n]*)$", text, flags=re.MULTILINE)
-    assert commands[0] == "uvx mandatia"
+    assert commands
+    assert all("mandatia" not in command for command in commands)
+    assert "uvx mandatia" not in text.replace("`uvx mandatia`", "")
 
 
 @pytest.mark.parametrize("text", [README, AGENTS, LLMS], ids=["README", "AGENTS", "llms"])
@@ -112,27 +125,31 @@ def test_docs_warn_that_uvx_amr_is_another_project(text: str) -> None:
     assert re.search(r"`uvx amr` installs a different", text)
 
 
-def test_client_configurations_use_the_package() -> None:
-    assert "claude mcp add amr -- uvx mandatia\n" in README
-    assert '"args": ["mandatia"]' in README
-
-
 # --- publication workflow --------------------------------------------------------------
 
 
 def test_workflow_runs_only_on_version_tags() -> None:
-    trigger = WORKFLOW[WORKFLOW.index("\non:") : WORKFLOW.index("\npermissions:")]
-    assert 'tags: ["v*"]' in trigger
-    assert "pull_request" not in trigger
-    assert "branches" not in trigger
-    assert "workflow_dispatch" not in trigger
+    trigger = WORKFLOW[WORKFLOW.index("\non:") + 1 : WORKFLOW.index("\npermissions:")]
+    lines = [line for line in trigger.splitlines() if line.strip()]
+    assert lines == ["on:", "  push:", '    tags: ["v*"]']
+
+
+def test_workflow_publishes_only_commits_already_on_main() -> None:
+    assert "fetch-depth: 0" in WORKFLOW
+    assert 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main' in WORKFLOW
+
+
+def test_release_build_uses_the_lockfile_and_no_shared_cache() -> None:
+    assert "uv sync --locked --extra dev" in WORKFLOW
+    assert "enable-cache: false" in WORKFLOW
+    assert "uv sync --extra dev" not in WORKFLOW
 
 
 def test_workflow_uses_trusted_publishing_without_stored_token() -> None:
     assert "pypa/gh-action-pypi-publish@release/v1" in WORKFLOW
     assert "password" not in WORKFLOW
-    assert "secrets." not in WORKFLOW
-    assert "PYPI_" not in WORKFLOW.upper().replace("PYPI_PUBLISH", "")
+    assert "secrets" not in WORKFLOW
+    assert "PYPI_" not in WORKFLOW.upper()
 
 
 def test_only_the_publish_job_may_request_an_identity_token() -> None:
@@ -148,6 +165,7 @@ def test_only_the_publish_job_may_request_an_identity_token() -> None:
 def test_workflow_checks_tag_tests_and_lints_before_building() -> None:
     build_job = WORKFLOW[WORKFLOW.index("\n  build:") : WORKFLOW.index("\n  publish:")]
     steps = [
+        "git merge-base --is-ancestor",
         'check_release_version.py "$GITHUB_REF_NAME"',
         "uv run python -m pytest -q",
         "uv run python -m ruff check src/",
@@ -248,5 +266,6 @@ def test_source_archive_carries_only_code_tests_and_docs(tmp_path: Path) -> None
     assert "tests/test_release_packaging.py" in names
     top = {n.split("/")[0] for n in names}
     allowed = {"src", "tests", "docs", "examples", "README.md", "AGENTS.md", "llms.txt"}
-    assert top <= allowed | {"server.json", "LICENSE", "pyproject.toml", "PKG-INFO", ".gitignore"}, top
+    allowed |= {"server.json", "LICENSE", "pyproject.toml", "PKG-INFO", ".gitignore"}
+    assert top <= allowed, top
     assert not [n for n in names if n.endswith((".pem", ".key", ".db", ".sqlite", ".ps1"))]

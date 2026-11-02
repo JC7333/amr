@@ -6,7 +6,7 @@
 #   2. no "ne-pas-fusionner" label;
 #   3. every GitHub Actions check of the head commit is completed and green, including "Tests + ruff";
 #   4. no protected path is touched: signing code and keys (any path containing "signing", *.pem, *.key),
-#      databases (*.db, *.sqlite), pyproject.toml, uv.lock, .github/, LICENSE, CLAUDE.md
+#      databases (*.db, *.sqlite), pyproject.toml, uv.lock, .github/, LICENSE, CLAUDE.md, server.json
 #      (section 3 e of the Atelier's instructions: these wait for Audric), and the files that
 #      configure the tests and the linter (conftest.py, pytest.ini, setup.cfg, tox.ini,
 #      ruff.toml, .ruff.toml, .gitignore), so that a pull request cannot weaken the CI that
@@ -50,7 +50,7 @@ for n in $numbers; do
   files=$(gh api --paginate "repos/$REPO/pulls/$n/files?per_page=100" --jq '.[].filename')
   if [[ "$(grep -c . <<<"$files" || true)" != "$changed" ]]; then waiting "file list incomplete ($changed changed)"; continue; fi
   protected=$( { echo "$files"; gh api --paginate "repos/$REPO/pulls/$n/files?per_page=100" --jq '.[].previous_filename // empty'; } \
-    | grep -iE '(signing|\.pem$|\.key$|\.db$|\.sqlite$|^pyproject\.toml$|^uv\.lock$|^\.github/|^LICENSE$|^CLAUDE\.md$|(^|/)conftest\.py$|^pytest\.ini$|^setup\.cfg$|^tox\.ini$|^\.?ruff\.toml$|(^|/)\.gitignore$)' || true)
+    | grep -iE '(signing|\.pem$|\.key$|\.db$|\.sqlite$|^pyproject\.toml$|^uv\.lock$|^\.github/|^LICENSE$|^CLAUDE\.md$|^server\.json$|(^|/)conftest\.py$|^pytest\.ini$|^setup\.cfg$|^tox\.ini$|^\.?ruff\.toml$|(^|/)\.gitignore$)' || true)
   if [[ -n "$protected" ]]; then waiting "touches protected path(s): $(tr '\n' ' ' <<<"$protected")(Audric's click)"; continue; fi
   if [[ "$mergeable" != "true" ]]; then waiting "not mergeable or not computed yet (mergeable=$mergeable)"; continue; fi
 
