@@ -111,13 +111,14 @@ def test_server_json_environment_variables_are_real_settings() -> None:
 
 
 @pytest.mark.parametrize("text", [README, AGENTS, LLMS], ids=["README", "AGENTS", "llms"])
-def test_docs_do_not_send_agents_to_pypi_before_the_first_release(text: str) -> None:
-    # Until "mandatia" is uploaded, anyone could register the name: the documentation must
-    # not tell agents to run it. A separate pull request switches it after the release.
+def test_uvx_mandatia_is_the_first_install_command(text: str) -> None:
     commands = re.findall(r"^[ \t]*(uvx [^\n]*)$", text, flags=re.MULTILINE)
-    assert commands
-    assert all("mandatia" not in command for command in commands)
-    assert "uvx mandatia" not in text.replace("`uvx mandatia`", "")
+    assert commands[0] == "uvx mandatia"
+
+
+def test_client_configurations_use_the_package() -> None:
+    assert "claude mcp add amr -- uvx mandatia\n" in README
+    assert '"args": ["mandatia"]' in README
 
 
 @pytest.mark.parametrize("text", [README, AGENTS, LLMS], ids=["README", "AGENTS", "llms"])

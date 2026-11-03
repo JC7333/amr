@@ -15,25 +15,30 @@ install AMR and reach a first verified mandate on its own: no account, no email,
 person to ask. Everything runs on your machine; AMR makes no network call (the one
 exception, `report_issue`, is off until the operator sets `AMR_ISSUE_TOKEN`).
 
-**1. Run the server** (needs [uv](https://docs.astral.sh/uv/)). The `--with "mcp<2"`
-part is a safety net: AMR is written for version 1 of the MCP Python SDK (its
-`pyproject.toml` already requires it), and version 2 fails at start with
-`No module named 'mcp.server.fastmcp'`.
+**1. Run the server** (needs [uv](https://docs.astral.sh/uv/)).
+
+```bash
+uvx mandatia
+```
+
+The PyPI package is named `mandatia`; the Python module and the `amr` command keep their
+names. `uvx amr` installs a different, unrelated project: do not use it. To run the
+latest code of the repository instead (the `--with "mcp<2"` part is a safety net: AMR is
+written for version 1 of the MCP Python SDK, and version 2 fails at start with
+`No module named 'mcp.server.fastmcp'`):
 
 ```bash
 uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
 ```
 
-AMR is not published on PyPI yet: `uvx amr` installs a different, unrelated project.
-Its package will be named `mandatia` ([release steps](https://github.com/JC7333/amr/blob/main/docs/release.md)).
-Until then, use the command above, or clone the repository and run `uv sync && uv run amr`.
+Or clone the repository and run `uv sync && uv run amr`.
 
 **2. Declare it in your MCP client.**
 
 Claude Code:
 
 ```bash
-claude mcp add amr -- uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+claude mcp add amr -- uvx mandatia
 ```
 
 Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
@@ -43,7 +48,7 @@ Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
   "mcpServers": {
     "amr": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/JC7333/amr", "--with", "mcp<2", "amr"],
+      "args": ["mandatia"],
       "env": {
         "AMR_DB_PATH": "/absolute/path/amr_mandates.db",
         "AMR_SIGNING_KEY_PATH": "/absolute/path/amr_signing_key.pem",
@@ -54,6 +59,8 @@ Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
 }
 ```
 
+To run the repository code instead, the arguments are
+`["--from", "git+https://github.com/JC7333/amr", "--with", "mcp<2", "amr"]`.
 Set the three paths: by default AMR writes its database and its signing key in the
 current directory of the client. Keep the `.pem` private key out of version control.
 
