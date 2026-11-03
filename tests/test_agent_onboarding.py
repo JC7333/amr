@@ -40,8 +40,8 @@ def test_install_command_pins_mcp_v1(text: str) -> None:
     assert INSTALL in text
 
 
-def test_readme_says_amr_is_not_on_pypi() -> None:
-    assert "`uvx amr` would install a different project" in README
+def test_readme_says_uvx_amr_is_another_project() -> None:
+    assert "`uvx amr` installs a different, unrelated project" in README
 
 
 def test_llms_txt_links_to_existing_files() -> None:

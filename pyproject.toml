@@ -1,5 +1,5 @@
 [project]
-name = "amr"
+name = "mandatia"
 version = "0.1.0"
 description = "Agent Mandate Registry - Legal mandate chain for AI agents. MCP server."
 readme = "README.md"
@@ -23,8 +23,14 @@ dev = [
     "ruff>=0.4.0",
 ]
 
+[project.urls]
+Homepage = "https://mandatia.eu"
+Repository = "https://github.com/JC7333/amr"
+Issues = "https://github.com/JC7333/amr/issues"
+
 [project.scripts]
 amr = "amr.server:main"
+mandatia = "amr.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -32,6 +38,21 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/amr"]
+
+# The source archive published on PyPI carries the code, its tests and documentation only
+# (no local scripts, no workflow files, no lockfile).
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/amr",
+    "tests",
+    "docs",
+    "examples",
+    "README.md",
+    "AGENTS.md",
+    "llms.txt",
+    "server.json",
+    "LICENSE",
+]
 
 [tool.ruff]
 target-version = "py312"

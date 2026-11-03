@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.JC7333/mandatia",
+  "title": "AMR (Agent Mandate Registry)",
+  "description": "Records who authorized an AI agent to do what, until when; signed tokens, hash-chained journal.",
+  "websiteUrl": "https://mandatia.eu",
+  "repository": {
+    "url": "https://github.com/JC7333/amr",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "mandatia",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AMR_DB_PATH",
+          "description": "Absolute path of the SQLite registry file (default: amr_mandates.db in the client's current directory)",
+          "format": "filepath",
+          "isRequired": false
+        },
+        {
+          "name": "AMR_SIGNING_KEY_PATH",
+          "description": "Absolute path of the registry's Ed25519 private key, created on first use; keep it out of version control",
+          "format": "filepath",
+          "isRequired": false
+        },
+        {
+          "name": "AMR_PUBLIC_KEY_PATH",
+          "description": "Absolute path of the registry's public key file",
+          "format": "filepath",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
