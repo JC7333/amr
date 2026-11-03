@@ -8,14 +8,17 @@ https://github.com/JC7333/amr (Apache-2.0). Human-readable guide: `README.md`.
 ## Install and run
 
 ```bash
-uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+uvx mandatia
 ```
 
 - Transport: stdio. Needs uv and Python 3.12 or later.
-- `--with "mcp<2"` is a safety net: AMR does not support version 2 of the MCP Python SDK
-  yet (error: `No module named 'mcp.server.fastmcp'`); its `pyproject.toml` requires 1.x.
-- AMR is not on PyPI yet: `uvx amr` installs a different project. Its package will be
-  named `mandatia`; until it is published, use the command above.
+- The PyPI package is `mandatia`. `uvx amr` installs a different project.
+- To run the latest code of the repository instead (keep `--with "mcp<2"` as a safety net:
+  AMR does not support version 2 of the MCP Python SDK yet):
+
+  ```bash
+  uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+  ```
 - Set `AMR_DB_PATH`, `AMR_SIGNING_KEY_PATH`, `AMR_PUBLIC_KEY_PATH` to absolute paths,
   or AMR writes them in the client's current directory. Never commit the `.pem` file.
 - Runnable end-to-end example: `examples/quickstart_agent.py`.
