@@ -412,40 +412,44 @@ def test_local_server_writes_no_access_log(capsys: pytest.CaptureFixture[str]) -
     import socket
     import threading
     import urllib.request
-    from wsgiref.simple_server import make_server
+    import wsgiref.simple_server as ws
 
     def tiny(environ: dict[str, Any], start_response: Any) -> list[bytes]:
         start_response("200 OK", [("Content-Type", "text/plain")])
         return [b"ok"]
 
-    captured: dict[str, Any] = {}
+    servers: list[Any] = []
+    real_make_server = ws.make_server
 
-    def fake_make_server(host: str, port: int, app: Any, handler_class: Any) -> Any:
-        captured["handler"] = handler_class
-        return make_server(host, port, app, handler_class=handler_class)
+    def recording_make_server(*args: Any, **kwargs: Any) -> Any:
+        server = real_make_server(*args, **kwargs)
+        servers.append(server)
+        return server
 
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    import wsgiref.simple_server as ws
-
-    original = ws.make_server
-    ws.make_server = fake_make_server
-    server_thread = threading.Thread(target=pr._serve, args=(tiny, "127.0.0.1", port),
-                                     daemon=True)
+    ws.make_server = recording_make_server
+    thread = threading.Thread(target=pr._serve, args=(tiny, "127.0.0.1", port), daemon=True)
+    body = None
     try:
-        server_thread.start()
-        for _ in range(50):
+        thread.start()
+        for _ in range(100):
             try:
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1).read()  # noqa: S310
+                body = urllib.request.urlopen(  # noqa: S310 - local test server
+                    f"http://127.0.0.1:{port}/probe", timeout=1).read()
                 break
             except OSError:
                 time.sleep(0.05)
     finally:
-        ws.make_server = original
+        ws.make_server = real_make_server
+        for server in servers:
+            server.shutdown()
+        thread.join(timeout=5)
+    assert body == b"ok"
     err = capsys.readouterr().err
+    assert "/probe" not in err
     assert "127.0.0.1 - -" not in err
-    assert "GET /" not in err
 
 
 # --- HTML for people -----------------------------------------------------------------
@@ -561,3 +565,102 @@ async def test_app_from_settings(tmp_path: Path) -> None:
     await asyncio.to_thread(pr.write_export, Path(settings.public_export_path))
     _, body = _json(pr.app_from_settings(), f"/mandates/{mandate_id}")
     assert body["status"] == "active"
+
+
+# --- after the independent review ----------------------------------------------------
+
+
+async def test_raw_snapshot_is_served_for_receivers_who_verify_themselves() -> None:
+    await _mandate()
+    token = await pr.build_export()
+    app = pr.make_app(token, load_public_key())
+    status, headers, body = _call(app, "/snapshot")
+    assert status.startswith("200")
+    assert headers["Content-Type"].startswith("application/jose")
+    assert body.decode() == token
+    assert pr.load_snapshot(body.decode(), load_public_key()).mandates
+
+
+async def test_old_snapshot_is_refused_when_a_maximum_age_is_set() -> None:
+    mandate_id = await _mandate()
+    old = await pr.build_export(now=datetime.now(UTC) - timedelta(hours=2))
+    await revoke_mandate(mandate_id, "ended")
+    token = await _attestation_after_revocation_is_impossible(mandate_id)
+    app = pr.make_app(old, load_public_key(), max_snapshot_age_seconds=3600)
+    status, body = _json(app, f"/mandates/{mandate_id}")
+    assert status.startswith("503")
+    assert body["status"] == "snapshot_too_old"
+    status, body = _json(app, "/attestation", f"attestation={token}")
+    assert (body["valid"], body["reason"]) == (False, "snapshot_too_old")
+    status, _, page = _call(app, f"/mandates/{mandate_id}", "format=html")
+    assert status.startswith("503") and b"snapshot_too_old" in page
+    fresh = pr.make_app(await pr.build_export(), load_public_key(),
+                        max_snapshot_age_seconds=3600)
+    _, body = _json(fresh, f"/mandates/{mandate_id}")
+    assert body["status"] == "revoked"
+
+
+async def _attestation_after_revocation_is_impossible(mandate_id: str) -> str:
+    result = json.loads(await issue_mandate_attestation(mandate_id, "agent:buyer"))
+    assert result.get("denied") is True
+    return "x.y.z"
+
+
+async def test_typed_value_with_slash_or_unknown_path_renders_not_found() -> None:
+    await _mandate()
+    app = await _app()
+    for path, query in (("/mandates/", "id=a/b&format=html"),
+                        ("/mandates/x/y", "format=html"), ("/anything", "format=html")):
+        status, headers, body = _call(app, path, query)
+        assert status.startswith("404"), path
+        assert headers["Content-Type"].startswith("text/html")
+        assert b"Not found" in body
+        assert b"Attestation" not in body
+
+
+async def test_too_many_query_fields_is_a_bad_request() -> None:
+    await _mandate()
+    query = "&".join(f"f{i}=1" for i in range(20))
+    status, body = _json(await _app(), "/attestation", query)
+    assert status.startswith("400")
+    assert body["error"] == "bad_query"
+
+
+async def test_export_never_creates_a_registry_key(tmp_path: Path,
+                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    await _mandate()
+    missing = tmp_path / "nokey" / "registry.pem"
+    from amr.config import settings
+
+    pub_path = Path(settings.public_key_path)
+    pub_before = pub_path.read_bytes()
+    monkeypatch.setattr("amr.config.settings.signing_key_path", missing)
+    with pytest.raises(pr.PublicRegistryError) as err:
+        await pr.build_export()
+    assert err.value.code == "signing_key_not_found"
+    assert not missing.exists()
+    assert pub_path.read_bytes() == pub_before
+
+
+async def test_outdated_database_gives_a_clear_error(tmp_path: Path) -> None:
+    import sqlite3
+
+    old = tmp_path / "old.db"
+    with sqlite3.connect(old) as db:
+        db.execute("CREATE TABLE mandates (id TEXT PRIMARY KEY, principal_id TEXT)")
+    with pytest.raises(pr.PublicRegistryError) as err:
+        await pr.build_export(db_path=old)
+    assert err.value.code == "schema_outdated"
+
+
+async def test_app_from_settings_applies_the_maximum_age(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    mandate_id = await _mandate()
+    from amr.config import settings
+
+    path = Path(settings.public_export_path)
+    old = await pr.build_export(now=datetime.now(UTC) - timedelta(hours=2))
+    path.write_text(old, encoding="ascii")
+    monkeypatch.setattr("amr.config.settings.public_snapshot_max_age_seconds", 3600)
+    status, body = _json(pr.app_from_settings(), f"/mandates/{mandate_id}")
+    assert (status[:3], body["status"]) == ("503", "snapshot_too_old")

@@ -23,7 +23,9 @@ python -m amr.public_registry export --out amr_public_registry.jws [--db amr_man
 ```
 
 Opens the database read-only (`mode=ro`; a missing file is an error, nothing is
-created) and writes a compact JWS, written atomically (temporary file then rename):
+created; a database not yet migrated to the current schema gives `schema_outdated`:
+start the AMR server once) and signs with the existing registry key (a missing key
+gives `signing_key_not_found`; the export never creates a key). It writes a compact JWS, written atomically (temporary file then rename):
 
 * header: `alg` `EdDSA` (the only algorithm, hard-coded), `typ`
   `amr-public-registry+jwt`, `kid` = key id of the registry key (the one that signs
@@ -70,8 +72,18 @@ server, access log disabled).
 At start, the snapshot is verified with the **pinned** public key (a PEM, or the JSON
 of `get_registry_public_key`): EdDSA only, type `amr-public-registry+jwt`, key id of
 the pinned key, Ed25519 signature, content matching v1 exactly, no mandate twice.
-Otherwise `PublicRegistryError` and nothing is served: whoever hosts the snapshot
-cannot alter it without the private key, which never leaves the operator.
+Otherwise `PublicRegistryError` and nothing is served: a storage layer separate from
+the process (a file store, a bucket) cannot alter the snapshot without the private
+key, which never leaves the operator. **Whoever runs the process is trusted**: a host
+that controls the running code can answer anything. A receiver who does not trust the
+host downloads the raw snapshot (`/snapshot`) and verifies it itself with the key it
+pinned (`load_snapshot`).
+
+Rollback: any correctly signed snapshot verifies, including an older one taken before
+a revocation. Set `AMR_PUBLIC_SNAPSHOT_MAX_AGE_SECONDS` (or `max_snapshot_age_seconds`)
+and export at least that often: past that age, mandate and attestation checks answer
+`503` with `snapshot_too_old` instead of a status. Without it, only
+`snapshot_age_seconds` shows the age.
 
 Routes, `GET` and `HEAD` only (anything else: 405, `Allow: GET, HEAD`):
 
@@ -81,8 +93,10 @@ Routes, `GET` and `HEAD` only (anything else: 405, `Allow: GET, HEAD`):
 | `/mandates/<id>` | status of the mandate now, from the snapshot |
 | `/attestation?attestation=<jws>[&audience=<you>]` | verification of an attestation (`docs/mandate-attestation-spec.md`) |
 | `/key` | the registry public key |
+| `/snapshot` | the signed snapshot itself (compact JWS, `application/jose`), for receivers who verify it themselves |
 
-JSON by default; HTML with `?format=html` or a browser's `Accept`. Every answer carries
+JSON by default; HTML with `?format=html` or a browser's `Accept`. Every JSON answer
+and every result page (all but the home page and `/snapshot`) carries
 `checked_at`, `registry` (`issuer`, `key_id`, `snapshot_generated_at`,
 `snapshot_age_seconds`, a notice that later revocations are not shown) and
 `verification_ms`, the time the verification took on the server, which the HTML page
@@ -102,6 +116,7 @@ above it:
 | `cut_by_parent` | `parent_mandate_revoked`, `parent_mandate_<status>`, `parent_mandate_expired`, `parent_mandate_not_found` or `delegation_chain_too_deep`; `refused_by` names the parent |
 | `unknown` | 404: the identifier is not in the snapshot; nothing else is said |
 | `invalid_id` | 400: not a UUID |
+| `snapshot_too_old` | 503: only with a maximum age set, see section 2 |
 
 ### Attestation
 
@@ -121,18 +136,20 @@ The hosting provider may keep its own logs: choose and configure it accordingly.
 Headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
 `Referrer-Policy: no-referrer`, a restrictive `Content-Security-Policy` (no script);
 JSON answers allow any origin (`Access-Control-Allow-Origin: *`). Query strings over
-16 KB are refused (414). Every value shown in HTML is escaped.
+16 KB are refused (414), more than 8 fields too (400, `bad_query`). Every value shown in HTML is escaped.
 
 ## 3. Hosting (operator's step)
 
 Deployment, domain and DNS are the operator's decision; nothing in this repository
-deploys. The application is a plain WSGI callable, so any Python host that serves WSGI
-can run it, with two files: the snapshot and the public key. Pin the key (do not fetch
-it from the same place as the snapshot) and publish its `key_id` where receivers
-already trust you.
+deploys. The application is a plain WSGI callable, so a Python host that serves WSGI
+can run it, with two files: the snapshot and the public key. Choose a host you trust
+to run the code unchanged (section 2). Pin the key (do not fetch it from the same
+place as the snapshot) and publish its `key_id` where receivers already trust you.
 
 ## Known limits
 
+* The answers themselves are not signed; only `/snapshot` is. Trust in an answer is
+  trust in whoever runs the application.
 * A snapshot is a photograph. A mandate revoked after `generated_at` still shows as
   active until the next export; `snapshot_age_seconds` says how old the answer is. For
   an irreversible act, the receiver should also use `check_action_token` with the

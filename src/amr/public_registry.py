@@ -14,7 +14,9 @@ Two halves, kept apart on purpose:
   states how long each verification took.
 
 The snapshot is verified when the application starts: a snapshot that is not signed
-by the pinned registry key is refused, so a hosting provider cannot alter it.
+by the pinned registry key is refused, so a storage layer separate from the process
+cannot alter it. Whoever runs the process itself is trusted: receivers who do not
+trust the host fetch the raw snapshot (``/snapshot``) and verify it with the key.
 A snapshot is a photograph: a revocation made after ``generated_at`` is not shown
 until the next export. Every answer says when the snapshot was taken.
 
@@ -45,7 +47,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from amr.attestation import registry_key_id, verify_attestation
 from amr.config import settings
-from amr.crypto.signing import ensure_signing_key_exists, load_signing_key
+from amr.crypto.signing import load_signing_key
 from amr.delegation import MAX_DELEGATION_DEPTH
 from amr.models.perimeter import Perimeter
 
@@ -128,17 +130,22 @@ async def _read_mandates(db_path: Path) -> list[PublicMandate]:
     db = await aiosqlite.connect(f"{path.as_uri()}?mode=ro", uri=True)
     db.row_factory = aiosqlite.Row
     try:
-        cursor = await db.execute(
+        try:
+            cursor = await db.execute(
             """
-            SELECT m.id, m.principal_id, m.agent_id, m.status, m.created_at,
-                   m.expires_at, m.parent_mandate_id, m.chain_hash, m.perimeter_json,
-                   m.principal_signature, m.principal_key_id, r.revoked_at
-            FROM mandates AS m
-            LEFT JOIN mandate_revocations AS r ON r.mandate_id = m.id
-            ORDER BY m.created_at, m.id
-            """
-        )
-        rows = await cursor.fetchall()
+                SELECT m.id, m.principal_id, m.agent_id, m.status, m.created_at,
+                       m.expires_at, m.parent_mandate_id, m.chain_hash, m.perimeter_json,
+                       m.principal_signature, m.principal_key_id, r.revoked_at
+                FROM mandates AS m
+                LEFT JOIN mandate_revocations AS r ON r.mandate_id = m.id
+                ORDER BY m.created_at, m.id
+                """
+            )
+            rows = await cursor.fetchall()
+        except aiosqlite.OperationalError as exc:
+            raise PublicRegistryError(
+                "schema_outdated", "start the AMR server once to migrate the database"
+            ) from exc
     finally:
         await db.close()
     mandates = []
@@ -173,10 +180,13 @@ async def build_export(
 ) -> str:
     """Read the registry read-only and return the signed snapshot (compact JWS).
 
-    Defaults: the configured database, registry key and issuer.
+    Defaults: the configured database, registry key and issuer. The registry key must
+    already exist: an export never creates one (a new key would not match the key
+    receivers pinned).
     """
     if private_key is None:
-        ensure_signing_key_exists()
+        if not Path(settings.signing_key_path).is_file():
+            raise PublicRegistryError("signing_key_not_found", str(settings.signing_key_path))
         private_key = load_signing_key()
     key_id = registry_key_id(private_key.public_key())
     moment = now or datetime.now(UTC)
@@ -340,6 +350,7 @@ _CSP = (
 _STATUS_TEXT = {
     200: "200 OK", 400: "400 Bad Request", 404: "404 Not Found",
     405: "405 Method Not Allowed", 414: "414 URI Too Long",
+    503: "503 Service Unavailable",
 }
 
 _STYLE = (
@@ -384,11 +395,15 @@ def make_app(
     *,
     issuer: str | None = None,
     clock: Callable[[], float] = time.time,
+    max_snapshot_age_seconds: int | None = None,
 ) -> Callable[..., list[bytes]]:
     """Build the read-only WSGI application for one signed snapshot.
 
     The snapshot is verified here, once: an altered or foreign snapshot raises
-    PublicRegistryError and nothing is served.
+    PublicRegistryError and nothing is served. With ``max_snapshot_age_seconds``,
+    mandate and attestation checks answer ``snapshot_too_old`` (503) once the snapshot
+    is older than that, instead of a status that may predate a revocation (this also
+    bounds a rollback to an older signed snapshot).
     """
     snapshot = load_snapshot(export_token, public_key, issuer)
     index = {mandate.id: mandate for mandate in snapshot.mandates}
@@ -408,7 +423,14 @@ def make_app(
                       "snapshot_generated_at is not shown here.",
         }
 
+    def too_old(now: float) -> bool:
+        return max_snapshot_age_seconds is not None and (
+            now - generated > max_snapshot_age_seconds
+        )
+
     def mandate_view(mandate_id: str, now: float) -> tuple[int, dict[str, Any]]:
+        if too_old(now):
+            return 503, {"status": "snapshot_too_old"}
         try:
             canonical = str(UUID(mandate_id))
         except ValueError:
@@ -419,6 +441,8 @@ def make_app(
         return 200, {**verdict, "mandate": index[canonical].model_dump()}
 
     def attestation_view(query: dict[str, list[str]], now: float) -> tuple[int, dict[str, Any]]:
+        if too_old(now):
+            return 503, {"valid": False, "reason": "snapshot_too_old"}
         token = query.get("attestation", [""])[0].strip()
         if not token:
             return 400, {"valid": False, "reason": "attestation_missing"}
@@ -439,7 +463,7 @@ def make_app(
         known = summary["mandate_id"] in index
         return 200, {**result, "in_snapshot": known}
 
-    def render_html(path: str, status: int, payload: dict[str, Any]) -> str:
+    def render_html(kind: str, status: int, payload: dict[str, Any]) -> str:
         verification = payload.get("verification_ms")
         registry = payload.get("registry", {})
         footer = (
@@ -449,7 +473,11 @@ def make_app(
             f"<code>{html.escape(str(registry.get('key_id')))}</code>.</p>"
             "<p><a href=\"/\">New verification</a></p>"
         )
-        if path.startswith("/mandates/"):
+        if kind == "other":
+            text = str(payload.get("error", status))
+            return _page("Not found", "<h1>Not found</h1><p class=\"s\">"
+                         f"{html.escape(text)}</p>" + footer)
+        if kind == "mandate":
             if status != 200:
                 return _page("Mandate", "<h1>Mandate</h1><p class=\"s\">"
                              f"{html.escape(payload['status'])}</p>" + footer)
@@ -498,28 +526,41 @@ def make_app(
             ("Referrer-Policy", "no-referrer"),
             ("Content-Security-Policy", _CSP),
         ]
+        kind = "other"
         if method not in ("GET", "HEAD"):
             status, payload, as_html = 405, {"error": "read_only"}, False
             headers.append(("Allow", "GET, HEAD"))
         elif len(raw_query) > MAX_QUERY_LENGTH:
             status, payload, as_html = 414, {"error": "query_too_long"}, False
         else:
-            query = parse_qs(raw_query, max_num_fields=8)
-            as_html = _wants_html(environ, query)
-            if path == "/mandates/" and "id" in query:
+            try:
+                query = parse_qs(raw_query, max_num_fields=8)
+            except ValueError:
+                query = None
+            as_html = query is not None and _wants_html(environ, query)
+            if query is not None and path == "/mandates/" and "id" in query:
                 path = "/mandates/" + query["id"][0].strip()
             match = _UUID_PATH.match(path)
+            if query is not None and path == "/snapshot":
+                headers.append(("Content-Type", "application/jose; charset=us-ascii"))
+                headers.append(("Access-Control-Allow-Origin", "*"))
+                start_response(_STATUS_TEXT[200], headers)
+                return [b"" if method == "HEAD" else export_token.encode("ascii")]
             if path == "/" and as_html:
                 body = home().encode("utf-8")
                 headers.append(("Content-Type", "text/html; charset=utf-8"))
                 start_response(_STATUS_TEXT[200], headers)
                 return [b"" if method == "HEAD" else body]
-            if path == "/":
+            if query is None:
+                status, payload = 400, {"error": "bad_query"}
+            elif path == "/":
                 status, payload = 200, {"endpoints": ["/mandates/<id>", "/attestation",
-                                                      "/key"]}
+                                                      "/key", "/snapshot"]}
             elif match:
+                kind = "mandate"
                 status, payload = mandate_view(match.group(1), now)
             elif path == "/attestation":
+                kind = "attestation"
                 status, payload = attestation_view(query, now)
             elif path == "/key":
                 status, payload = 200, {"issuer": snapshot.issuer,
@@ -531,8 +572,8 @@ def make_app(
         payload["checked_at"] = datetime.fromtimestamp(now, UTC).isoformat()
         payload["registry"] = registry_block(now)
         payload["verification_ms"] = round((time.perf_counter() - started) * 1000, 3)
-        if as_html and path != "/" and status in (200, 400, 404):
-            body = render_html(path, status, payload).encode("utf-8")
+        if as_html and path != "/" and status in (200, 400, 404, 503):
+            body = render_html(kind, status, payload).encode("utf-8")
             headers.append(("Content-Type", "text/html; charset=utf-8"))
         else:
             body = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
@@ -548,7 +589,8 @@ def app_from_settings() -> Callable[..., list[bytes]]:
     """The application for a host: snapshot at AMR_PUBLIC_EXPORT_PATH, key at
     AMR_PUBLIC_KEY_PATH (the registry public key, pinned by the operator)."""
     token = Path(settings.public_export_path).read_text(encoding="ascii").strip()
-    return make_app(token, load_public_key_file(Path(settings.public_key_path)))
+    return make_app(token, load_public_key_file(Path(settings.public_key_path)),
+                    max_snapshot_age_seconds=settings.public_snapshot_max_age_seconds)
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +640,9 @@ def main(argv: list[str] | None = None) -> int:
         token = Path(args.export or settings.public_export_path).read_text(
             encoding="ascii").strip()
         key = load_public_key_file(Path(args.public_key or settings.public_key_path))
-        _serve(make_app(token, key), args.host, args.port)
+        app = make_app(token, key,
+                       max_snapshot_age_seconds=settings.public_snapshot_max_age_seconds)
+        _serve(app, args.host, args.port)
         return 0
     except PublicRegistryError as exc:
         print(json.dumps({"error": exc.code, "detail": exc.detail}))
