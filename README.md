@@ -289,6 +289,31 @@ file. Existing mandates and their hashes are unchanged; issuances are logged in 
 new append-only table, `issued_attestations` (schema v5). See
 `docs/mandate-attestation-spec.md`.
 
+### Public registry: online verification without an account
+
+AMR runs over stdio next to each operator, so nobody else can query it. The public
+registry is a separate, read-only verification point: the operator exports a **signed
+snapshot** of the registry, and a small WSGI application (standard library only)
+serves it. A receiver checks a mandate identifier or pastes an attestation, in a
+browser (HTML) or from a script (JSON), with no account.
+
+```bash
+python -m amr.public_registry export --out amr_public_registry.jws   # read-only, signed EdDSA
+python -m amr.public_registry serve --export amr_public_registry.jws --public-key registry.pub
+curl http://127.0.0.1:8080/mandates/<mandate-id>
+# {"status": "active" | "revoked" | "expired" | "cut_by_parent" | ..., "verification_ms": 0.2, ...}
+```
+
+The snapshot holds, per mandate, the agent, a SHA-256 reference of the principal (never
+the identifier in clear), the perimeter, dates, recorded status, revocation date and
+chain hash; never the scope text, legal basis, metadata or revocation reason. The
+application verifies the snapshot with the pinned registry key before serving it,
+has no write path, keeps no log and never reads the client's address. Every answer
+gives the snapshot date and the time the verification took. Limit: a revocation made
+after the snapshot shows only at the next export. Deployment and domain are the
+operator's step. Existing mandates and their hashes are unchanged; no schema change.
+See `docs/public-registry-spec.md`.
+
 ---
 
 ## Vision: from registry to enforcement
@@ -917,6 +942,8 @@ tests/
 | `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
 | `AMR_ISSUE_REPOSITORY` | `JC7333/amr` | Repository `report_issue` files issues on (`owner/name`) |
 | `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
+| `AMR_PUBLIC_EXPORT_PATH` | `amr_public_registry.jws` | Signed snapshot written by `python -m amr.public_registry export` and served by its app |
+| `AMR_PUBLIC_KEY_PATH` | `amr_signing_key.pub` | Registry public key; the public registry app pins it to verify the snapshot |
 
 ---
 
