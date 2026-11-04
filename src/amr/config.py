@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     # a revocation reaches a receiver that checks offline only when it expires.
     attestation_lifetime_seconds: int = Field(default=900, gt=0)
 
+    # Public registry (see docs/public-registry-spec.md): the signed snapshot written by
+    # `python -m amr.public_registry export` and served read-only by its WSGI app.
+    public_export_path: Path = Path("amr_public_registry.jws")
+    # Refuse to answer from a snapshot older than this (None: no limit, age shown).
+    public_snapshot_max_age_seconds: int | None = Field(default=None, gt=0)
+
     # report_issue (see docs/report-issue-spec.md) files issues on this repository.
     # Its token, AMR_ISSUE_TOKEN, is deliberately not a setting: report_issue reads it
     # from the process environment only, never from a .env file.
