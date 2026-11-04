@@ -275,6 +275,9 @@ def check_claims(claims: dict[str, Any], now: float, leeway: int = 0) -> dict[st
         "principal_key_domain": (
             signature.get("key_domain_proof") if signature is not None else None
         ),
+        "principal_did_web_unverified": (
+            bool(signature.get("did_web_unverified")) if signature is not None else False
+        ),
         "issuer": claims["iss"],
         "audience": claims.get("aud"),
         "status_checked_at": _iso(claims["iat"]),

@@ -87,6 +87,7 @@ def _integrity(proof: dict[str, Any]) -> dict[str, Any]:
             if signature and signature.get("key_domain_proof")
             else None
         ),
+        "principal_did_web_unverified": bool(signature and signature.get("did_web_unverified")),
         "chain_head": actions[-1]["chain_hash"] if actions else proof["mandate"]["chain_hash"],
         "total_actions": chain["total_actions"],
     }

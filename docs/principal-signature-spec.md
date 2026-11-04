@@ -72,14 +72,21 @@ not control. Rules:
   `AMR_DID_WEB_RESOLVE=1` in the server's process environment (never read from `.env`).
   Off, a `did:web` key is refused (`did_web_resolution_disabled`); it never falls back
   to "first registration wins". A `did:web` identifier is recognised whatever its case
-  or surrounding spaces, so `DID:Web:...` cannot skip the check.
+  or surrounding spaces, so `DID:Web:...` cannot skip the check; and any identifier
+  that reads as `scheme:method:...` must write that prefix in plain ASCII (Cyrillic
+  letters, full-width colons or zero-width characters are refused with
+  `principal_id_lookalike`, for every principal).
 - **One request, constrained.** One HTTPS GET per registration, after the proof of
   possession is checked and only if the principal has no key yet. Certificate checked
-  against the host name; no redirect followed; 5 s timeout per socket operation; at
-  most 64 KiB read; every address of the domain must be public (no private, loopback,
-  link-local, reserved or multicast address), and the connection is made to the
-  address that was checked.
-- **Canonical identifier.** The domain is lowercase and in its ASCII form (punycode for
+  against the host name; no redirect followed; 5 s timeout per socket operation and
+  10 s for the whole request; at most 64 KiB read; every address of the domain must be
+  public (no private, loopback, link-local, reserved or multicast address, and no
+  NAT64, IPv4-compatible, 6to4 or Teredo address that embeds another one); the
+  connection is made to an address that was checked (each in turn if one fails). No
+  database connection is held while the domain answers.
+- **Canonical identifier.** Characters that IDNA 2003 and IDNA 2008 encode differently
+  (`ß`, final sigma, zero-width joiners) are refused: write the punycode form.
+  The domain is lowercase and in its ASCII form (punycode for
   a domain with accents: `did:web:xn--hpital-ixa.example`); ports and IP addresses are
   refused. A non-canonical identifier is refused with `canonical_principal_id`, the form
   to use.
@@ -160,11 +167,21 @@ sub-mandates it grants.
   - null for an unsigned mandate whose principal had no key at the time.
 - `mandate.principal_signature.key_domain_proof` is, for a `did:web` principal,
   `{did_document_url, did_document_sha256, verified_at, document, rechecked}`, else
-  null. `rechecked` is true when the stored document still hashes to the stored SHA-256,
-  has the principal as `id` and lists the registered key. A third party re-checks the
-  hash offline from `document`, and re-reads `did_document_url` to see whether the
-  domain still publishes the key today. The mandate attestation and the insurer
-  dossier carry the URL, the hash and the time (not the document).
+  null. `rechecked` is true when: the key record rebuilt with this proof gives the
+  key's stored `chain_hash` (also exported, as `key_chain_hash`), so the proof is the
+  one sealed at registration; the URL is the one the identifier names; `verified_at`
+  is the registration time; the stored document hashes to the stored SHA-256, has the
+  principal as `id` and lists the registered key. These checks run on the registry's
+  own database: they detect a proof row changed on its own, not someone who rewrites
+  the whole key chain (section 5, last point). To see whether the domain still
+  publishes the key today, re-read `did_document_url`.
+- `mandate.principal_signature.did_web_unverified` is true when the principal's
+  identifier is a `did:web` but its key has no domain proof or the proof fails its
+  recheck (for example a key registered before this version). **A consumer that relies
+  on a `did:web` principal must require `did_web_unverified: false`.** The mandate
+  attestation (`principal_key_domain` with `rechecked`, and
+  `principal_did_web_unverified`) and the insurer dossier carry the same information
+  (URL, hash, time, recheck; not the document).
 
 ## 5. Known limits
 
@@ -187,7 +204,8 @@ sub-mandates it grants.
   same key is registered. The registration proof does not expire.
 - **Identifiers are compared exactly**: `user:victim` and `user:victim ` (trailing space)
   or Unicode look-alikes are different principals. The signature rule protects the exact
-  `principal_id` that registered a key.
+  `principal_id` that registered a key. Only the scheme prefix (`did:web:` and the like)
+  is checked for look-alike characters; the rest of an identifier is not.
 - **Race**: the key lookup and the mandate insert are not one transaction; an unsigned
   mandate whose creation started just before the principal's key registration can still
   be stored. `get_proof` then reports it as `false` if its `created_at` is after the
@@ -204,6 +222,13 @@ sub-mandates it grants.
 
 - Schema v9 adds the table `principal_key_domain_proofs`; no existing row changes, and
   keys of ordinary principals keep exactly the previous hash payload.
+- **Behaviour change** for deployments that already use `did:web:` identifiers: with
+  the default configuration, registering a key for such an identifier is now refused
+  (`did_web_resolution_disabled`) instead of "first registration wins". Set
+  `AMR_DID_WEB_RESOLVE=1` and publish the key in the DID document, or keep an ordinary
+  identifier. Keys already registered stay valid and are reported with
+  `did_web_unverified: true`. Registering an identifier whose `scheme:method:` prefix is
+  not plain ASCII is refused (`principal_id_lookalike`).
 - Existing databases are migrated in place (schema v4): four nullable columns on
   `mandates`, a new `principal_keys` table, a unique index on the signature. No existing
   row is modified.

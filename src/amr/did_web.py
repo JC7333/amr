@@ -26,6 +26,8 @@ import os
 import re
 import socket
 import ssl
+import time
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import unquote
@@ -35,6 +37,9 @@ from amr.crypto.principal import b64url_decode
 RESOLVE_ENV = "AMR_DID_WEB_RESOLVE"
 DID_WEB_PREFIX = "did:web:"
 REQUEST_TIMEOUT_SECONDS = 5
+# Whole request (connection, headers and body), whatever the server trickles.
+TOTAL_DEADLINE_SECONDS = 10
+_PORT = 443
 MAX_DOCUMENT_BYTES = 64 * 1024
 MAX_DID_LENGTH = 200
 
@@ -44,6 +49,21 @@ _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 _LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 _PATH_SEGMENT = re.compile(r"^[A-Za-z0-9._~-]{1,100}$")
 _ENABLED_VALUES = frozenset({"1", "true", "yes", "on"})
+# Prefixes whose addresses embed another (IPv4) address: refused outright.
+_EMBEDDING_NETWORKS = tuple(
+    ipaddress.ip_network(net)
+    for net in (
+        "64:ff9b::/96",  # NAT64 well-known prefix
+        "64:ff9b:1::/48",  # NAT64 local-use prefix
+        "::/96",  # IPv4-compatible (deprecated)
+        "2002::/16",  # 6to4
+        "2001::/32",  # Teredo
+        "192.88.99.0/24",  # 6to4 relay anycast
+    )
+)
+# Characters that IDNA 2003 and IDNA 2008 encode differently (e.g. "ß"): refused, the
+# owner must write the punycode form it actually registered.
+_IDNA_DIVERGENT = frozenset("\u00df\u03c2\u200c\u200d")
 
 
 class DidWebError(Exception):
@@ -80,6 +100,29 @@ class DidWebDocument:
     document: dict[str, Any]
 
 
+def _folded_prefix(principal_id: str) -> str:
+    """NFKC form, case-folded (full-width colons become ":")."""
+    return unicodedata.normalize("NFKC", principal_id).casefold()
+
+
+def check_identifier_prefix(principal_id: str) -> None:
+    """Refuse an identifier whose scheme prefix ("xxx:yyy:") is not plain ASCII.
+
+    "did:w\u0435b:" (Cyrillic e), full-width colons or zero-width characters would
+    otherwise look like a did:web identifier to a person and escape the domain check.
+    Applies only to identifiers that read as "scheme:method:..." once normalised.
+    Raises DidWebError(principal_id_lookalike).
+    """
+    if len(_folded_prefix(principal_id).split(":", 2)) < 3:
+        return
+    raw = principal_id.split(":", 2)
+    if not ":".join(raw[:2]).isascii():
+        raise DidWebError(
+            "principal_id_lookalike",
+            "the identifier's scheme prefix must be plain ASCII (for example did:web:)",
+        )
+
+
 def is_did_web(principal_id: str) -> bool:
     """True if the identifier claims the did:web method (prefix compared loosely).
 
@@ -99,6 +142,10 @@ def _ascii_host(raw_host: str) -> str:
     if "%3a" in raw_host.lower() or ":" in raw_host:
         raise DidWebError("did_web_invalid", "ports are not supported in did:web identifiers")
     host = raw_host.strip().rstrip(".")
+    if any(c in _IDNA_DIVERGENT for c in host.lower()):
+        raise DidWebError(
+            "did_web_invalid", "write this domain in the punycode form it was registered with"
+        )
     if not host:
         raise DidWebError("did_web_invalid", "the did:web identifier names no domain")
     try:
@@ -149,6 +196,8 @@ def _public_address(address: str) -> bool:
     ip = ipaddress.ip_address(address.split("%")[0])
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
+    if any(ip in network for network in _EMBEDDING_NETWORKS if network.version == ip.version):
+        return False
     return ip.is_global and not ip.is_multicast
 
 
@@ -158,19 +207,26 @@ def _resolve(host: str) -> list[str]:
     return [info[4][0] for info in infos]
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """System trust store, host name checked. Separate so a test can trust its own CA."""
+    return ssl.create_default_context()
+
+
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     """HTTPS to a checked address, with the certificate checked against the host name."""
 
     def __init__(self, host: str, address: str, timeout: float) -> None:
-        super().__init__(host, 443, timeout=timeout, context=ssl.create_default_context())
+        super().__init__(host, _PORT, timeout=timeout, context=_ssl_context())
         self._address = address
 
     def connect(self) -> None:
-        sock = socket.create_connection((self._address, 443), self.timeout)
+        sock = socket.create_connection((self._address, _PORT), self.timeout)
         self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
 
 
-def _get(host: str, address: str, path: str) -> tuple[int, str | None, bytes]:
+def _get(
+    host: str, address: str, path: str, deadline: float | None = None
+) -> tuple[int, str | None, bytes]:
     """GET https://host/path through the checked address; never follows a redirect.
 
     Blocking: run in a thread. Returns (status, Location header, body up to the limit
@@ -184,8 +240,19 @@ def _get(host: str, address: str, path: str) -> tuple[int, str | None, bytes]:
             headers={"Accept": "application/did+json, application/json", "User-Agent": "amr"},
         )
         response = connection.getresponse()
-        body = response.read(MAX_DOCUMENT_BYTES + 1)
-        return response.status, response.getheader("Location"), body
+        if deadline is None:
+            deadline = time.monotonic() + TOTAL_DEADLINE_SECONDS
+        chunks: list[bytes] = []
+        size = 0
+        while size <= MAX_DOCUMENT_BYTES:
+            if time.monotonic() > deadline:
+                raise TimeoutError("the DID document took too long to arrive")
+            chunk = response.read1(min(8192, MAX_DOCUMENT_BYTES + 1 - size))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+        return response.status, response.getheader("Location"), b"".join(chunks)
     finally:
         connection.close()
 
@@ -209,17 +276,33 @@ def fetch(target: DidWebTarget) -> DidWebDocument:
             "did_web_address_refused",
             f"{target.host} resolves to a private, local or reserved address",
         )
-    try:
-        status, location, body = _get(target.host, addresses[0], target.path)
-    except ssl.SSLError as exc:
+    deadline = time.monotonic() + TOTAL_DEADLINE_SECONDS
+    answer: tuple[int, str | None, bytes] | None = None
+    last_error: Exception = OSError("no address could be reached")
+    for address in addresses:
+        if time.monotonic() > deadline:
+            break
+        try:
+            answer = _get(target.host, address, target.path, deadline)
+            break
+        except ssl.SSLError as exc:
+            raise DidWebError(
+                "did_web_https_required",
+                f"{target.host} did not complete a valid HTTPS connection "
+                f"({type(exc).__name__})",
+            ) from exc
+        except TimeoutError as exc:
+            raise DidWebError(
+                "did_web_unreachable", f"{target.url} took too long ({type(exc).__name__})"
+            ) from exc
+        except (OSError, http.client.HTTPException) as exc:
+            last_error = exc  # try the next checked address
+    if answer is None:
         raise DidWebError(
-            "did_web_https_required",
-            f"{target.host} did not complete a valid HTTPS connection ({type(exc).__name__})",
-        ) from exc
-    except (OSError, http.client.HTTPException) as exc:
-        raise DidWebError(
-            "did_web_unreachable", f"{target.url} could not be read ({type(exc).__name__})"
-        ) from exc
+            "did_web_unreachable",
+            f"{target.url} could not be read ({type(last_error).__name__})",
+        ) from last_error
+    status, location, body = answer
     if 300 <= status < 400:
         raise DidWebError(
             "did_web_redirect",
@@ -232,7 +315,7 @@ def fetch(target: DidWebTarget) -> DidWebDocument:
         raise DidWebError("did_web_document_invalid", "the DID document is too large")
     try:
         document = json.loads(body.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise DidWebError("did_web_document_invalid", "the DID document is not JSON") from exc
     if not isinstance(document, dict):
         raise DidWebError("did_web_document_invalid", "the DID document is not a JSON object")

@@ -190,6 +190,7 @@ async def issue_mandate_attestation(
                 "signed_at": signature["signed_at"],
                 "algorithm": signature["algorithm"],
                 "key_domain_proof": signature.get("key_domain_proof"),
+                "did_web_unverified": signature.get("did_web_unverified", False),
             }
         if signature is not None:
             # did:web keys: where and when the domain published the key, and the hash
@@ -202,6 +203,7 @@ async def issue_mandate_attestation(
                         "did_document_url": domain["did_document_url"],
                         "did_document_sha256": domain["did_document_sha256"],
                         "verified_at": domain["verified_at"],
+                        "rechecked": domain["rechecked"],
                     }
                     if domain is not None
                     else None

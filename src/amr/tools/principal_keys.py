@@ -25,7 +25,15 @@ from amr.crypto.principal import (
     verify,
 )
 from amr.db.engine import get_db, get_last_principal_key_hash, get_principal_key, init_db
-from amr.did_web import DidWebError, fetch, is_did_web, key_published, parse, resolution_enabled
+from amr.did_web import (
+    DidWebError,
+    check_identifier_prefix,
+    fetch,
+    is_did_web,
+    key_published,
+    parse,
+    resolution_enabled,
+)
 from amr.models.mandate import LegalBasis, MandateCreate
 from amr.models.perimeter import PerimeterError
 from amr.tools.create_mandate import _build_perimeter, signed_mandate_payload
@@ -78,7 +86,9 @@ async def register_principal_key(
         verified_at} for a did:web principal, else null).
         On error: {"error": "...", "code": "..."} with code principal_id_invalid,
         public_key_invalid, principal_signature_invalid, principal_key_proof_invalid,
-        principal_key_already_registered, or for did:web: did_web_resolution_disabled,
+        principal_key_already_registered, principal_id_lookalike (a scheme prefix such
+        as "did:web:" written with non-ASCII look-alike characters), or for did:web:
+        did_web_resolution_disabled,
         did_web_invalid, did_web_not_canonical (then canonical_principal_id),
         did_web_unreachable, did_web_address_refused, did_web_https_required,
         did_web_redirect, did_web_document_invalid or did_web_key_not_published.
@@ -89,6 +99,7 @@ async def register_principal_key(
             _PrincipalId(principal_id=principal_id)
         except ValidationError as exc:
             return _error("principal_id_invalid", str(exc))
+        check_identifier_prefix(principal_id)
         target = None
         if is_did_web(principal_id):
             if not resolution_enabled():
@@ -124,11 +135,20 @@ async def register_principal_key(
 
         document = None
         if target is not None:
+            # No database connection is held while the domain answers.
+            await db.close()
+            db = None
             document = await asyncio.to_thread(fetch, target)
             if not key_published(document.document, public_key_raw):
                 raise DidWebError(
                     "did_web_key_not_published",
                     f"{document.url} does not list this Ed25519 key in verificationMethod",
+                )
+            db = await get_db(settings.db_path)
+            if await get_principal_key(db, principal_id) is not None:
+                raise PrincipalSignatureError(
+                    "principal_key_already_registered",
+                    "this principal already has a key; it cannot be replaced",
                 )
 
         registered_at = datetime.now(UTC).isoformat()

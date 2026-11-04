@@ -74,7 +74,9 @@ class FakeNet:
             raise self.resolve_error
         return list(self.addresses)
 
-    def get(self, host: str, address: str, path: str) -> tuple[int, str | None, bytes]:
+    def get(
+        self, host: str, address: str, path: str, deadline: float | None = None
+    ) -> tuple[int, str | None, bytes]:
         self.gets.append((host, address, path))
         if self.get_error is not None:
             raise self.get_error
@@ -614,7 +616,9 @@ async def test_attestation_carries_the_domain_proof_without_the_document(
         "did_document_url": "https://hospital.example/.well-known/did.json",
         "did_document_sha256": hashlib.sha256(body).hexdigest(),
         "verified_at": summary["principal_key_domain"]["verified_at"],
+        "rechecked": True,
     }
+    assert summary["principal_did_web_unverified"] is False
     assert summary["principal_signature_rechecked"] is include_payload
     assert body.decode("utf-8") not in issued["attestation"]
 
@@ -661,3 +665,382 @@ async def test_migration_adds_the_table_to_an_existing_database(temp_db: Path) -
     await init_db(temp_db)
     assert _sql(temp_db, "SELECT COUNT(*) FROM principal_key_domain_proofs") == [(0,)]
     assert _sql(temp_db, "SELECT MAX(version) FROM schema_version") == [(9,)]
+
+
+# --- Review fixes: forged proofs, look-alikes, addresses, real TLS --------------------
+
+
+async def test_forged_proof_row_with_matching_hash_fails_the_recheck(
+    net: FakeNet, temp_db: Path
+) -> None:
+    # Document and its hash replaced together, URL and time changed: the key's
+    # chain_hash no longer matches the record rebuilt with this proof.
+    mandate_id, _ = await _did_mandate(net)
+    forged = json.loads(_sql(temp_db, "SELECT document FROM principal_key_domain_proofs")[0][0])
+    forged["service"] = []
+    raw = json.dumps(forged).encode()
+    _sql(
+        temp_db,
+        "UPDATE principal_key_domain_proofs SET document = ?, document_sha256 = ?",
+        (raw.decode(), hashlib.sha256(raw).hexdigest()),
+    )
+    proof = json.loads(await get_proof(mandate_id))
+    block = proof["mandate"]["principal_signature"]
+    assert block["key_domain_proof"]["rechecked"] is False
+    assert block["did_web_unverified"] is True
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("document_url", "https://evil.example/x"), ("verified_at", "1999-01-01T00:00:00+00:00")],
+)
+async def test_proof_row_with_other_url_or_time_fails_the_recheck(
+    net: FakeNet, temp_db: Path, column: str, value: str
+) -> None:
+    mandate_id, _ = await _did_mandate(net)
+    _sql(temp_db, f"UPDATE principal_key_domain_proofs SET {column} = ?", (value,))  # noqa: S608
+    proof = json.loads(await get_proof(mandate_id))
+    assert proof["mandate"]["principal_signature"]["key_domain_proof"]["rechecked"] is False
+
+
+async def test_proof_row_added_to_an_unchecked_key_fails_the_recheck(
+    net: FakeNet, temp_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A did:web key registered without any domain check (as before this version),
+    # then a proof row slipped in afterwards: the key's hash does not seal it.
+    key = _new_key()
+    net.body = _document(_jwk_method(key))
+    assert (await _register(key))["status"] == "registered"
+    record = _sql(temp_db, "SELECT * FROM principal_key_domain_proofs")
+    # Rebuild the key row as a legacy one: chain_hash without domain_proof.
+    proof = b64url_encode(key.sign(key_registration_payload(DID, _pub(key))))
+    registered_at = _sql(temp_db, "SELECT registered_at FROM principal_keys")[0][0]
+    legacy = {
+        "context": KEY_REGISTRATION_CONTEXT,
+        "principal_id": DID,
+        "public_key": _pub(key),
+        "key_id": key_id(_raw(key)),
+        "proof_signature": proof,
+        "registered_at": registered_at,
+    }
+    _sql(temp_db, "UPDATE principal_keys SET chain_hash = ?", (compute_hash(legacy, ""),))
+    assert record
+    mandate_id = await _signed_mandate(key)
+    block = json.loads(await get_proof(mandate_id))["mandate"]["principal_signature"]
+    assert block["key_domain_proof"]["rechecked"] is False
+    assert block["did_web_unverified"] is True
+
+
+async def test_legacy_did_web_key_without_proof_is_flagged_unverified(
+    net: FakeNet, temp_db: Path
+) -> None:
+    key = _new_key()
+    net.body = _document(_jwk_method(key))
+    await _register(key)
+    _sql(temp_db, "DELETE FROM principal_key_domain_proofs")
+    mandate_id = await _signed_mandate(key)
+    block = json.loads(await get_proof(mandate_id))["mandate"]["principal_signature"]
+    assert block["key_domain_proof"] is None
+    assert block["did_web_unverified"] is True
+    issued = json.loads(await issue_mandate_attestation(mandate_id, AGENT))
+    pem = json.loads(await get_registry_public_key())["public_key_pem"]
+    summary = verify_attestation(issued["attestation"], pem)["attestation"]
+    assert summary["principal_did_web_unverified"] is True
+    dossier = json.loads(await export_insurer_dossier(mandate_id))
+    assert _find(dossier, "principal_did_web_unverified")[0] is True
+
+
+async def test_ordinary_signed_mandate_is_not_flagged(net: FakeNet) -> None:
+    key = _new_key()
+    await _register(key, "user:audric")
+    mandate_id = await _signed_mandate(key, "user:audric")
+    block = json.loads(await get_proof(mandate_id))["mandate"]["principal_signature"]
+    assert block["did_web_unverified"] is False
+
+
+@pytest.mark.parametrize(
+    "principal_id",
+    [
+        "did:w\u0435b:hospital.example",  # Cyrillic e
+        "d\u0456d:web:hospital.example",  # Cyrillic i
+        "did:\u200bweb:hospital.example",  # zero-width space
+        "did\uff1aweb\uff1ahospital.example",  # full-width colons
+        "\uff44id:web:hospital.example",  # full-width d
+    ],
+)
+async def test_lookalike_did_web_identifiers_are_refused(
+    net: FakeNet, monkeypatch: pytest.MonkeyPatch, principal_id: str
+) -> None:
+    monkeypatch.delenv(did_web.RESOLVE_ENV)
+    result = await _register(_new_key(), principal_id)
+    assert result["code"] == "principal_id_lookalike", result
+    assert net.gets == []
+
+
+@pytest.mark.parametrize("principal_id", ["user:audric", "urn:example:hr", "agent:caf\u00e9"])
+async def test_ordinary_identifiers_still_register(net: FakeNet, principal_id: str) -> None:
+    assert (await _register(_new_key(), principal_id))["status"] == "registered"
+
+
+@pytest.mark.parametrize(
+    "address", ["64:ff9b::7f00:1", "64:ff9b::a00:1", "::7f00:1", "192.88.99.1", "2002:7f00:1::1"]
+)
+def test_addresses_embedding_another_address_are_refused(address: str) -> None:
+    assert not did_web._public_address(address)
+
+
+def test_idna_divergent_domain_is_refused() -> None:
+    with pytest.raises(did_web.DidWebError) as exc:
+        did_web.parse("did:web:stra\u00dfe.example")
+    assert exc.value.code == "did_web_invalid"
+
+
+async def test_deeply_nested_document_is_invalid(net: FakeNet) -> None:
+    net.body = b"[" * 50000 + b"]" * 50000
+    net.body = net.body[: did_web.MAX_DOCUMENT_BYTES]
+    assert (await _register(_new_key()))["code"] == "did_web_document_invalid"
+
+
+async def test_next_checked_address_is_tried_when_one_fails(net: FakeNet) -> None:
+    key = _new_key()
+    net.addresses = ["2606:4700:4700::1111", PUBLIC_IP]
+    net.body = _document(_jwk_method(key))
+    calls = []
+
+    def flaky(host: str, address: str, path: str, deadline: float | None = None):
+        calls.append(address)
+        if address != PUBLIC_IP:
+            raise OSError("network unreachable")
+        return 200, None, net.body
+
+    did_web._get = flaky  # restored by the net fixture's monkeypatch
+    assert (await _register(key))["status"] == "registered"
+    assert calls == ["2606:4700:4700::1111", PUBLIC_IP]
+
+
+async def test_migration_keeps_existing_key_hashes(temp_db: Path, net: FakeNet) -> None:
+    from amr.db.engine import init_db
+
+    key = _new_key()
+    result = await _register(key, "user:audric")
+    _sql(temp_db, "DROP TABLE principal_key_domain_proofs")
+    _sql(temp_db, "DELETE FROM schema_version WHERE version = 9")
+    await init_db(temp_db)
+    assert _sql(temp_db, "SELECT chain_hash FROM principal_keys") == [(result["chain_hash"],)]
+    assert _sql(temp_db, "SELECT MAX(version) FROM schema_version") == [(9,)]
+
+
+# --- Real TLS on a local server (the network code itself, not a fake) ---------------
+
+
+def _local_ca_and_cert(tmp_path: Path) -> tuple[Path, Path, Path]:
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    now = dt.datetime.now(dt.UTC)
+    ca_key = ec.generate_private_key(ec.SECP256R1())
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AMR test CA")])
+    ca = (
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - dt.timedelta(minutes=5))
+        .not_valid_after(now + dt.timedelta(hours=1))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True, content_commitment=False, key_encipherment=False,
+                data_encipherment=False, key_agreement=False, key_cert_sign=True,
+                crl_sign=True, encipher_only=False, decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False
+        )
+        .sign(ca_key, hashes.SHA256())
+    )
+    key = ec.generate_private_key(ec.SECP256R1())
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "hospital.example")]))
+        .issuer_name(ca_name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - dt.timedelta(minutes=5))
+        .not_valid_after(now + dt.timedelta(hours=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.DNSName("hospital.example")]), critical=False
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]),
+                       critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+    pem = serialization.Encoding.PEM
+    ca_path, cert_path, key_path = tmp_path / "ca.pem", tmp_path / "c.pem", tmp_path / "k.pem"
+    ca_path.write_bytes(ca.public_bytes(pem))
+    cert_path.write_bytes(cert.public_bytes(pem))
+    key_path.write_bytes(
+        key.private_bytes(
+            pem, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+        )
+    )
+    return ca_path, cert_path, key_path
+
+
+@pytest.fixture
+def tls_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A local HTTPS server for hospital.example; did_web trusts its CA and port only."""
+    import http.server
+    import threading
+    import time as _time
+
+    ca_path, cert_path, key_path = _local_ca_and_cert(tmp_path)
+    routes: dict[str, tuple[int, dict[str, str], bytes, float]] = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - http.server API
+            status, headers, body, pause = routes.get(self.path, (404, {}, b"", 0.0))
+            self.send_response(status)
+            for name, value in headers.items():
+                self.send_header(name, value)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if pause:
+                for byte in body:
+                    self.wfile.write(bytes([byte]))
+                    self.wfile.flush()
+                    _time.sleep(pause)
+            else:
+                self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert_path, key_path)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    server.daemon_threads = True
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def trusting_context() -> ssl.SSLContext:
+        ctx = ssl.create_default_context(cafile=str(ca_path))
+        return ctx
+
+    monkeypatch.setattr(did_web, "_PORT", server.server_address[1])
+    monkeypatch.setattr(did_web, "_ssl_context", trusting_context)
+    yield routes
+    server.shutdown()
+    server.server_close()
+
+
+def test_real_get_reads_the_document_through_the_pinned_address(tls_server) -> None:
+    tls_server["/.well-known/did.json"] = (200, {}, b'{"id": "x"}', 0.0)
+    # "hospital.example" does not resolve: only the pinned address can reach the server.
+    status, _, body = did_web._get("hospital.example", "127.0.0.1", "/.well-known/did.json")
+    assert (status, body) == (200, b'{"id": "x"}')
+
+
+def test_real_get_checks_the_certificate_against_the_host_name(tls_server) -> None:
+    tls_server["/.well-known/did.json"] = (200, {}, b"{}", 0.0)
+    with pytest.raises(ssl.SSLCertVerificationError):
+        did_web._get("attacker.example", "127.0.0.1", "/.well-known/did.json")
+
+
+def test_real_get_does_not_follow_a_redirect(tls_server) -> None:
+    tls_server["/.well-known/did.json"] = (
+        302, {"Location": "https://hospital.example/other.json"}, b"", 0.0
+    )
+    tls_server["/other.json"] = (200, {}, b"{}", 0.0)
+    status, location, _ = did_web._get("hospital.example", "127.0.0.1", "/.well-known/did.json")
+    assert (status, location) == (302, "https://hospital.example/other.json")
+
+
+def test_real_get_stops_reading_past_the_size_limit(tls_server) -> None:
+    tls_server["/.well-known/did.json"] = (200, {}, b"x" * (did_web.MAX_DOCUMENT_BYTES * 3), 0.0)
+    _, _, body = did_web._get("hospital.example", "127.0.0.1", "/.well-known/did.json")
+    assert len(body) == did_web.MAX_DOCUMENT_BYTES + 1
+
+
+def test_real_get_enforces_an_overall_deadline(tls_server) -> None:
+    import time as _time
+
+    # One byte every 0.2 s: each read is fast, the whole body is not.
+    tls_server["/.well-known/did.json"] = (200, {}, b"x" * 100, 0.2)
+    with pytest.raises(TimeoutError):
+        did_web._get(
+            "hospital.example", "127.0.0.1", "/.well-known/did.json", _time.monotonic() + 1
+        )
+
+
+async def test_real_registration_end_to_end(
+    tls_server, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(did_web.RESOLVE_ENV, "1")
+    monkeypatch.setattr(did_web, "_resolve", lambda host: ["127.0.0.1"])
+    # The local server is on a loopback address, refused in production: allow it here.
+    monkeypatch.setattr(did_web, "_public_address", lambda address: True)
+    key = _new_key()
+    tls_server["/.well-known/did.json"] = (200, {}, _document(_jwk_method(key)), 0.0)
+    result = await _register(key)
+    assert result["status"] == "registered", result
+    other = _new_key()
+    tls_server["/.well-known/did.json"] = (
+        200, {}, _document(_jwk_method(key), did="did:web:other.example"), 0.0
+    )
+    result = await _register(other, "did:web:other.example")
+    assert result["code"] == "did_web_https_required"  # certificate is for hospital.example
+
+
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("document_url", "https://evil.example/x"), ("verified_at", "1999-01-01T00:00:00+00:00")],
+)
+async def test_resealed_forged_url_or_time_still_fails_the_recheck(
+    net: FakeNet, temp_db: Path, column: str, value: str
+) -> None:
+    # An attacker with file access rewrites the proof row AND the key's chain_hash so
+    # they agree: the URL must still be the identifier's, the time the registration's.
+    key = _new_key()
+    net.body = _document(_jwk_method(key))
+    result = await _register(key)
+    _sql(temp_db, f"UPDATE principal_key_domain_proofs SET {column} = ?", (value,))  # noqa: S608
+    url, sha, verified_at = _sql(
+        temp_db,
+        "SELECT document_url, document_sha256, verified_at FROM principal_key_domain_proofs",
+    )[0]
+    record = {
+        "context": KEY_REGISTRATION_CONTEXT,
+        "principal_id": DID,
+        "public_key": _pub(key),
+        "key_id": key_id(_raw(key)),
+        "proof_signature": b64url_encode(key.sign(key_registration_payload(DID, _pub(key)))),
+        "registered_at": result["registered_at"],
+        "domain_proof": {
+            "did_document_url": url,
+            "did_document_sha256": sha,
+            "verified_at": verified_at,
+        },
+    }
+    _sql(temp_db, "UPDATE principal_keys SET chain_hash = ?", (compute_hash(record, ""),))
+    mandate_id = await _signed_mandate(key)
+    block = json.loads(await get_proof(mandate_id))["mandate"]["principal_signature"]
+    assert block["key_domain_proof"]["rechecked"] is False
+    # The attestation carries the failed recheck instead of vouching for the proof.
+    issued = json.loads(await issue_mandate_attestation(mandate_id, AGENT))
+    pem = json.loads(await get_registry_public_key())["public_key_pem"]
+    summary = verify_attestation(issued["attestation"], pem)["attestation"]
+    assert summary["principal_key_domain"]["rechecked"] is False
+    assert summary["principal_did_web_unverified"] is True

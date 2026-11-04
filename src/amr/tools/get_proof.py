@@ -9,8 +9,9 @@ from uuid import UUID
 import aiosqlite
 
 from amr.config import settings
-from amr.crypto.chain import verify_chain
+from amr.crypto.chain import compute_hash, verify_chain
 from amr.crypto.principal import (
+    KEY_REGISTRATION_CONTEXT,
     MANDATE_CONTEXT,
     PrincipalSignatureError,
     key_id,
@@ -27,7 +28,7 @@ from amr.db.engine import (
     init_db,
 )
 from amr.delegation import load_ancestors
-from amr.did_web import key_published
+from amr.did_web import DidWebError, is_did_web, key_published, parse
 from amr.models.organ_decision import recorded_organ_decision
 from amr.models.perimeter import Perimeter
 from amr.tools.contest_action import (
@@ -113,14 +114,43 @@ def _signature_matches(
     return abs(granted - timedelta(hours=duration)) <= timedelta(seconds=1)
 
 
+async def _key_hash_seals(db: aiosqlite.Connection, key_row: Any, proof_row: Any) -> bool:
+    """True if the key's chain_hash is the hash of its record with this domain proof."""
+    cursor = await db.execute(
+        "SELECT chain_hash FROM principal_keys WHERE rowid < "
+        "(SELECT rowid FROM principal_keys WHERE principal_id = ?) "
+        "ORDER BY rowid DESC LIMIT 1",
+        (key_row["principal_id"],),
+    )
+    previous = await cursor.fetchone()
+    record = {
+        "context": KEY_REGISTRATION_CONTEXT,
+        "principal_id": key_row["principal_id"],
+        "public_key": key_row["public_key"],
+        "key_id": key_row["key_id"],
+        "proof_signature": key_row["proof_signature"],
+        "registered_at": key_row["registered_at"],
+        "domain_proof": {
+            "did_document_url": proof_row["document_url"],
+            "did_document_sha256": proof_row["document_sha256"],
+            "verified_at": proof_row["verified_at"],
+        },
+    }
+    previous_hash = previous["chain_hash"] if previous is not None else ""
+    return compute_hash(record, previous_hash) == key_row["chain_hash"]
+
+
 async def key_domain_proof(
     db: aiosqlite.Connection, key_row: Any
 ) -> dict[str, Any] | None:
     """The did:web domain proof of a registered key, rechecked, or None if it has none.
 
-    rechecked is true when the stored document still hashes to the stored SHA-256,
-    names the key's principal and lists the registered key. It cannot say whether the
-    domain still publishes the key today: fetch did_document_url again for that.
+    rechecked is true when: the key record, rebuilt with this proof, gives the key's
+    stored chain_hash (so the proof is the one sealed at registration); the URL is the
+    one the identifier names; the time is the registration time; the stored document
+    hashes to the stored SHA-256, names the key's principal and lists the registered
+    key. It cannot say whether the domain still publishes the key today: fetch
+    did_document_url again for that.
     """
     if key_row is None:
         return None
@@ -129,9 +159,16 @@ async def key_domain_proof(
         return None
     rechecked = False
     raw = row["document"].encode("utf-8")
+    try:
+        expected_url = parse(key_row["principal_id"]).url
+    except DidWebError:
+        expected_url = None
     if (
         row["key_id"] == key_row["key_id"]
+        and row["document_url"] == expected_url
+        and row["verified_at"] == key_row["registered_at"]
         and hashlib.sha256(raw).hexdigest() == row["document_sha256"]
+        and await _key_hash_seals(db, key_row, row)
     ):
         try:
             document = json.loads(raw)
@@ -174,9 +211,17 @@ async def principal_signature_status(
                 key_row["proof_signature"] if key_row is not None else None
             ),
             "key_domain_proof": await key_domain_proof(db, key_row),
+            "key_chain_hash": key_row["chain_hash"] if key_row is not None else None,
             "payload": mandate_row["principal_signed_payload"],
             "algorithm": "Ed25519",
         }
+        # A did:web-named principal whose key has no valid domain proof (registered
+        # before did:web checks, or proof failing its recheck): consumers must not
+        # treat it as domain-verified.
+        domain = signature["key_domain_proof"]
+        signature["did_web_unverified"] = is_did_web(mandate_row["principal_id"]) and (
+            domain is None or not domain["rechecked"]
+        )
         parent_perimeter_json = None
         if mandate_row["parent_mandate_id"] is not None:
             parent_cursor = await db.execute(

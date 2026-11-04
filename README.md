@@ -230,7 +230,15 @@ onboarding, through the principal's own channel. An organisation can instead use
 `did:web:<its domain>` identifier: the key is then accepted only if the domain publishes
 it in `https://<domain>/.well-known/did.json`, and the SHA-256 of that document is
 sealed with the key (opt-in network access, `AMR_DID_WEB_RESOLVE=1`). This proves
-control of the domain at registration time, not a qualified signature. Mandates of principals without a key behave as before (same
+control of the domain at registration time, not a qualified signature. Consumers that
+rely on a `did:web` principal must check `did_web_unverified: false` in the Proof Pack,
+the attestation or the insurer dossier.
+
+**Behaviour change (did:web keys):** with the default configuration, registering a key
+for a `did:web:` identifier is now refused (`did_web_resolution_disabled`) instead of
+"first registration wins"; keys already registered stay valid and are reported as
+`did_web_unverified`. A `scheme:method:` prefix written with non-ASCII look-alike
+characters is refused (`principal_id_lookalike`). Mandates of principals without a key behave as before (same
 hashes; the result gains `"principal_signature": null`); mandates created before a key
 was registered stay valid. See `docs/principal-signature-spec.md`, including its
 known limits.
