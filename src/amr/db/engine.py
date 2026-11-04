@@ -135,6 +135,18 @@ CREATE TABLE IF NOT EXISTS action_contests (
     chain_hash               TEXT NOT NULL
 );
 
+-- Schema v9: proof that a did:web principal's key was published by its domain when
+-- it was registered (register_principal_key). One row per key, written in the same
+-- transaction as the key and sealed into its chain_hash. Append-only.
+CREATE TABLE IF NOT EXISTS principal_key_domain_proofs (
+    principal_id     TEXT PRIMARY KEY REFERENCES principal_keys(principal_id),
+    key_id           TEXT NOT NULL,
+    document_url     TEXT NOT NULL,
+    document_sha256  TEXT NOT NULL,
+    document         TEXT NOT NULL,
+    verified_at      TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_action_contests_mandate ON action_contests(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_contester ON action_contests(contested_by);
 CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate
@@ -204,7 +216,8 @@ async def init_db(db_path: Path | str | None = None) -> None:
     Creates all tables and indexes if they do not already exist.
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
-    7: token amounts for cumulative ceilings, 8: action contests).
+    7: token amounts for cumulative ceilings, 8: action contests,
+    9: did:web key domain proofs).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -279,6 +292,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (8,),
         )
+        # Schema v9: principal_key_domain_proofs, created by the script above
+        # (did:web keys). Existing keys and their chain hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (9,),
+        )
         await db.commit()
 
 
@@ -309,6 +328,18 @@ async def get_principal_key(
     cursor = await db.execute(
         "SELECT principal_id, public_key, key_id, proof_signature, registered_at, chain_hash "
         "FROM principal_keys WHERE principal_id = ?",
+        (principal_id,),
+    )
+    return await cursor.fetchone()
+
+
+async def get_principal_key_domain_proof(
+    db: aiosqlite.Connection, principal_id: str
+) -> aiosqlite.Row | None:
+    """Return the did:web domain proof of a principal's key, or None if it has none."""
+    cursor = await db.execute(
+        "SELECT principal_id, key_id, document_url, document_sha256, document, verified_at "
+        "FROM principal_key_domain_proofs WHERE principal_id = ?",
         (principal_id,),
     )
     return await cursor.fetchone()

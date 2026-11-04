@@ -12,8 +12,9 @@ AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that regist
 
 This section is written so that an AI agent (Claude Code, Cursor, any MCP client) can
 install AMR and reach a first verified mandate on its own: no account, no email, no
-person to ask. Everything runs on your machine; AMR makes no network call (the one
-exception, `report_issue`, is off until the operator sets `AMR_ISSUE_TOKEN`).
+person to ask. Everything runs on your machine; AMR makes no network call (two opt-in
+exceptions, both off by default: `report_issue` once the operator sets `AMR_ISSUE_TOKEN`,
+and the `did:web` key check once the operator sets `AMR_DID_WEB_RESOLVE=1`).
 
 **1. Run the server** (needs [uv](https://docs.astral.sh/uv/)).
 
@@ -223,9 +224,13 @@ with the public key and the signed bytes, so anyone can re-check it offline. Set
 `AMR_REQUIRE_PRINCIPAL_SIGNATURE=true` to refuse every unsigned mandate.
 
 What a valid signature proves: the mandate was signed with the key first registered
-for that `principal_id`. The registry does not check who registers a key (first
-registration wins), so register each principal's key at onboarding, through the
-principal's own channel. Mandates of principals without a key behave as before (same
+for that `principal_id`. For an ordinary `principal_id` the registry does not check who
+registers a key (first registration wins), so register each principal's key at
+onboarding, through the principal's own channel. An organisation can instead use a
+`did:web:<its domain>` identifier: the key is then accepted only if the domain publishes
+it in `https://<domain>/.well-known/did.json`, and the SHA-256 of that document is
+sealed with the key (opt-in network access, `AMR_DID_WEB_RESOLVE=1`). This proves
+control of the domain at registration time, not a qualified signature. Mandates of principals without a key behave as before (same
 hashes; the result gains `"principal_signature": null`); mandates created before a key
 was registered stay valid. See `docs/principal-signature-spec.md`, including its
 known limits.
@@ -441,7 +446,12 @@ Register a principal's Ed25519 public key, once, with a proof of possession.
 | `public_key` | str | Raw 32-byte public key, base64url |
 | `proof_signature` | str | Signature of `{"context":"amr.principal_key.v1","principal_id":...,"public_key":...}` (canonical JSON) |
 
-Returns `{"status": "registered", "principal_id", "key_id", "registered_at", "chain_hash"}`.
+Returns `{"status": "registered", "principal_id", "key_id", "registered_at", "chain_hash",
+"domain_proof"}`. `domain_proof` is null, except for a `did:web:<domain>` principal: its key
+is accepted only if `https://<domain>/.well-known/did.json` lists it (needs
+`AMR_DID_WEB_RESOLVE=1`), and `domain_proof` holds `did_document_url`,
+`did_document_sha256` and `verified_at`. See `docs/principal-signature-spec.md`,
+section 1 bis.
 
 ---
 
@@ -919,9 +929,10 @@ src/amr/
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
 │   ├── contest_action.py   # contested acts and their response deadline (reminder)
-│   ├── report_issue.py   # only network call, opt-in (AMR_ISSUE_TOKEN)
+│   ├── report_issue.py   # network call, opt-in (AMR_ISSUE_TOKEN)
 │   └── export_insurer_dossier.py
 ├── attestation.py     # offline attestation verifier (no DB, no network)
+├── did_web.py         # did:web key check, network opt-in (AMR_DID_WEB_RESOLVE)
 ├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
@@ -943,6 +954,7 @@ tests/
 | `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
 | `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
+| `AMR_DID_WEB_RESOLVE` | unset | `1` lets `register_principal_key` read the DID document of a `did:web` principal (one HTTPS GET to that domain). Read from the process environment only, never from `.env`. Unset: `did:web` keys are refused |
 | `AMR_ISSUE_REPOSITORY` | `JC7333/amr` | Repository `report_issue` files issues on (`owner/name`) |
 | `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
 | `AMR_PUBLIC_EXPORT_PATH` | `amr_public_registry.jws` | Signed snapshot written by `python -m amr.public_registry export` and served by its app |

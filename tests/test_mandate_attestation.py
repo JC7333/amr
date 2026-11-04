@@ -391,7 +391,8 @@ async def test_signed_payload_and_metadata_are_not_disclosed_by_default() -> Non
     attestation = (await _attest(m["mandate_id"]))["attestation"]
     assert "C-0042" not in json.dumps(_claims(attestation))
     block = _claims(attestation)["amr_mandate"]["principal_signature"]
-    assert set(block) == {"key_id", "public_key", "signed_at", "algorithm"}
+    assert set(block) == {"key_id", "public_key", "signed_at", "algorithm", "key_domain_proof"}
+    assert block["key_domain_proof"] is None
     result = await _verify(attestation)
     assert result["valid"] is True, result
     assert result["attestation"]["principal_signed"] is True

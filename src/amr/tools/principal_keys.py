@@ -4,6 +4,7 @@ A principal registers its Ed25519 public key once; from then on every mandate it
 grants must carry its signature (see create_mandate).
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -24,13 +25,14 @@ from amr.crypto.principal import (
     verify,
 )
 from amr.db.engine import get_db, get_last_principal_key_hash, get_principal_key, init_db
+from amr.did_web import DidWebError, fetch, is_did_web, key_published, parse, resolution_enabled
 from amr.models.mandate import LegalBasis, MandateCreate
 from amr.models.perimeter import PerimeterError
 from amr.tools.create_mandate import _build_perimeter, signed_mandate_payload
 
 
-def _error(code: str, message: str) -> str:
-    return json.dumps({"error": f"{code}: {message}", "code": code})
+def _error(code: str, message: str, **extra: Any) -> str:
+    return json.dumps({"error": f"{code}: {message}", "code": code, **extra})
 
 
 class _PrincipalId(BaseModel):
@@ -48,9 +50,17 @@ async def register_principal_key(
 
     After registration, create_mandate refuses any mandate from this principal that
     is not signed with the matching private key. The key cannot be replaced or
-    removed in this version, and the registry does not check who registers it: the
-    first registration wins. Expose this tool to principals (or their back office)
-    only, never to the agents they govern, and register each key at onboarding.
+    removed in this version. For an ordinary principal_id the registry does not check
+    who registers it: the first registration wins. Expose this tool to principals (or
+    their back office) only, never to the agents they govern, and register each key at
+    onboarding.
+
+    did:web principals (principal_id "did:web:<domain>"): the key is accepted only if
+    the domain publishes it in https://<domain>/.well-known/did.json (W3C did:web).
+    This needs AMR_DID_WEB_RESOLVE=1 in the server's process environment (one HTTPS
+    request per registration; refused otherwise). The SHA-256 of the document read and
+    the verification time are sealed with the key and shown by get_proof. It proves
+    control of the domain at registration time, not a qualified signature.
 
     Proof of possession: proof_signature is the principal's signature of the canonical
     JSON {"context": "amr.principal_key.v1", "principal_id": ..., "public_key": ...}
@@ -64,11 +74,14 @@ async def register_principal_key(
 
     Returns:
         JSON string with keys: status ("registered"), principal_id, key_id,
-        registered_at, chain_hash.
+        registered_at, chain_hash, domain_proof ({did_document_url, did_document_sha256,
+        verified_at} for a did:web principal, else null).
         On error: {"error": "...", "code": "..."} with code principal_id_invalid,
-        public_key_invalid,
-        principal_signature_invalid, principal_key_proof_invalid or
-        principal_key_already_registered.
+        public_key_invalid, principal_signature_invalid, principal_key_proof_invalid,
+        principal_key_already_registered, or for did:web: did_web_resolution_disabled,
+        did_web_invalid, did_web_not_canonical (then canonical_principal_id),
+        did_web_unreachable, did_web_address_refused, did_web_https_required,
+        did_web_redirect, did_web_document_invalid or did_web_key_not_published.
     """
     db = None
     try:
@@ -76,6 +89,21 @@ async def register_principal_key(
             _PrincipalId(principal_id=principal_id)
         except ValidationError as exc:
             return _error("principal_id_invalid", str(exc))
+        target = None
+        if is_did_web(principal_id):
+            if not resolution_enabled():
+                raise DidWebError(
+                    "did_web_resolution_disabled",
+                    "a did:web key is checked against the domain, which needs "
+                    "AMR_DID_WEB_RESOLVE=1 in the server's environment",
+                )
+            target = parse(principal_id)
+            if target.did != principal_id:
+                raise DidWebError(
+                    "did_web_not_canonical",
+                    "use the canonical form of this did:web identifier",
+                    canonical_principal_id=target.did,
+                )
         public_key_raw = parse_public_key(public_key)
         signature_raw = parse_signature(proof_signature)
         normalized_key = b64url_encode(public_key_raw)
@@ -94,8 +122,17 @@ async def register_principal_key(
                 "this principal already has a key; it cannot be replaced",
             )
 
+        document = None
+        if target is not None:
+            document = await asyncio.to_thread(fetch, target)
+            if not key_published(document.document, public_key_raw):
+                raise DidWebError(
+                    "did_web_key_not_published",
+                    f"{document.url} does not list this Ed25519 key in verificationMethod",
+                )
+
         registered_at = datetime.now(UTC).isoformat()
-        record = {
+        record: dict[str, Any] = {
             "context": KEY_REGISTRATION_CONTEXT,
             "principal_id": principal_id,
             "public_key": normalized_key,
@@ -103,6 +140,15 @@ async def register_principal_key(
             "proof_signature": b64url_encode(signature_raw),
             "registered_at": registered_at,
         }
+        domain_proof = None
+        if document is not None:
+            domain_proof = {
+                "did_document_url": document.url,
+                "did_document_sha256": document.sha256,
+                "verified_at": registered_at,
+            }
+            # Only did:web keys carry it, so the hash of every other key is unchanged.
+            record["domain_proof"] = domain_proof
         chain_hash = compute_hash(record, await get_last_principal_key_hash(db))
         await db.execute(
             """
@@ -119,6 +165,23 @@ async def register_principal_key(
                 chain_hash,
             ),
         )
+        if document is not None:
+            await db.execute(
+                """
+                INSERT INTO principal_key_domain_proofs
+                  (principal_id, key_id, document_url, document_sha256, document,
+                   verified_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    principal_id,
+                    record["key_id"],
+                    document.url,
+                    document.sha256,
+                    document.raw.decode("utf-8"),
+                    registered_at,
+                ),
+            )
         await db.commit()
         return json.dumps(
             {
@@ -127,11 +190,15 @@ async def register_principal_key(
                 "key_id": record["key_id"],
                 "registered_at": registered_at,
                 "chain_hash": chain_hash,
+                "domain_proof": domain_proof,
             }
         )
 
     except PrincipalSignatureError as exc:
         return _error(exc.code, exc.message)
+
+    except DidWebError as exc:
+        return _error(exc.code, exc.message, **exc.extra)
 
     except aiosqlite.IntegrityError:
         return _error(

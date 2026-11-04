@@ -14,9 +14,11 @@ turns what the agent observed into a GitHub issue on the AMR repository.
 | `AMR_ISSUE_TOKEN` set | Sends one `POST https://api.github.com/repos/<repo>/issues` and returns `status: "created"`, `issue_number`, `issue_url` | One HTTPS request, 10 s timeout per socket operation, redirects refused, answer read up to 1 MB |
 
 `<repo>` is `AMR_ISSUE_REPOSITORY` (default `JC7333/amr`, format `owner/name`, checked at
-start; names made only of dots are refused). This is the only tool of AMR allowed to reach
-the network (CLAUDE.md, rule 5), and only in the second mode. A test parses every module
-under `src/amr` and fails if another one imports a network module (`urllib.request`,
+start; names made only of dots are refused). This tool may reach the network (CLAUDE.md,
+rule 5) only in the second mode. The one other opt-in exception is the `did:web` key check
+of `register_principal_key` (`src/amr/did_web.py`, `AMR_DID_WEB_RESOLVE`, see
+`docs/principal-signature-spec.md`). A test parses every module under `src/amr` and fails
+if a module other than these two imports a network module (`urllib.request`,
 `http`, `socket`, `ssl`, `requests`, `httpx`, `aiohttp`, `urllib3`, and a few others) or
 calls `urlopen`, `open_connection` or `create_connection`.
 

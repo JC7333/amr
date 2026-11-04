@@ -1,6 +1,7 @@
 # Principal signatures on mandates
 
-Status: v1 (schema v4). First step towards answering "who really granted this mandate?".
+Status: v1 (schema v4; did:web keys: schema v9). First step towards answering "who really
+granted this mandate?".
 
 Without it, anyone who can call `create_mandate` can register a mandate in the name of
 any principal, including an agent minting itself a root mandate. With it, a principal
@@ -42,14 +43,58 @@ The key record is appended to the `principal_keys` table and chained (SHA-256, l
 mandates). One key per principal: a second registration is refused
 (`principal_key_already_registered`). Key rotation and revocation are not in v1.
 
-**Limit: first registration wins.** The registry does not check who registers a key for
-a given `principal_id`. Expose `register_principal_key` to principals (or their back
+**Limit: first registration wins.** For an ordinary `principal_id`, the registry does not
+check who registers a key. Expose `register_principal_key` to principals (or their back
 office) only, never to agents, and register each principal's key when the principal is
-onboarded. Binding the key to a verified identity (eIDAS wallet, qualified certificate)
-is a later step.
+onboarded. A `did:web` principal closes this gap at the level of a domain name (section
+1 bis). Binding the key to a qualified signature or a named signatory is a later step.
 
 Errors: `principal_id_invalid`, `public_key_invalid`, `principal_signature_invalid`
-(malformed proof), `principal_key_proof_invalid`, `principal_key_already_registered`.
+(malformed proof), `principal_key_proof_invalid`, `principal_key_already_registered`,
+and for `did:web` principals the codes of section 1 bis.
+
+## 1 bis. Key published by the principal's domain: `did:web` principals
+
+An organisation can use as `principal_id` a `did:web` identifier (W3C did:web method):
+`did:web:<domain>` or `did:web:<domain>:<path>:<segments>`. It publishes its Ed25519
+key in its DID document, at `https://<domain>/.well-known/did.json` (or
+`https://<domain>/<path>/<segments>/did.json`), as a `verificationMethod` with
+`publicKeyJwk` `{"kty": "OKP", "crv": "Ed25519", "x": "<base64url>"}` or
+`publicKeyMultibase` `"z"` + base58btc(`0xed 0x01` + key). The document's `id` must be
+the identifier itself.
+
+`register_principal_key` then accepts the key only if that document lists it: whoever
+calls the tool first can no longer take the name of an organisation whose domain they do
+not control. Rules:
+
+- **Opt-in network access.** Reading the document is the second exception to "no
+  network calls" (the first is `report_issue`). It is off unless the operator sets
+  `AMR_DID_WEB_RESOLVE=1` in the server's process environment (never read from `.env`).
+  Off, a `did:web` key is refused (`did_web_resolution_disabled`); it never falls back
+  to "first registration wins". A `did:web` identifier is recognised whatever its case
+  or surrounding spaces, so `DID:Web:...` cannot skip the check.
+- **One request, constrained.** One HTTPS GET per registration, after the proof of
+  possession is checked and only if the principal has no key yet. Certificate checked
+  against the host name; no redirect followed; 5 s timeout per socket operation; at
+  most 64 KiB read; every address of the domain must be public (no private, loopback,
+  link-local, reserved or multicast address), and the connection is made to the
+  address that was checked.
+- **Canonical identifier.** The domain is lowercase and in its ASCII form (punycode for
+  a domain with accents: `did:web:xn--hpital-ixa.example`); ports and IP addresses are
+  refused. A non-canonical identifier is refused with `canonical_principal_id`, the form
+  to use.
+- **Sealed proof.** The document URL, the SHA-256 of the exact bytes read and the
+  verification time are added to the key record sealed in its `chain_hash` (as
+  `domain_proof`); the document itself is kept in the append-only table
+  `principal_key_domain_proofs`. The result of `register_principal_key` gains
+  `domain_proof` (`null` for an ordinary principal).
+
+Errors: `did_web_resolution_disabled`, `did_web_invalid` (malformed identifier, port, IP
+address, path segment), `did_web_not_canonical`, `did_web_unreachable` (name not
+resolved, connection failed, HTTP status other than 200), `did_web_address_refused`,
+`did_web_https_required` (no valid TLS connection), `did_web_redirect` (with
+`location`), `did_web_document_invalid` (not a JSON object, too large, `id` not the
+identifier), `did_web_key_not_published`.
 
 ## 2. Sign a mandate
 
@@ -113,10 +158,29 @@ sub-mandates it grants.
   - false otherwise, including when the signature is missing although the principal's
     key was registered before the mandate was created (a stripped signature);
   - null for an unsigned mandate whose principal had no key at the time.
+- `mandate.principal_signature.key_domain_proof` is, for a `did:web` principal,
+  `{did_document_url, did_document_sha256, verified_at, document, rechecked}`, else
+  null. `rechecked` is true when the stored document still hashes to the stored SHA-256,
+  has the principal as `id` and lists the registered key. A third party re-checks the
+  hash offline from `document`, and re-reads `did_document_url` to see whether the
+  domain still publishes the key today. The mandate attestation and the insurer
+  dossier carry the URL, the hash and the time (not the document).
 
 ## 5. Known limits
 
-- **First registration wins** (section 1): the key is not bound to a verified identity.
+- **First registration wins** (section 1) for ordinary principals: the key is not bound
+  to a verified identity.
+- **did:web proves control of a domain, at one moment.** It shows that the domain served
+  the key when it was registered: not a qualified electronic signature, not who inside
+  the organisation holds the key, and not that the domain still publishes it (no
+  re-check after registration; key rotation is not in v1). Whoever controls the domain's
+  web server or DNS, or obtains a certificate for it, controls what the registry reads.
+- **did:web and unsigned mandates.** As for every principal, mandates in the name of a
+  `did:web` principal that has no key yet are accepted unsigned unless
+  `AMR_REQUIRE_PRINCIPAL_SIGNATURE` is true; they carry no signature and no domain proof.
+- **Keys registered before did:web checks.** A key registered under a `did:web`
+  identifier before this version was not checked against the domain: its
+  `key_domain_proof` is null.
 - **Per-registry replay protection**: a signature is refused if it already registered a
   mandate in the same database. The payload names no registry, so within the 15-minute
   window the same signed payload could be accepted by another AMR registry where the
@@ -138,6 +202,8 @@ sub-mandates it grants.
 
 ## 6. Compatibility
 
+- Schema v9 adds the table `principal_key_domain_proofs`; no existing row changes, and
+  keys of ordinary principals keep exactly the previous hash payload.
 - Existing databases are migrated in place (schema v4): four nullable columns on
   `mandates`, a new `principal_keys` table, a unique index on the signature. No existing
   row is modified.

@@ -113,7 +113,9 @@ audience=..., issuer=...)`. No database, no network. Result:
 valid, 1 if not (an unusable key gives `public_key_invalid`), 2 if the key file
 cannot be read. The summary says `principal_signed` and
 `principal_signature_rechecked` (true only when the receiver re-checked the
-principal's signature itself).
+principal's signature itself), and `principal_key_domain`: for a `did:web` principal,
+`{did_document_url, did_document_sha256, verified_at}` as seen by the registry when the
+key was registered (signed by the registry, not re-fetched by the verifier), else null.
 
 Checks, in this order (another implementation MUST do all of them):
 

@@ -1,5 +1,6 @@
 """AMR tool: get_proof - Generate a cryptographic Proof Pack for a mandate."""
 
+import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,8 +19,15 @@ from amr.crypto.principal import (
     parse_signature,
     verify,
 )
-from amr.db.engine import get_db, get_principal_key, get_revocation, init_db
+from amr.db.engine import (
+    get_db,
+    get_principal_key,
+    get_principal_key_domain_proof,
+    get_revocation,
+    init_db,
+)
 from amr.delegation import load_ancestors
+from amr.did_web import key_published
 from amr.models.organ_decision import recorded_organ_decision
 from amr.models.perimeter import Perimeter
 from amr.tools.contest_action import (
@@ -105,6 +113,45 @@ def _signature_matches(
     return abs(granted - timedelta(hours=duration)) <= timedelta(seconds=1)
 
 
+async def key_domain_proof(
+    db: aiosqlite.Connection, key_row: Any
+) -> dict[str, Any] | None:
+    """The did:web domain proof of a registered key, rechecked, or None if it has none.
+
+    rechecked is true when the stored document still hashes to the stored SHA-256,
+    names the key's principal and lists the registered key. It cannot say whether the
+    domain still publishes the key today: fetch did_document_url again for that.
+    """
+    if key_row is None:
+        return None
+    row = await get_principal_key_domain_proof(db, key_row["principal_id"])
+    if row is None:
+        return None
+    rechecked = False
+    raw = row["document"].encode("utf-8")
+    if (
+        row["key_id"] == key_row["key_id"]
+        and hashlib.sha256(raw).hexdigest() == row["document_sha256"]
+    ):
+        try:
+            document = json.loads(raw)
+            public_key_raw = parse_public_key(key_row["public_key"])
+        except (ValueError, PrincipalSignatureError):
+            document = None
+        rechecked = (
+            isinstance(document, dict)
+            and document.get("id") == key_row["principal_id"]
+            and key_published(document, public_key_raw)
+        )
+    return {
+        "did_document_url": row["document_url"],
+        "did_document_sha256": row["document_sha256"],
+        "verified_at": row["verified_at"],
+        "document": row["document"],
+        "rechecked": rechecked,
+    }
+
+
 async def principal_signature_status(
     db: aiosqlite.Connection, mandate_row: Any, mandate_dict: dict[str, Any]
 ) -> tuple[dict[str, Any] | None, bool | None]:
@@ -126,6 +173,7 @@ async def principal_signature_status(
             "key_proof_signature": (
                 key_row["proof_signature"] if key_row is not None else None
             ),
+            "key_domain_proof": await key_domain_proof(db, key_row),
             "payload": mandate_row["principal_signed_payload"],
             "algorithm": "Ed25519",
         }

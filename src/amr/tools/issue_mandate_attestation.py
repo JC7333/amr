@@ -189,6 +189,23 @@ async def issue_mandate_attestation(
                 "public_key": signature["public_key"],
                 "signed_at": signature["signed_at"],
                 "algorithm": signature["algorithm"],
+                "key_domain_proof": signature.get("key_domain_proof"),
+            }
+        if signature is not None:
+            # did:web keys: where and when the domain published the key, and the hash
+            # of the document read. The document itself stays in the Proof Pack.
+            domain = signature.get("key_domain_proof")
+            signature = {
+                **signature,
+                "key_domain_proof": (
+                    {
+                        "did_document_url": domain["did_document_url"],
+                        "did_document_sha256": domain["did_document_sha256"],
+                        "verified_at": domain["verified_at"],
+                    }
+                    if domain is not None
+                    else None
+                ),
             }
         mandate["principal_signature"] = signature
         chain = [
