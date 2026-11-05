@@ -77,6 +77,17 @@ def _integrity(proof: dict[str, Any]) -> dict[str, Any]:
         "contests_intact": chain.get("contests_intact"),
         "contested_actions": len(proof.get("action_contests", [])),
         "principal_key_id": signature["key_id"] if signature else None,
+        "principal_key_domain": (
+            {
+                "did_document_url": signature["key_domain_proof"]["did_document_url"],
+                "did_document_sha256": signature["key_domain_proof"]["did_document_sha256"],
+                "verified_at": signature["key_domain_proof"]["verified_at"],
+                "rechecked": signature["key_domain_proof"]["rechecked"],
+            }
+            if signature and signature.get("key_domain_proof")
+            else None
+        ),
+        "principal_did_web_unverified": bool(signature and signature.get("did_web_unverified")),
         "chain_head": actions[-1]["chain_hash"] if actions else proof["mandate"]["chain_hash"],
         "total_actions": chain["total_actions"],
     }
