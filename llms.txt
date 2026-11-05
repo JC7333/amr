@@ -6,9 +6,9 @@ Install and run (needs uv; the PyPI package is `mandatia`, `uvx amr` installs a 
 
     uvx mandatia
 
-Latest code of the repository instead (keep `--with "mcp<2"`, AMR is written for version 1 of the MCP Python SDK):
+Latest code of the repository instead (works with version 1 and version 2 of the MCP Python SDK, no extra pin):
 
-    uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+    uvx --from git+https://github.com/JC7333/amr amr
 
 ## Docs
 - [AGENTS.md](https://github.com/JC7333/amr/blob/main/AGENTS.md): what AMR does and does not do, tools, how to report a problem

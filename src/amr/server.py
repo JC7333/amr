@@ -3,7 +3,10 @@
 Run with: uv run amr
 """
 
-from mcp.server.fastmcp import FastMCP
+try:  # mcp 2.x renamed FastMCP to MCPServer (and kept the decorator and run API used here)
+    from mcp.server.mcpserver import MCPServer as FastMCP
+except ModuleNotFoundError:  # mcp 1.x
+    from mcp.server.fastmcp import FastMCP
 
 from amr.config import settings
 from amr.tools.check_action_token import check_action_token

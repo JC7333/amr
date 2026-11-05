@@ -14,7 +14,7 @@ LLMS = (ROOT / "llms.txt").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 REGISTERED_TOOLS = set(re.findall(r"^mcp\.tool\(\)\((\w+)\)", SERVER, flags=re.MULTILINE))
-INSTALL = 'uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr'
+INSTALL = 'uvx --from git+https://github.com/JC7333/amr amr'
 
 
 def test_registered_tools_are_found() -> None:
@@ -36,7 +36,7 @@ def test_readme_quickstart_names_only_real_tools() -> None:
 
 
 @pytest.mark.parametrize("text", [AGENTS, LLMS, README])
-def test_install_command_pins_mcp_v1(text: str) -> None:
+def test_install_command_needs_no_sdk_pin(text: str) -> None:
     assert INSTALL in text
 
 
