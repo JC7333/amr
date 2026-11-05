@@ -925,7 +925,7 @@ uv run amr
 ```
 src/amr/
 ├── config.py          # Settings via pydantic-settings (env prefix: AMR_)
-├── server.py          # FastMCP server entrypoint (stdio transport)
+├── server.py          # MCP server entrypoint (stdio transport; mcp 1.x or 2.x)
 ├── models/mandate.py  # Pydantic models: MandateCreate, Mandate, ActionLog
 ├── crypto/chain.py    # compute_hash() and verify_chain() — stdlib only
 ├── db/engine.py       # init_db(), get_db(), get_last_mandate_hash()

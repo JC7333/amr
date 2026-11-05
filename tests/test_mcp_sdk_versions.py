@@ -123,6 +123,24 @@ def test_missing_sdk_is_still_reported(monkeypatch) -> None:
         _load_server_copy(monkeypatch, {"mcp.server.mcpserver": None, "mcp.server.fastmcp": None})
 
 
+class _BrokenDependencyFinder:
+    """Makes "import mcp.server.mcpserver" fail because one of its own dependencies is missing."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name == "mcp.server.mcpserver":
+            raise ModuleNotFoundError("No module named 'httpx2'", name="httpx2")
+        return None
+
+
+def test_missing_dependency_of_v2_is_not_hidden_by_the_fallback(monkeypatch) -> None:
+    v1 = _fake_module("mcp.server.fastmcp", "FastMCP")
+    monkeypatch.delitem(sys.modules, "mcp.server.mcpserver", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [_BrokenDependencyFinder(), *sys.meta_path])
+    with pytest.raises(ModuleNotFoundError) as excinfo:
+        _load_server_copy(monkeypatch, {"mcp.server.fastmcp": v1})
+    assert excinfo.value.name == "httpx2"
+
+
 def test_server_name_comes_from_settings(monkeypatch) -> None:
     from amr.config import settings
 
@@ -157,19 +175,23 @@ def test_stdio_session_lists_tools_and_answers(tmp_path) -> None:
     )
     params = StdioServerParameters(command=sys.executable, args=["-m", "amr.server"], env=env)
 
-    async def session() -> tuple[set[str], str, bool]:
+    async def session() -> tuple[str, set[str], str, bool]:
         async with (
             stdio_client(params) as (read, write),
             ClientSession(read, write) as client,
         ):
-            await client.initialize()
+            init = await client.initialize()
+            info = getattr(init, "serverInfo", None) or init.server_info
             names = {t.name for t in (await client.list_tools()).tools}
             ok = await client.call_tool("verify_mandate", {"agent_id": "agent-x", "action": "read"})
             bad = await client.call_tool("verify_mandate", {"agent_id": "agent-x"})
             is_error = getattr(bad, "isError", getattr(bad, "is_error", None))
-            return names, ok.content[0].text, is_error
+            return info.name, names, ok.content[0].text, is_error
 
-    names, text, is_error = asyncio.run(asyncio.wait_for(session(), timeout=60))
+    from amr.config import settings
+
+    server_name, names, text, is_error = asyncio.run(asyncio.wait_for(session(), timeout=60))
+    assert server_name == settings.server_name
     assert names == REGISTERED_TOOLS
     assert '"authorized": false' in text
     assert "No active mandate found for agent 'agent-x'" in text
@@ -190,10 +212,25 @@ def test_docs_say_both_sdk_versions_work(name: str) -> None:
     assert "version 1 and version 2 of the MCP Python SDK" in DOCS[name]
 
 
+V2_RUN = (
+    "uv run --isolated --no-project --with . --with pytest --with pytest-asyncio"
+    ' --with "mcp[cli]>=2,<3" python -m pytest -q'
+)
+
+
+def test_release_runs_the_suite_against_mcp_v2_before_building() -> None:
+    publish = ROOT / ".github" / "workflows" / "publish.yml"
+    if not publish.is_file():
+        pytest.skip("CI files are only in the repository")
+    workflow = publish.read_text(encoding="utf-8")
+    assert V2_RUN in workflow
+    assert workflow.index(V2_RUN) < workflow.index("run: uv build")
+
+
 def test_ci_runs_the_suite_against_mcp_v2() -> None:
     if not CI.is_file():
         pytest.skip("CI files are only in the repository")
     ci = CI.read_text(encoding="utf-8")
-    assert 'uv run --with "mcp[cli]>=2,<3" python -m pytest -q' in ci
+    assert V2_RUN in ci
     assert 'EXPECTED_MCP_MAJOR: "2"' in ci
     assert 'EXPECTED_MCP_MAJOR: "1"' in ci

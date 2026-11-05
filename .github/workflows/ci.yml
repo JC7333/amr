@@ -34,9 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Install
-        run: uv sync --extra dev
-      - name: Tests against mcp 2.x
+      - name: Tests against mcp 2.x (clean environment, no mcp 1.x leftovers)
         env:
           EXPECTED_MCP_MAJOR: "2"
-        run: uv run --with "mcp[cli]>=2,<3" python -m pytest -q
+        run: uv run --isolated --no-project --with . --with pytest --with pytest-asyncio --with "mcp[cli]>=2,<3" python -m pytest -q

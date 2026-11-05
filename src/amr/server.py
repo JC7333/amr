@@ -5,7 +5,9 @@ Run with: uv run amr
 
 try:  # mcp 2.x renamed FastMCP to MCPServer (and kept the decorator and run API used here)
     from mcp.server.mcpserver import MCPServer as FastMCP
-except ModuleNotFoundError:  # mcp 1.x
+except ModuleNotFoundError as exc:  # mcp 1.x has no mcp.server.mcpserver
+    if exc.name not in ("mcp", "mcp.server", "mcp.server.mcpserver"):
+        raise  # a dependency of mcp 2.x is missing: show that error, not a misleading one
     from mcp.server.fastmcp import FastMCP
 
 from amr.config import settings
