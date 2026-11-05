@@ -456,11 +456,15 @@ def test_network_detector_allows_urllib_parse() -> None:
     assert _network_uses("import urllib.parse\nfrom urllib.parse import quote") == []
 
 
-def test_report_issue_is_the_only_module_that_reaches_the_network() -> None:
-    # CLAUDE.md rule 5: report_issue is the single, opt-in exception.
+def test_only_the_two_opt_in_modules_reach_the_network() -> None:
+    # CLAUDE.md rule 5: report_issue is an opt-in exception (AMR_ISSUE_TOKEN); did:web key
+    # checks are the second one (AMR_DID_WEB_RESOLVE, see tests/test_did_web.py).
     offenders = [
         str(path.relative_to(ROOT))
         for path in sorted((ROOT / "src" / "amr").rglob("*.py"))
         if _network_uses(path.read_text(encoding="utf-8"))
     ]
-    assert offenders == [str(Path("src/amr/tools/report_issue.py"))]
+    assert offenders == [
+        str(Path("src/amr/did_web.py")),
+        str(Path("src/amr/tools/report_issue.py")),
+    ]

@@ -50,11 +50,14 @@ uvx mandatia
 - It does not give legal advice and does not make anyone compliant with any
   regulation; that stays with the operator.
 - It does not check who a principal is, unless that principal registered a key and signs
-  its mandates (`register_principal_key`).
+  its mandates (`register_principal_key`). For a `did:web:<domain>` principal, it checks
+  that the domain publishes the key; it never checks a qualified signature.
 - It does not host anything: there is no hosted service. The registry runs where you
   start it and trusts its own database file; protect that file.
 - It makes no network call, except `report_issue` when the operator set `AMR_ISSUE_TOKEN`
-  (one HTTPS request to the GitHub API). Tokens and attestations already issued stay valid until
+  (one HTTPS request to the GitHub API), and `register_principal_key` for a `did:web`
+  principal when the operator set `AMR_DID_WEB_RESOLVE=1` (one HTTPS request to that
+  domain's DID document). Tokens and attestations already issued stay valid until
   their expiry after a revocation (the revocation response counts the tokens), unless the
   receiver re-checks the token with `check_action_token` when it acts.
 - Existing rows are never edited or deleted: status changes are new chained rows.

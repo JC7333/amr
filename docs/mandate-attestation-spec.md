@@ -85,9 +85,11 @@ Claims:
 | `amr_chain` | The parent mandates, nearest first, up to the root: `id`, `principal_id`, `agent_id`, `status`, `expires_at`, `parent_mandate_id`, `perimeter_digest` |
 
 `principal_signature` is `null` (unsigned mandate) or, by default,
-`{key_id, public_key, signed_at, algorithm}`: the registry checked the signature at
-issuance and vouches for it. With `include_principal_payload`, it is
-`{signature, signed_at, key_id, public_key, key_proof_signature, payload, algorithm}`:
+`{key_id, public_key, signed_at, algorithm, key_domain_proof, did_web_unverified}`: the
+registry checked the signature at issuance and vouches for it. With
+`include_principal_payload`, it is `{signature, signed_at, key_id, public_key,
+key_proof_signature, key_chain_hash, payload, algorithm, key_domain_proof,
+did_web_unverified}`:
 the principal's own Ed25519 signature over `payload`, the exact bytes it signed (see
 `docs/principal-signature-spec.md`), which the receiver re-checks.
 
@@ -113,7 +115,11 @@ audience=..., issuer=...)`. No database, no network. Result:
 valid, 1 if not (an unusable key gives `public_key_invalid`), 2 if the key file
 cannot be read. The summary says `principal_signed` and
 `principal_signature_rechecked` (true only when the receiver re-checked the
-principal's signature itself).
+principal's signature itself), and `principal_key_domain`: for a `did:web` principal,
+`{did_document_url, did_document_sha256, verified_at, rechecked}` as seen by the registry
+when the key was registered (signed by the registry, not re-fetched by the verifier;
+`rechecked` as in the Proof Pack), else null; and `principal_did_web_unverified` (true
+for a `did:web` principal whose key has no valid domain proof: do not rely on it).
 
 Checks, in this order (another implementation MUST do all of them):
 
