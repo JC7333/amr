@@ -43,7 +43,11 @@ async def prepare_mandate_pdf(
     The registry does not sign this PDF and does not check a signature made on it in
     this version: the principal signs it with its own tool (for example a PAdES
     signature), and keeps the signed file. An agent cannot sign in the principal's
-    place.
+    place. create_mandate accepts signed_at only within
+    AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS (default 900 s) of its clock: generate,
+    sign and register within that window, or generate a new PDF. The PDF matches a
+    registered mandate only if that mandate was created with the same arguments, the
+    same signed_at and a principal signature.
 
     Args:
         signed_at: ISO 8601 timestamp with timezone to place in the content.
@@ -55,7 +59,8 @@ async def prepare_mandate_pdf(
         pdf_sha256, attachment_name ("amr-mandate.json"), payload_sha256 (the value
         printed in the PDF), payload, payload_b64url, signed_at.
         On error: the same error as prepare_mandate_signature, or
-        {"error": "...", "code": "mandate_payload_invalid"}.
+        {"error": "...", "code": "mandate_pdf_too_large"} (content over 256 KiB or
+        more than 200 pages).
     """
     prepared = json.loads(
         await prepare_mandate_signature(

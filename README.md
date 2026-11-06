@@ -482,7 +482,9 @@ payload of `prepare_mandate_signature` as the attached file `amr-mandate.json` a
 its SHA-256 on every page. The same arguments and `signed_at` always give the same PDF.
 The registry does not sign this PDF and, in this version, does not check a signature
 made on it: the mandate is still accepted on the principal's Ed25519 signature of the
-same payload (see `docs/principal-signature-spec.md`, section 2 bis).
+same payload, with `signed_at` within `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS`
+(default 900 seconds) of the registry clock; generate, sign and register within that
+window (see `docs/principal-signature-spec.md`, section 2 bis).
 
 ---
 

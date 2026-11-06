@@ -30,6 +30,8 @@ _HEADING_HEIGHT = 18
 _CHARS_PER_LINE = 90  # 90 * 0.6 * 9 pt = 486 pt, inside the 495 pt between margins
 _FOOTER_Y = 30
 _MAX_PAGES = 200
+_MAX_PAYLOAD_BYTES = 256 * 1024  # checked before any layout work
+_CONTINUATION = "    "  # every wrapped summary line after the first is indented
 
 
 def _display(text: str) -> str:
@@ -56,7 +58,7 @@ def _literal(text: str) -> bytes:
 
 
 def _wrap(line: str) -> list[str]:
-    """Wrap one line to the page width, keeping its indentation; never drops a character."""
+    """Wrap one line to the page width, keeping its indentation (capped at half a line)."""
     shown = _display(line)
     indent = len(shown) - len(shown.lstrip(" "))
     indent = min(indent, _CHARS_PER_LINE // 2)
@@ -69,7 +71,7 @@ def _wrap(line: str) -> list[str]:
 
 
 def _wrap_words(text: str) -> list[str]:
-    """Wrap prose on word boundaries; long words are cut, nothing is dropped."""
+    """Wrap fixed prose on word boundaries; long words are cut, spaces at breaks dropped."""
     shown = _display(text)
     lines = textwrap.wrap(
         shown,
@@ -82,7 +84,25 @@ def _wrap_words(text: str) -> list[str]:
     return lines or [""]
 
 
+def _wrap_row(label: str, value: str) -> list[str]:
+    """One summary row: runs of whitespace in the value collapse to one space, and every
+    continuation line is indented, so only the real labels start at the left margin."""
+    flat = " ".join(_display(value).split())
+    return textwrap.wrap(
+        f"{label}: {flat}",
+        width=_CHARS_PER_LINE,
+        subsequent_indent=_CONTINUATION,
+        break_long_words=True,
+        break_on_hyphens=False,
+    )
+
+
 def _parse_payload(payload: bytes) -> dict[str, Any]:
+    if len(payload) > _MAX_PAYLOAD_BYTES:
+        raise PrincipalSignatureError(
+            "mandate_pdf_too_large",
+            f"the mandate content is over {_MAX_PAYLOAD_BYTES} bytes, too large for a PDF",
+        )
     try:
         content = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
@@ -110,6 +130,36 @@ def _summary(content: dict[str, Any]) -> list[tuple[str, str]]:
         ("Parent mandate", str(content.get("parent_mandate_id") or "none (root mandate)")),
         ("Signed at (in the content)", str(content.get("signed_at"))),
     ]
+    perimeter = content.get("perimeter")
+    if not isinstance(perimeter, dict):
+        rows.append(("Perimeter", "none (free-text scope only)"))
+        return rows
+    rows.append(("Allowed actions", ", ".join(map(str, perimeter.get("allowed_actions", [])))))
+    rows.append(
+        ("Forbidden actions", ", ".join(map(str, perimeter.get("forbidden_actions", []))) or "none")
+    )
+    currency = str(perimeter.get("currency", ""))
+    if perimeter.get("max_amount") is not None:
+        targets = ", ".join(map(str, perimeter.get("amount_actions", []))) or "none listed"
+        rows.append(
+            ("Ceiling per action", f"{perimeter['max_amount']} {currency} (actions: {targets})")
+        )
+    else:
+        rows.append(("Ceiling per action", "none"))
+    if perimeter.get("period_max_amount") is not None:
+        rows.append(
+            (
+                "Ceiling per period",
+                f"{perimeter['period_max_amount']} {currency} "
+                f"over {perimeter.get('period_days')} days",
+            )
+        )
+    delegation = "yes" if perimeter.get("delegation_allowed") else "no"
+    if perimeter.get("max_delegation_depth") is not None:
+        delegation += f", at most {perimeter['max_delegation_depth']} level(s) below"
+    rows.append(("Delegation allowed", delegation))
+    if perimeter.get("risk_classes"):
+        rows.append(("Risk classes", "see the exact content below"))
     return rows
 
 
@@ -118,7 +168,7 @@ def _lines(payload: bytes, content: dict[str, Any], digest: str) -> list[tuple[s
     out: list[tuple[str, str]] = [("h", "Mandate for an AI agent, to be signed by the principal")]
     out.append(("b", ""))
     for label, value in _summary(content):
-        out.extend(("b", line) for line in _wrap_words(f"{label}: {value}"))
+        out.extend(("b", line) for line in _wrap_row(label, value))
     out.append(("b", ""))
     out.append(("h", "Exact content of the mandate"))
     out.extend(
@@ -162,7 +212,7 @@ def _paginate(lines: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
         used += height
     if len(pages) > _MAX_PAGES:
         raise PrincipalSignatureError(
-            "mandate_payload_invalid", f"the mandate needs more than {_MAX_PAGES} pages"
+            "mandate_pdf_too_large", f"the mandate needs more than {_MAX_PAGES} pages"
         )
     return pages
 
@@ -205,7 +255,8 @@ def build_mandate_pdf(payload: bytes) -> bytes:
     """Return the PDF of a mandate payload (bytes from prepare_mandate_signature).
 
     Raises PrincipalSignatureError("mandate_payload_invalid") if the payload is not an
-    amr.mandate.v1 canonical JSON document.
+    amr.mandate.v1 canonical JSON document, and ("mandate_pdf_too_large") if it is over
+    256 KiB or needs more than 200 pages.
     """
     content = _parse_payload(payload)
     digest = hashlib.sha256(payload).hexdigest()

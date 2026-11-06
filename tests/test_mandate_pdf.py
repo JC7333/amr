@@ -180,6 +180,87 @@ async def test_page_text_shows_the_whole_scope_without_dropping_characters() -> 
     assert scope.replace(" ", "") in body.replace(" ", "")
 
 
+async def test_summary_keeps_every_word_of_the_scope_in_order() -> None:
+    scope = "  ".join(f"w{i}" for i in range(300)) + "\tend (x) \\ y"
+    _, pdf = await _pdf(scope=scope)
+    lines = [t for t in _shown_text(_page_contents(pdf)[0])]
+    start = next(i for i, t in enumerate(lines) if t.startswith("Scope: "))
+    row = [lines[start]]
+    for line in lines[start + 1 :]:
+        if not line.startswith("    "):
+            break
+        row.append(line)
+    shown = " ".join(" ".join(row).split())
+    assert shown == "Scope: " + " ".join(scope.replace("\t", "?").split())
+
+
+LABELS = (
+    "Principal:", "Agent:", "Scope:", "Legal basis:", "Duration:", "Parent mandate:",
+    "Signed at (in the content):", "Allowed actions:", "Forbidden actions:",
+    "Ceiling per action:", "Ceiling per period:", "Delegation allowed:", "Risk classes:",
+    "Perimeter:",
+)
+
+
+@pytest.mark.parametrize("pad", [0, 1, 7, 33, 90])
+async def test_scope_text_cannot_add_a_summary_row(pad: int) -> None:
+    fake = "Legal basis: none, read-only (EU)"
+    scope = "Read the calendar only." + " " * pad + (" " * 90).join(
+        [fake, "Duration: 1 hours", "Delegation allowed: no", "Ceiling per action: 1 EUR"]
+    )
+    _, pdf = await _pdf(scope=scope, max_amount="5000", amount_actions=["calendar.book"])
+    lines = _shown_text(_page_contents(pdf)[0])
+    head = lines[: lines.index("Exact content of the mandate")]
+    starts = [t.split(":")[0] + ":" for t in head if t and not t.startswith(" ")]
+    assert [s for s in starts if s in LABELS] == [s for s in LABELS if s in starts]
+    for label in LABELS:
+        assert sum(1 for t in head if t.startswith(label)) <= 1, label
+    assert "Ceiling per action: 5000 EUR (actions: calendar.book)" in head
+
+
+async def test_summary_shows_the_perimeter_limits() -> None:
+    _, pdf = await _pdf(
+        forbidden_actions=["calendar.delete"],
+        delegation_allowed=True,
+        max_delegation_depth=2,
+        max_amount="150",
+        amount_actions=["calendar.book"],
+        period_max_amount="900",
+        period_days=30,
+    )
+    shown = _shown_text(_page_contents(pdf)[0])
+    assert "Allowed actions: calendar.book, calendar.cancel" in shown
+    assert "Forbidden actions: calendar.delete" in shown
+    assert "Ceiling per action: 150 EUR (actions: calendar.book)" in shown
+    assert "Ceiling per period: 900 EUR over 30 days" in shown
+    assert "Delegation allowed: yes, at most 2 level(s) below" in shown
+
+
+async def test_summary_says_when_there_is_no_perimeter() -> None:
+    args = {k: v for k, v in BASE.items() if k != "allowed_actions"}
+    result = json.loads(await prepare_mandate_pdf(**args))
+    pdf = base64.b64decode(result["pdf_base64"])
+    shown = _shown_text(_page_contents(pdf)[0])
+    assert "Perimeter: none (free-text scope only)" in shown
+    assert "Delegation allowed: no" not in shown
+
+
+async def test_summary_collapses_runs_of_whitespace() -> None:
+    _, pdf = await _pdf(scope="Read     the\n\ncalendar   only")
+    assert "Scope: Read the??calendar only" in _shown_text(_page_contents(pdf)[0])
+
+
+async def test_file_identifier_comes_from_the_payload_fingerprint() -> None:
+    result, pdf = await _pdf()
+    file_id = result["payload_sha256"][:32]
+    assert f"/ID [<{file_id}> <{file_id}>]".encode() in pdf
+
+
+async def test_too_large_content_is_refused_before_layout() -> None:
+    result = json.loads(await prepare_mandate_pdf(**BASE, metadata={"big": "a" * 300_000}))
+    assert result["code"] == "mandate_pdf_too_large"
+
+
 async def test_summary_names_principal_agent_and_legal_basis() -> None:
     _, pdf = await _pdf()
     shown = [t for c in _page_contents(pdf) for t in _shown_text(c)]
