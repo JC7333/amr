@@ -31,6 +31,10 @@ jobs:
         run: uv sync --locked --extra dev
       - name: Tests
         run: uv run python -m pytest -q
+      - name: Tests against mcp 2.x ("uvx mandatia" resolves the newest allowed mcp)
+        env:
+          EXPECTED_MCP_MAJOR: "2"
+        run: uv run --isolated --no-project --with . --with pytest --with pytest-asyncio --with "mcp[cli]>=2,<3" python -m pytest -q
       - name: Ruff (security rules included)
         run: uv run python -m ruff check src/
       - name: Build

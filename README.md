@@ -24,13 +24,14 @@ uvx mandatia
 
 The PyPI package is named `mandatia`; the Python module and the `amr` command keep their
 names. `uvx amr` installs a different, unrelated project: do not use it. To run the
-latest code of the repository instead (the `--with "mcp<2"` part is a safety net: AMR is
-written for version 1 of the MCP Python SDK, and version 2 fails at start with
-`No module named 'mcp.server.fastmcp'`):
+latest code of the repository instead:
 
 ```bash
-uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+uvx --from git+https://github.com/JC7333/amr amr
 ```
+
+AMR runs with version 1 and version 2 of the MCP Python SDK (`mcp>=1.2,<3`); no extra
+version pin is needed.
 
 Or clone the repository and run `uv sync && uv run amr`.
 
@@ -61,7 +62,7 @@ Cursor (`.cursor/mcp.json`) and other clients that read an `mcpServers` object:
 ```
 
 To run the repository code instead, the arguments are
-`["--from", "git+https://github.com/JC7333/amr", "--with", "mcp<2", "amr"]`.
+`["--from", "git+https://github.com/JC7333/amr", "amr"]`.
 Set the three paths: by default AMR writes its database and its signing key in the
 current directory of the client. Keep the `.pem` private key out of version control.
 
@@ -924,7 +925,7 @@ uv run amr
 ```
 src/amr/
 ├── config.py          # Settings via pydantic-settings (env prefix: AMR_)
-├── server.py          # FastMCP server entrypoint (stdio transport)
+├── server.py          # MCP server entrypoint (stdio transport; mcp 1.x or 2.x)
 ├── models/mandate.py  # Pydantic models: MandateCreate, Mandate, ActionLog
 ├── crypto/chain.py    # compute_hash() and verify_chain() — stdlib only
 ├── db/engine.py       # init_db(), get_db(), get_last_mandate_hash()
