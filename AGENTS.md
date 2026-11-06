@@ -13,12 +13,12 @@ uvx mandatia
 
 - Transport: stdio. Needs uv and Python 3.12 or later.
 - The PyPI package is `mandatia`. `uvx amr` installs a different project.
-- To run the latest code of the repository instead (keep `--with "mcp<2"` as a safety net:
-  AMR does not support version 2 of the MCP Python SDK yet):
+- To run the latest code of the repository instead:
 
   ```bash
-  uvx --from git+https://github.com/JC7333/amr --with "mcp<2" amr
+  uvx --from git+https://github.com/JC7333/amr amr
   ```
+- Works with version 1 and version 2 of the MCP Python SDK (`mcp>=1.2,<3`); no extra pin.
 - Set `AMR_DB_PATH`, `AMR_SIGNING_KEY_PATH`, `AMR_PUBLIC_KEY_PATH` to absolute paths,
   or AMR writes them in the client's current directory. Never commit the `.pem` file.
 - Runnable end-to-end example: `examples/quickstart_agent.py`.

@@ -20,6 +20,21 @@ jobs:
       - name: Install
         run: uv sync --extra dev
       - name: Tests
+        env:
+          EXPECTED_MCP_MAJOR: "1"
         run: uv run python -m pytest -q
       - name: Ruff (security rules included)
         run: uv run python -m ruff check src/
+
+  tests-mcp-v2:
+    # AMR supports version 1 (locked) and version 2 of the MCP Python SDK: "uvx mandatia"
+    # resolves to the newest allowed version, so the whole suite also runs against version 2.
+    name: Tests (MCP SDK v2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Tests against mcp 2.x (clean environment, no mcp 1.x leftovers)
+        env:
+          EXPECTED_MCP_MAJOR: "2"
+        run: uv run --isolated --no-project --with . --with pytest --with pytest-asyncio --with "mcp[cli]>=2,<3" python -m pytest -q
