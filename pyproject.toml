@@ -1,6 +1,6 @@
 [project]
 name = "mandatia"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agent Mandate Registry - Legal mandate chain for AI agents. MCP server."
 readme = "README.md"
 license = "Apache-2.0"

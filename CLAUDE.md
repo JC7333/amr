@@ -94,10 +94,10 @@ uv run python -c "from amr.config import settings; print(settings.server_name)"
 
 | Regulation | Relevance |
 |---|---|
-| **EU AI Act Art.26** | High-risk AI system operators must maintain logs of agent actions and mandates. AMR provides the technical infrastructure for this obligation. |
+| **EU AI Act Art.26** | Deployers of high-risk AI systems must assign human oversight and keep the logs the system generates. AMR records the mandate behind each agent and its actions, as evidence for that oversight. Applies from 2 December 2027 (Annex III) and 2 August 2028 (Annex I), Regulation (EU) 2026/1744. |
 | **EU AI Act Art.26(6)** | Logs must be retained for minimum 6 months. AMR's append-only SQLite + Proof Pack export supports this requirement. |
 | **eIDAS 2.0** | Electronic mandates for AI agents acting on behalf of natural/legal persons. AMR's mandate chain maps to the eIDAS trust framework. |
-| **Fines** | EU AI Act fines up to €30M or 6% global turnover for non-compliance with Art.26. AMR reduces this risk. |
+| **Fines** | Non-compliance with Art.26 can be fined up to €15 million or 3% of worldwide annual turnover, whichever is higher (Art. 99(4) of Regulation (EU) 2024/1689; for SMEs and start-ups, whichever is lower, Art. 99(6)). Never write €30M or 6% (2021 proposal, not the adopted text). |
 
 ---
 
