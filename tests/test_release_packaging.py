@@ -194,28 +194,48 @@ def test_registry_job_lists_the_version_only_after_pypi_serves_it() -> None:
     registry = _job("registry")
     assert "needs: publish" in registry
     steps = [
-        "cosign verify-blob",
+        "name: mcp-publisher",
         'version="${GITHUB_REF_NAME#v}"',
         "https://pypi.org/pypi/mandatia/${version}/json",
-        "./mcp-publisher login github-oidc",
-        "./mcp-publisher publish",
+        "publisher/mcp-publisher login github-oidc",
+        "publisher/mcp-publisher publish",
     ]
     positions = [registry.index(step) for step in steps]
     assert positions == sorted(positions)
 
 
-def test_registry_publisher_is_pinned_and_its_signature_checked() -> None:
+def test_registry_job_cannot_be_skipped_silently_or_hold_a_git_token() -> None:
     registry = _job("registry")
-    assert re.search(r"MCP_PUBLISHER_VERSION: v\d+\.\d+\.\d+\n", registry)
-    assert "releases/latest" not in registry
-    assert re.search(r"sigstore/cosign-installer@[0-9a-f]{40} ", registry)
+    for forbidden in ("continue-on-error", "if:", "ref:", "cosign", "curl --fail --location"):
+        assert forbidden not in registry, forbidden
+    assert "persist-credentials: false" in registry
+    assert re.search(r"timeout-minutes: \d+\n", registry)
+    assert "--max-time" in registry
+
+
+def test_publisher_is_pinned_and_its_signature_checked_before_pypi() -> None:
+    # A wrong pin, asset name or signer must fail in the build job, before anything reaches PyPI.
+    top_level = WORKFLOW[: WORKFLOW.index("\njobs:")]
+    assert re.search(r"\nenv:\n  MCP_PUBLISHER_VERSION: v\d+\.\d+\.\d+\n", top_level)
+    assert "releases/latest" not in WORKFLOW
+    assert WORKFLOW.count("MCP_PUBLISHER_VERSION:") == 1
+    build = _job("build")
+    assert re.search(r"sigstore/cosign-installer@[0-9a-f]{40} ", build)
+    url = "releases/download/${MCP_PUBLISHER_VERSION}"
+    assert url in build
     identity = (
         "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml"
         "@refs/tags/${MCP_PUBLISHER_VERSION}"
     )
-    assert f'--certificate-identity "{identity}"' in registry
-    assert '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' in registry
-    assert registry.count("set -euo pipefail") == 2
+    assert f'--certificate-identity "{identity}"' in build
+    assert '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' in build
+    # The verified binary is handed over as an artifact; the archive is checked before use.
+    steps = ["run: uv build", "cosign verify-blob", 'tar xzf "$archive" mcp-publisher']
+    steps.append("name: mcp-publisher")
+    positions = [build.index(step) for step in steps]
+    assert positions == sorted(positions)
+    assert "set -euo pipefail" in build
+    assert "name: mcp-publisher" not in _job("publish")
 
 
 def test_registry_login_uses_oidc_and_no_token() -> None:
@@ -223,7 +243,7 @@ def test_registry_login_uses_oidc_and_no_token() -> None:
     assert registry.count("mcp-publisher login") == 1
     assert "mcp-publisher login github-oidc" in registry
     for forbidden in ("--token", "MCP_GITHUB_TOKEN", "GITHUB_TOKEN", "secrets."):
-        assert forbidden not in registry
+        assert forbidden not in WORKFLOW, forbidden
 
 
 def test_workflow_checks_tag_tests_and_lints_before_building() -> None:

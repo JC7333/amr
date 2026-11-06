@@ -116,7 +116,7 @@ Modern AI agent infrastructure covers many concerns — but the legal mandate la
 | Observability & tracing | ✅ OpenTelemetry, Langfuse | — |
 | **Legal mandate & accountability** | ❌ **Not covered** | ✅ **AMR** |
 
-**EU AI Act Article 26** ([Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)) requires deployers of high-risk AI systems to assign human oversight and to keep the logs the system generates for at least six months (Art. 26(6)). It applies from 2 December 2027 for Annex III systems and 2 August 2028 for Annex I systems ([Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj)). Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher (Art. 99(4)). AMR records who authorized an agent, for what and until when, and what it did, in a tamper-evident form that this oversight can rely on.
+**EU AI Act Article 26** ([Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)) requires deployers of high-risk AI systems to assign human oversight and to keep the logs the system generates, to the extent they are under their control, for at least six months (Art. 26(6)). It applies from 2 December 2027 for Annex III systems and 2 August 2028 for Annex I systems ([Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj)). Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher (Art. 99(4); for SMEs and start-ups, whichever is lower, Art. 99(6)). AMR records who authorized an agent, for what and until when, and what it did, in a tamper-evident form that this oversight can rely on; it complements the system's own logs, it does not replace them.
 
 ---
 
@@ -339,7 +339,7 @@ AMR started as a **mandate registry** — it stores, verifies, and audits mandat
 
 The problem: if the mandate check is a voluntary call, agents skip it. The system degrades to advisory compliance within weeks of real-world deployment.
 
-The roadmap leads to **structural enforcement**: AMR becomes the layer that issues execution authorizations. No valid mandate → no authorization → no action possible. The system refuses to work without the mandate — not because someone recommends checking, but because the architecture makes it impossible to bypass.
+AMR now provides **structural enforcement**: it is the layer that issues execution authorizations (`issue_action_token`). No valid mandate → no authorization → no action possible. The system refuses to work without the mandate — not because someone recommends checking, but because the architecture makes it impossible to bypass.
 
 | Layer | What it does | Status |
 |---|---|---|
@@ -881,7 +881,7 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 | **EU AI Act Art.26** | Deployers of high-risk AI systems must use them as instructed, assign human oversight and keep the logs the system generates. AMR records the mandate behind each agent and its actions, as evidence for that oversight. Applies from **2 December 2027** (Annex III systems) and **2 August 2028** (Annex I systems), [Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj). |
 | **EU AI Act Art.26(6)** | The logs a high-risk system generates must be kept for at least six months. AMR's append-only SQLite database and Proof Pack export support this requirement. |
 | **eIDAS 2.0** | Electronic mandates for AI agents acting on behalf of natural or legal persons. AMR's mandate chain maps to the eIDAS electronic delegation trust framework. |
-| **Fines** | Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher ([Art. 99(4)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)). |
+| **Fines** | Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher ([Art. 99(4)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj); for SMEs and start-ups, whichever is lower, Art. 99(6)). |
 
 ---
 

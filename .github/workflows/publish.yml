@@ -8,13 +8,17 @@ name: Publish to PyPI
 # Once PyPI has the version, the job "registry" lists it in the official MCP registry
 # (registry.modelcontextprotocol.io), also without a token: GitHub OIDC, namespace
 # io.github.JC7333. Its identity token cannot publish to PyPI: it runs outside the
-# environment "pypi", which PyPI requires.
+# environment "pypi", which PyPI requires. The registry's tool mcp-publisher is downloaded
+# and its signature checked in the build job, before anything reaches PyPI.
 on:
   push:
     tags: ["v*"]
 
 permissions:
   contents: read
+
+env:
+  MCP_PUBLISHER_VERSION: v1.8.1
 
 jobs:
   build:
@@ -47,6 +51,28 @@ jobs:
         with:
           name: dist
           path: dist/
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Download and verify mcp-publisher (signed by the registry's own release workflow)
+        run: |
+          set -euo pipefail
+          mkdir -p publisher
+          cd publisher
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --max-time 120 --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --max-time 120 --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-publisher
+          path: publisher/mcp-publisher
 
   publish:
     name: Publish to PyPI
@@ -66,35 +92,24 @@ jobs:
     name: List in the official MCP registry
     needs: publish
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       id-token: write
       contents: read
-    env:
-      MCP_PUBLISHER_VERSION: v1.8.1
     steps:
       - uses: actions/checkout@v4
-      - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Download and verify mcp-publisher (signed by the registry's own release workflow)
-        run: |
-          set -euo pipefail
-          archive="mcp-publisher_linux_amd64.tar.gz"
-          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
-          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
-          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
-          cosign verify-blob \
-            --bundle "$archive.sigstore.json" \
-            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            "$archive"
-          tar xzf "$archive" mcp-publisher
-          rm -f "$archive" "$archive.sigstore.json"
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcp-publisher
+          path: publisher/
       - name: Wait until PyPI serves this version (the registry checks it)
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --output /dev/null "https://pypi.org/pypi/mandatia/${version}/json"; then
+            if curl --fail --silent --max-time 30 --output /dev/null "https://pypi.org/pypi/mandatia/${version}/json"; then
               echo "PyPI serves mandatia ${version}"
               exit 0
             fi
@@ -103,6 +118,8 @@ jobs:
           echo "PyPI does not serve mandatia ${version} after 10 minutes" >&2
           exit 1
       - name: Authenticate to the MCP registry (GitHub OIDC, no token)
-        run: ./mcp-publisher login github-oidc
+        run: |
+          chmod +x publisher/mcp-publisher
+          publisher/mcp-publisher login github-oidc
       - name: Publish server.json
-        run: ./mcp-publisher publish
+        run: publisher/mcp-publisher publish

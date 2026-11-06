@@ -22,8 +22,9 @@ Nothing below runs by itself: each step is a deliberate action of the repository
 | `README.md`, first lines | `<!-- mcp-name: io.github.JC7333/mandatia -->`: the MCP registry reads this line in the PyPI description to accept that the package belongs to this server |
 
 No PyPI token is stored anywhere. PyPI trusts the workflow through trusted publishing
-(OpenID Connect): only the `publish` job may request an identity token, and PyPI accepts
-it only from the workflow `publish.yml` running in the GitHub environment `pypi`. The
+(OpenID Connect): only the `publish` and `registry` jobs request an identity token, and PyPI
+accepts it only from the workflow `publish.yml` running in the GitHub environment `pypi`,
+which only the `publish` job uses. The
 workflow refuses a tag whose commit is not already on main.
 
 ## First release, once
@@ -48,7 +49,7 @@ That change is a separate pull request, merged after step 5.
    `v*`, rules "Restrict creations", "Restrict updates" and "Restrict deletions",
    bypass list: you only.
 4. **Merge** the pull request that adds these files.
-5. **Tag the version** written in `pyproject.toml` (today `0.1.0`), on main:
+5. **Tag the version** written in `pyproject.toml` (first release: `0.1.0`, 2026-11-05), on main:
    GitHub, Releases, "Draft a new release", "Choose a tag", type `v0.1.0`, target `main`,
    "Publish release". The workflow "Publish to PyPI" checks and builds, then waits for
    your approval ("Review deployments", Approve). When it is green,
