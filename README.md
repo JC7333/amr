@@ -472,6 +472,20 @@ principal signs before calling `create_mandate`.
 
 ---
 
+### `prepare_mandate_pdf`
+
+Same arguments as `prepare_mandate_signature`. Writes nothing; returns the mandate as a
+PDF for the principal to read and sign with its own signature tool (for example a PAdES
+signature): `{"pdf_base64", "filename", "pdf_sha256", "attachment_name",
+"payload_sha256", "payload", "payload_b64url", "signed_at"}`. The PDF carries the exact
+payload of `prepare_mandate_signature` as the attached file `amr-mandate.json` and prints
+its SHA-256 on every page. The same arguments and `signed_at` always give the same PDF.
+The registry does not sign this PDF and, in this version, does not check a signature
+made on it: the mandate is still accepted on the principal's Ed25519 signature of the
+same payload (see `docs/principal-signature-spec.md`, section 2 bis).
+
+---
+
 ### `verify_mandate`
 
 Check whether an AI agent has a currently active, non-expired mandate (for a
@@ -927,6 +941,7 @@ src/amr/
 ├── db/engine.py       # init_db(), get_db(), get_last_mandate_hash()
 ├── tools/
 │   ├── create_mandate.py
+│   ├── prepare_mandate_pdf.py   # the mandate as a PDF the principal signs itself
 │   ├── verify_mandate.py
 │   ├── log_action.py
 │   ├── get_proof.py
@@ -938,6 +953,7 @@ src/amr/
 │   └── export_insurer_dossier.py
 ├── attestation.py     # offline attestation verifier (no DB, no network)
 ├── did_web.py         # did:web key check, network opt-in (AMR_DID_WEB_RESOLVE)
+├── mandate_pdf.py     # deterministic mandate PDF, payload attached (stdlib only)
 ├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
 └── templates/         # Sector mandate templates (agent-sante-rgpd)

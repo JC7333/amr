@@ -26,6 +26,7 @@ from amr.tools.issue_mandate_attestation import (
     issue_mandate_attestation,
 )
 from amr.tools.log_action import log_action
+from amr.tools.prepare_mandate_pdf import prepare_mandate_pdf
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
 from amr.tools.report_issue import report_issue
 from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
@@ -42,6 +43,7 @@ mcp.tool()(issue_action_token)
 mcp.tool()(check_action_token)
 mcp.tool()(register_principal_key)
 mcp.tool()(prepare_mandate_signature)
+mcp.tool()(prepare_mandate_pdf)
 mcp.tool()(issue_mandate_attestation)
 mcp.tool()(get_registry_public_key)
 mcp.tool()(export_insurer_dossier)
