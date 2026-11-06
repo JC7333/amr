@@ -35,6 +35,7 @@ uvx mandatia
 | `check_action_token` | For the receiver: re-check a token with the registry at the moment of acting (mandate and whole chain still active, not revoked, not expired) |
 | `register_principal_key` | Register the principal's Ed25519 public key |
 | `prepare_mandate_signature` | Build the exact bytes a principal signs for a mandate |
+| `prepare_mandate_pdf` | Get the mandate as a PDF the principal signs with its own tool (exact bytes attached, SHA-256 printed; the registry does not check a signature made on the PDF) |
 | `issue_mandate_attestation` | Issue a signed document a third party verifies offline |
 | `get_registry_public_key` | Get the registry's public key to verify attestations and tokens |
 | `export_insurer_dossier` | Export a signed, printable dossier of a mandate |

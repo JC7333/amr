@@ -131,6 +131,45 @@ mandate id and timestamps):
 `perimeter` is the requested perimeter in canonical form (for a sub-mandate, before
 the registry narrows it by its parent).
 
+## 2 bis. The mandate as a PDF: `prepare_mandate_pdf`
+
+`prepare_mandate_pdf` takes the same arguments as `prepare_mandate_signature` and writes
+nothing. It returns a PDF (`pdf_base64`) that:
+
+- shows the principal, the agent, the scope, the legal basis, the duration, the parent
+  mandate, `signed_at` and the perimeter (allowed and forbidden actions, ceilings,
+  delegation), then the whole payload, indented. In this summary, runs of whitespace in
+  a value are shown as one space and every wrapped line is indented, so only the real
+  labels start at the left margin;
+- carries the exact payload bytes as the attached file `amr-mandate.json`
+  (`application/json`, listed in the document's `EmbeddedFiles` and `AF`);
+- prints the SHA-256 of these bytes in the body and in the footer of every page
+  (`payload_sha256` in the result). Characters outside Windows-1252 are shown as `?` on
+  the page; the attached file is authoritative.
+
+It is built with the standard library only and is deterministic: the same arguments and
+`signed_at` always give the same bytes (`pdf_sha256`). The principal reads it and signs
+it with its own tool, for example a PAdES signature; an agent cannot sign in its place.
+
+Limits of this version: the registry does not sign the PDF and does not check a
+signature made on it (signature level, signer, certificate status). A mandate is
+accepted on the principal's Ed25519 signature of the same payload (section 3), as
+before. Keep the signed PDF with the mandate's records.
+
+- **Time window.** `signed_at` is fixed inside the PDF, and `create_mandate` accepts it
+  only within `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` (default 900 seconds) of its
+  clock. Generate, sign and register within that window, or generate a new PDF.
+- **Link to a mandate.** A PDF matches a registered mandate only if that mandate was
+  created with the same arguments, the same `signed_at` and a principal signature; a
+  mandate created without a signature keeps no `signed_at`, so nothing ties a PDF to it.
+- **Text in values.** A scope or metadata value can contain any printable text,
+  including text that looks like a fingerprint: compare the footer's SHA-256, or
+  `payload_sha256`, with the attached file, not a value in the body.
+- **Size.** Content over 256 KiB, or that needs more than 200 pages, is refused
+  (`mandate_pdf_too_large`).
+- The file declares PDF 1.7 and also carries the `AF` / `AFRelationship` keys of later
+  versions for the attachment; it does not claim conformance to PDF/A.
+
 ## 3. Rules applied by `create_mandate`
 
 | Situation | Result |
