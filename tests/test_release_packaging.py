@@ -153,14 +153,97 @@ def test_workflow_uses_trusted_publishing_without_stored_token() -> None:
     assert "PYPI_" not in WORKFLOW.upper()
 
 
-def test_only_the_publish_job_may_request_an_identity_token() -> None:
-    assert WORKFLOW.count("id-token: write") == 1
+JOBS = ("build", "publish", "registry")
+
+
+def _job(name: str) -> str:
+    """Text of one job of publish.yml, up to the next job."""
+    starts = {job: WORKFLOW.index(f"\n  {job}:") for job in JOBS}
+    later = [pos for pos in starts.values() if pos > starts[name]]
+    return WORKFLOW[starts[name] : min(later) if later else len(WORKFLOW)]
+
+
+def test_workflow_has_exactly_the_expected_jobs() -> None:
+    jobs = WORKFLOW[WORKFLOW.index("\njobs:") :]
+    assert re.findall(r"^  ([a-z][a-z0-9_-]*):$", jobs, flags=re.MULTILINE) == list(JOBS)
+
+
+def test_only_the_publish_and_registry_jobs_may_request_an_identity_token() -> None:
     top_level = WORKFLOW[: WORKFLOW.index("\njobs:")]
     assert "permissions:\n  contents: read\n" in top_level
-    publish_job = WORKFLOW[WORKFLOW.index("\n  publish:") :]
-    assert "id-token: write" in publish_job
-    assert "environment: pypi" in publish_job
-    assert "needs: build" in publish_job
+    assert "id-token" not in top_level
+    assert "id-token" not in _job("build")
+    assert _job("publish").count("id-token: write") == 1
+    assert _job("registry").count("id-token: write") == 1
+    assert WORKFLOW.count("id-token: write") == 2
+    assert "environment: pypi" in _job("publish")
+    assert "needs: build" in _job("publish")
+
+
+def test_registry_job_cannot_publish_to_pypi() -> None:
+    # PyPI accepts an identity token from this workflow only in the environment "pypi":
+    # the registry job runs outside any environment, so its token is useless on PyPI.
+    registry = _job("registry")
+    assert "environment:" not in registry
+    assert "pypa/gh-action-pypi-publish" not in registry
+    assert WORKFLOW.count("pypa/gh-action-pypi-publish") == 1
+    assert WORKFLOW.count("environment:") == 1
+
+
+def test_registry_job_lists_the_version_only_after_pypi_serves_it() -> None:
+    registry = _job("registry")
+    assert "needs: publish" in registry
+    steps = [
+        "name: mcp-publisher",
+        'version="${GITHUB_REF_NAME#v}"',
+        "https://pypi.org/pypi/mandatia/${version}/json",
+        "publisher/mcp-publisher login github-oidc",
+        "publisher/mcp-publisher publish",
+    ]
+    positions = [registry.index(step) for step in steps]
+    assert positions == sorted(positions)
+
+
+def test_registry_job_cannot_be_skipped_silently_or_hold_a_git_token() -> None:
+    registry = _job("registry")
+    for forbidden in ("continue-on-error", "if:", "ref:", "cosign", "curl --fail --location"):
+        assert forbidden not in registry, forbidden
+    assert "persist-credentials: false" in registry
+    assert re.search(r"timeout-minutes: \d+\n", registry)
+    assert "--max-time" in registry
+
+
+def test_publisher_is_pinned_and_its_signature_checked_before_pypi() -> None:
+    # A wrong pin, asset name or signer must fail in the build job, before anything reaches PyPI.
+    top_level = WORKFLOW[: WORKFLOW.index("\njobs:")]
+    assert re.search(r"\nenv:\n  MCP_PUBLISHER_VERSION: v\d+\.\d+\.\d+\n", top_level)
+    assert "releases/latest" not in WORKFLOW
+    assert WORKFLOW.count("MCP_PUBLISHER_VERSION:") == 1
+    build = _job("build")
+    assert re.search(r"sigstore/cosign-installer@[0-9a-f]{40} ", build)
+    url = "releases/download/${MCP_PUBLISHER_VERSION}"
+    assert url in build
+    identity = (
+        "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml"
+        "@refs/tags/${MCP_PUBLISHER_VERSION}"
+    )
+    assert f'--certificate-identity "{identity}"' in build
+    assert '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' in build
+    # The verified binary is handed over as an artifact; the archive is checked before use.
+    steps = ["run: uv build", "cosign verify-blob", 'tar xzf "$archive" mcp-publisher']
+    steps.append("name: mcp-publisher")
+    positions = [build.index(step) for step in steps]
+    assert positions == sorted(positions)
+    assert "set -euo pipefail" in build
+    assert "name: mcp-publisher" not in _job("publish")
+
+
+def test_registry_login_uses_oidc_and_no_token() -> None:
+    registry = _job("registry")
+    assert registry.count("mcp-publisher login") == 1
+    assert "mcp-publisher login github-oidc" in registry
+    for forbidden in ("--token", "MCP_GITHUB_TOKEN", "GITHUB_TOKEN", "secrets."):
+        assert forbidden not in WORKFLOW, forbidden
 
 
 def test_workflow_checks_tag_tests_and_lints_before_building() -> None:

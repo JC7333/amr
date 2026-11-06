@@ -16,14 +16,15 @@ Nothing below runs by itself: each step is a deliberate action of the repository
 | File | Role |
 |---|---|
 | `pyproject.toml` | Package name `mandatia`, version, the two commands |
-| `.github/workflows/publish.yml` | On a pushed tag `vX.Y.Z`: checks the tag, runs the tests and ruff, builds, publishes to PyPI |
+| `.github/workflows/publish.yml` | On a pushed tag `vX.Y.Z`: checks the tag, runs the tests and ruff, builds, publishes to PyPI, then lists the version in the official MCP registry |
 | `.github/scripts/check_release_version.py` | Refuses a tag that is not `v` + the version of `pyproject.toml`, or a `server.json` that announces another version or package |
 | `server.json` | The entry of the official MCP registry (`registry.modelcontextprotocol.io`), name `io.github.JC7333/mandatia` |
 | `README.md`, first lines | `<!-- mcp-name: io.github.JC7333/mandatia -->`: the MCP registry reads this line in the PyPI description to accept that the package belongs to this server |
 
 No PyPI token is stored anywhere. PyPI trusts the workflow through trusted publishing
-(OpenID Connect): only the `publish` job may request an identity token, and PyPI accepts
-it only from the workflow `publish.yml` running in the GitHub environment `pypi`. The
+(OpenID Connect): only the `publish` and `registry` jobs request an identity token, and PyPI
+accepts it only from the workflow `publish.yml` running in the GitHub environment `pypi`,
+which only the `publish` job uses. The
 workflow refuses a tag whose commit is not already on main.
 
 ## First release, once
@@ -48,7 +49,7 @@ That change is a separate pull request, merged after step 5.
    `v*`, rules "Restrict creations", "Restrict updates" and "Restrict deletions",
    bypass list: you only.
 4. **Merge** the pull request that adds these files.
-5. **Tag the version** written in `pyproject.toml` (today `0.1.0`), on main:
+5. **Tag the version** written in `pyproject.toml` (first release: `0.1.0`, 2026-11-05), on main:
    GitHub, Releases, "Draft a new release", "Choose a tag", type `v0.1.0`, target `main`,
    "Publish release". The workflow "Publish to PyPI" checks and builds, then waits for
    your approval ("Review deployments", Approve). When it is green,
@@ -58,23 +59,29 @@ That change is a separate pull request, merged after step 5.
 
 ## Official MCP registry
 
-Done after step 5 (the registry checks that the PyPI package exists and that its
-description carries the `mcp-name` line). Publishing there is public and lists AMR in
-the directory MCP clients read.
+Automatic since 0.1.1: after the job "Publish to PyPI", the job "List in the official MCP
+registry" of `publish.yml` waits until PyPI serves the new version (the registry checks
+that the package exists and that its description carries the `mcp-name` line), then runs
+`mcp-publisher login github-oidc` and `mcp-publisher publish`. No token: the registry
+trusts GitHub's identity token for the owner `JC7333`, which gives the namespace
+`io.github.JC7333`. The job runs outside the environment `pypi`, so its token cannot
+publish to PyPI. `mcp-publisher` is pinned (`MCP_PUBLISHER_VERSION`) and its signature is
+checked with cosign before use. Publishing there is public and lists AMR in the
+directory MCP clients read.
 
-1. Install the registry's command line tool `mcp-publisher` (instructions:
-   https://github.com/modelcontextprotocol/registry, "Publishing").
-2. In a copy of the repository on main: `mcp-publisher login github` (opens a GitHub
-   sign-in as JC7333, which owns the namespace `io.github.JC7333`), then
-   `mcp-publisher publish`.
-3. Check: https://registry.modelcontextprotocol.io/v0/servers?search=mandatia
+Check: https://registry.modelcontextprotocol.io/v0/servers?search=mandatia
+
+By hand, only if the job fails: install `mcp-publisher`
+(https://github.com/modelcontextprotocol/registry, "Publishing"), then in a copy of the
+repository on the tagged commit `mcp-publisher login github` (GitHub sign-in as JC7333)
+and `mcp-publisher publish`.
 
 ## Next releases
 
 Raise `version` in `pyproject.toml`, in `server.json` (twice: top level and the
 package) and `server_version` in `src/amr/config.py` in the same pull request (a test
-checks they agree); after the merge, tag `vX.Y.Z` as in step 5, then
-`mcp-publisher publish` again. A version published on PyPI can never be replaced, only
+checks they agree); after the merge, tag `vX.Y.Z` as in step 5: the same approval
+publishes on PyPI, then lists the version in the MCP registry. A version published on PyPI can never be replaced, only
 followed by a new one. Machines that already ran `uvx mandatia` keep their cached version
 until `uvx mandatia@latest` (or `uv cache clean`).
 
