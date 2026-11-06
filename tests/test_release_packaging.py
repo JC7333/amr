@@ -153,14 +153,77 @@ def test_workflow_uses_trusted_publishing_without_stored_token() -> None:
     assert "PYPI_" not in WORKFLOW.upper()
 
 
-def test_only_the_publish_job_may_request_an_identity_token() -> None:
-    assert WORKFLOW.count("id-token: write") == 1
+JOBS = ("build", "publish", "registry")
+
+
+def _job(name: str) -> str:
+    """Text of one job of publish.yml, up to the next job."""
+    starts = {job: WORKFLOW.index(f"\n  {job}:") for job in JOBS}
+    later = [pos for pos in starts.values() if pos > starts[name]]
+    return WORKFLOW[starts[name] : min(later) if later else len(WORKFLOW)]
+
+
+def test_workflow_has_exactly_the_expected_jobs() -> None:
+    jobs = WORKFLOW[WORKFLOW.index("\njobs:") :]
+    assert re.findall(r"^  ([a-z][a-z0-9_-]*):$", jobs, flags=re.MULTILINE) == list(JOBS)
+
+
+def test_only_the_publish_and_registry_jobs_may_request_an_identity_token() -> None:
     top_level = WORKFLOW[: WORKFLOW.index("\njobs:")]
     assert "permissions:\n  contents: read\n" in top_level
-    publish_job = WORKFLOW[WORKFLOW.index("\n  publish:") :]
-    assert "id-token: write" in publish_job
-    assert "environment: pypi" in publish_job
-    assert "needs: build" in publish_job
+    assert "id-token" not in top_level
+    assert "id-token" not in _job("build")
+    assert _job("publish").count("id-token: write") == 1
+    assert _job("registry").count("id-token: write") == 1
+    assert WORKFLOW.count("id-token: write") == 2
+    assert "environment: pypi" in _job("publish")
+    assert "needs: build" in _job("publish")
+
+
+def test_registry_job_cannot_publish_to_pypi() -> None:
+    # PyPI accepts an identity token from this workflow only in the environment "pypi":
+    # the registry job runs outside any environment, so its token is useless on PyPI.
+    registry = _job("registry")
+    assert "environment:" not in registry
+    assert "pypa/gh-action-pypi-publish" not in registry
+    assert WORKFLOW.count("pypa/gh-action-pypi-publish") == 1
+    assert WORKFLOW.count("environment:") == 1
+
+
+def test_registry_job_lists_the_version_only_after_pypi_serves_it() -> None:
+    registry = _job("registry")
+    assert "needs: publish" in registry
+    steps = [
+        "cosign verify-blob",
+        'version="${GITHUB_REF_NAME#v}"',
+        "https://pypi.org/pypi/mandatia/${version}/json",
+        "./mcp-publisher login github-oidc",
+        "./mcp-publisher publish",
+    ]
+    positions = [registry.index(step) for step in steps]
+    assert positions == sorted(positions)
+
+
+def test_registry_publisher_is_pinned_and_its_signature_checked() -> None:
+    registry = _job("registry")
+    assert re.search(r"MCP_PUBLISHER_VERSION: v\d+\.\d+\.\d+\n", registry)
+    assert "releases/latest" not in registry
+    assert re.search(r"sigstore/cosign-installer@[0-9a-f]{40} ", registry)
+    identity = (
+        "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml"
+        "@refs/tags/${MCP_PUBLISHER_VERSION}"
+    )
+    assert f'--certificate-identity "{identity}"' in registry
+    assert '--certificate-oidc-issuer "https://token.actions.githubusercontent.com"' in registry
+    assert registry.count("set -euo pipefail") == 2
+
+
+def test_registry_login_uses_oidc_and_no_token() -> None:
+    registry = _job("registry")
+    assert registry.count("mcp-publisher login") == 1
+    assert "mcp-publisher login github-oidc" in registry
+    for forbidden in ("--token", "MCP_GITHUB_TOKEN", "GITHUB_TOKEN", "secrets."):
+        assert forbidden not in registry
 
 
 def test_workflow_checks_tag_tests_and_lints_before_building() -> None:

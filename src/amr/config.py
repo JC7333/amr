@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     hash_algorithm: str = "sha256"
     log_level: str = "INFO"
     server_name: str = "Agent Mandate Registry"
-    server_version: str = "0.1.0"
+    server_version: str = "0.1.1"
 
     # Token issuance
     signing_key_path: Path = Path("amr_signing_key.pem")

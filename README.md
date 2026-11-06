@@ -4,7 +4,7 @@
 
 > **The legal mandate layer for AI agents.**
 
-AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that registers, verifies, and audits legal mandates authorizing AI agents to act on behalf of principals. It provides a cryptographically chained audit trail designed for compliance with **EU AI Act Art.26** (effective August 2026) and **eIDAS 2.0**.
+AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that registers, verifies, and audits legal mandates authorizing AI agents to act on behalf of principals. It provides a cryptographically chained audit trail of who authorized which agent to do what, until when: evidence that supports the human-oversight and record-keeping duties of deployers under **EU AI Act Article 26**, with **eIDAS 2.0** electronic mandates in mind. AMR is a technical tool: it does not by itself make a system compliant.
 
 ---
 
@@ -116,7 +116,7 @@ Modern AI agent infrastructure covers many concerns — but the legal mandate la
 | Observability & tracing | ✅ OpenTelemetry, Langfuse | — |
 | **Legal mandate & accountability** | ❌ **Not covered** | ✅ **AMR** |
 
-**EU AI Act Art.26** (August 2026) requires operators of high-risk AI systems to maintain tamper-evident logs of agent mandates and actions. Non-compliance: fines up to **€30M or 6% global turnover**. AMR closes this gap.
+**EU AI Act Article 26** ([Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)) requires deployers of high-risk AI systems to assign human oversight and to keep the logs the system generates for at least six months (Art. 26(6)). It applies from 2 December 2027 for Annex III systems and 2 August 2028 for Annex I systems ([Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj)). Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher (Art. 99(4)). AMR records who authorized an agent, for what and until when, and what it did, in a tamper-evident form that this oversight can rely on.
 
 ---
 
@@ -335,7 +335,7 @@ See `docs/public-registry-spec.md`.
 
 ## Vision: from registry to enforcement
 
-AMR v0.1 is a **mandate registry** — it stores, verifies, and audits mandates. This is necessary but not sufficient.
+AMR started as a **mandate registry** — it stores, verifies, and audits mandates. This is necessary but not sufficient.
 
 The problem: if the mandate check is a voluntary call, agents skip it. The system degrades to advisory compliance within weeks of real-world deployment.
 
@@ -343,8 +343,8 @@ The roadmap leads to **structural enforcement**: AMR becomes the layer that issu
 
 | Layer | What it does | Status |
 |---|---|---|
-| **Registry** (v0.1) | Store, verify, audit mandates. SHA-256 chain. MCP native. | ✅ Live |
-| **Enforcement** (planned) | Mandate-gated execution authorization. No mandate = no action. | 🔜 In design |
+| **Registry** | Store, verify, audit mandates. SHA-256 chain. MCP native. | ✅ Live |
+| **Enforcement** | Mandate-gated execution authorization (`issue_action_token`, `check_action_token`). No mandate = no action. | ✅ Live |
 | **Ecosystem** | AMR authorizes *before* the action. Certification proxies prove what happened *during*. | Compatible today |
 
 The open-source registry stays free. The enforcement layer is the commercial product.
@@ -377,7 +377,7 @@ Add AMR to your Claude Desktop config file:
 }
 ```
 
-Restart Claude Desktop. AMR's four tools will be available immediately.
+Restart Claude Desktop. All AMR tools will be available immediately.
 
 ---
 
@@ -878,23 +878,19 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 
 | Regulation | Relevance to AMR |
 |---|---|
-| **EU AI Act Art.26** | High-risk AI system operators must maintain logs of agent mandates and actions. AMR provides the technical infrastructure for this obligation. Effective **August 2026**. |
-| **EU AI Act Art.26(6)** | Logs must be retained for a minimum of 6 months. AMR's append-only SQLite database and Proof Pack export support this requirement. |
+| **EU AI Act Art.26** | Deployers of high-risk AI systems must use them as instructed, assign human oversight and keep the logs the system generates. AMR records the mandate behind each agent and its actions, as evidence for that oversight. Applies from **2 December 2027** (Annex III systems) and **2 August 2028** (Annex I systems), [Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj). |
+| **EU AI Act Art.26(6)** | The logs a high-risk system generates must be kept for at least six months. AMR's append-only SQLite database and Proof Pack export support this requirement. |
 | **eIDAS 2.0** | Electronic mandates for AI agents acting on behalf of natural or legal persons. AMR's mandate chain maps to the eIDAS electronic delegation trust framework. |
-| **Fines** | EU AI Act fines up to **€30M or 6% of global annual turnover** for non-compliance with high-risk AI obligations. AMR directly reduces this regulatory risk. |
+| **Fines** | Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher ([Art. 99(4)](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)). |
 
 ---
 
 ## Roadmap
 
-| Version | Features |
+| Status | Features |
 |---|---|
-| **v0.1** *(current)* | 4 MCP tools · SQLite · SHA-256 chain · Pydantic validation · Proof Pack JSON · Claude Desktop integration |
-| **v0.2** | PDF Proof Pack export · SSE transport for remote MCP clients · Mandate revocation workflow |
-| **v0.3** | PostgreSQL backend · Multi-tenant support · REST API alongside MCP |
-| **v0.4** | eIDAS 2.0 qualified electronic signature integration · Cross-border mandate recognition |
-| **v0.5** | Managed Agents registry · Sub-delegation chains · Webhook notifications on mandate events |
-| **v0.6** | **Enforcement layer** — mandate-gated execution authorization · No valid mandate = no action · Dashboard + alerting |
+| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · sector template (health) · MCP SDK v1 and v2 · PyPI package `mandatia` |
+| **Planned** | PDF Proof Pack export · remote transport for MCP clients · PostgreSQL backend · multi-tenant support · REST API alongside MCP · eIDAS 2.0 qualified electronic signatures · cross-border mandate recognition · webhook notifications · dashboard and alerting |
 
 ---
 
@@ -947,10 +943,7 @@ src/amr/
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)
-├── test_create_mandate.py   # 5 tests
-├── test_verify_mandate.py   # 3 tests
-├── test_log_and_proof.py    # 5 tests
-└── test_crypto.py           # 7 tests
+└── test_*.py                # One file per tool or feature (`uv run pytest -q`)
 ```
 
 ### Environment Variables
