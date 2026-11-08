@@ -79,3 +79,8 @@ def test_readme_presents_enforcement_as_shipped() -> None:
 
 def test_readme_says_amr_alone_does_not_make_a_system_compliant() -> None:
     assert "does not by itself make a system compliant" in README
+
+def test_readme_does_not_sell_the_open_source_enforcement() -> None:
+    # issue_action_token and check_action_token ship in the free Apache-2.0 package
+    # (sentence removed at the owner's request, 2026-11-08).
+    assert "enforcement layer is the commercial product" not in README.lower()

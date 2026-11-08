@@ -353,8 +353,6 @@ AMR now provides **structural enforcement**: it is the layer that issues executi
 | **Enforcement** | Mandate-gated execution authorization (`issue_action_token`, `check_action_token`). No mandate = no action. | ✅ Live |
 | **Ecosystem** | AMR authorizes *before* the action. Certification proxies prove what happened *during*. | Compatible today |
 
-The open-source registry stays free. The enforcement layer is the commercial product.
-
 ---
 
 ## Quick Start
