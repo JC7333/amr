@@ -11,6 +11,7 @@ except ModuleNotFoundError as exc:  # mcp 1.x has no mcp.server.mcpserver
     from mcp.server.fastmcp import FastMCP
 
 from amr.config import settings
+from amr.tools.attach_signed_mandate_pdf import attach_signed_mandate_pdf
 from amr.tools.check_action_token import check_action_token
 from amr.tools.contest_action import (
     contest_action,
@@ -44,6 +45,7 @@ mcp.tool()(check_action_token)
 mcp.tool()(register_principal_key)
 mcp.tool()(prepare_mandate_signature)
 mcp.tool()(prepare_mandate_pdf)
+mcp.tool()(attach_signed_mandate_pdf)
 mcp.tool()(issue_mandate_attestation)
 mcp.tool()(get_registry_public_key)
 mcp.tool()(export_insurer_dossier)

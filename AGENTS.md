@@ -35,7 +35,8 @@ uvx mandatia
 | `check_action_token` | For the receiver: re-check a token with the registry at the moment of acting (mandate and whole chain still active, not revoked, not expired) |
 | `register_principal_key` | Register the principal's Ed25519 public key |
 | `prepare_mandate_signature` | Build the exact bytes a principal signs for a mandate |
-| `prepare_mandate_pdf` | Get the mandate as a PDF the principal signs with its own tool (exact bytes attached, SHA-256 printed; the registry does not check a signature made on the PDF) |
+| `prepare_mandate_pdf` | Get the mandate as a PDF the principal signs with its own tool (exact bytes attached, SHA-256 printed) |
+| `attach_signed_mandate_pdf` | Record that PDF once the principal signed it (PAdES): checked offline against the operator's trust roots, shown in the Proof Pack |
 | `issue_mandate_attestation` | Issue a signed document a third party verifies offline |
 | `get_registry_public_key` | Get the registry's public key to verify attestations and tokens |
 | `export_insurer_dossier` | Export a signed, printable dossier of a mandate |
@@ -52,7 +53,9 @@ uvx mandatia
   regulation; that stays with the operator.
 - It does not check who a principal is, unless that principal registered a key and signs
   its mandates (`register_principal_key`). For a `did:web:<domain>` principal, it checks
-  that the domain publishes the key; it never checks a qualified signature.
+  that the domain publishes the key. A PDF signature (`attach_signed_mandate_pdf`) is checked
+  against the trust roots the operator chose; AMR does not read the EU trusted lists and
+  does not compare the signer with the principal.
 - It does not host anything: there is no hosted service. The registry runs where you
   start it and trusts its own database file; protect that file.
 - It makes no network call, except `report_issue` when the operator set `AMR_ISSUE_TOKEN`

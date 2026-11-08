@@ -8,7 +8,7 @@ compare the printed value with the attached file without trusting the rendering.
 The PDF is built with the standard library only and is deterministic: the same
 payload always gives the same bytes. The registry never signs it; the principal signs
 it (for example a PAdES signature made with the tool it uses for its contracts).
-Checking such a signature is not done here.
+amr.pades checks such a signature (attach_signed_mandate_pdf).
 """
 
 import hashlib
@@ -271,7 +271,10 @@ def build_mandate_pdf(payload: bytes) -> bytes:
     objects[1] = (
         b"<< /Type /Catalog /Pages 2 0 R /Lang (en)"
         b" /Names << /EmbeddedFiles << /Names [" + name + b" 5 0 R] >> >>"
-        b" /AF [5 0 R] /PageMode /UseAttachments >>"
+        b" /AF [5 0 R] /PageMode /UseAttachments"
+        # An empty form with SigFlags 3 (signatures exist, append only): a signing tool
+        # adds its field to it in an incremental update, which amr.pades compares.
+        b" /AcroForm << /Fields [] /SigFlags 3 >> >>"
     )
     kids = b" ".join(b"%d 0 R" % pid for pid in page_ids)
     objects[2] = b"<< /Type /Pages /Kids [" + kids + b"] /Count %d >>" % len(pages)

@@ -664,7 +664,7 @@ async def test_migration_adds_the_table_to_an_existing_database(temp_db: Path) -
     _sql(temp_db, "DELETE FROM schema_version WHERE version = 9")
     await init_db(temp_db)
     assert _sql(temp_db, "SELECT COUNT(*) FROM principal_key_domain_proofs") == [(0,)]
-    assert _sql(temp_db, "SELECT MAX(version) FROM schema_version") == [(9,)]
+    assert (9,) in _sql(temp_db, "SELECT version FROM schema_version")
 
 
 # --- Review fixes: forged proofs, look-alikes, addresses, real TLS --------------------
@@ -827,7 +827,7 @@ async def test_migration_keeps_existing_key_hashes(temp_db: Path, net: FakeNet) 
     _sql(temp_db, "DELETE FROM schema_version WHERE version = 9")
     await init_db(temp_db)
     assert _sql(temp_db, "SELECT chain_hash FROM principal_keys") == [(result["chain_hash"],)]
-    assert _sql(temp_db, "SELECT MAX(version) FROM schema_version") == [(9,)]
+    assert (9,) in _sql(temp_db, "SELECT version FROM schema_version")
 
 
 # --- Real TLS on a local server (the network code itself, not a fake) ---------------

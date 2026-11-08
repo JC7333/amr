@@ -151,17 +151,21 @@ It is built with the standard library only and is deterministic: the same argume
 `signed_at` always give the same bytes (`pdf_sha256`). The principal reads it and signs
 it with its own tool, for example a PAdES signature; an agent cannot sign in its place.
 
-Limits of this version: the registry does not sign the PDF and does not check a
-signature made on it (signature level, signer, certificate status). A mandate is
-accepted on the principal's Ed25519 signature of the same payload (section 3), as
-before. Keep the signed PDF with the mandate's records.
+The registry does not sign the PDF. A mandate is accepted on the principal's Ed25519
+signature of the same payload (section 3), as before. Once the principal has signed the
+PDF itself, `attach_signed_mandate_pdf` checks that signature offline and records it
+(see `docs/mandate-pdf-signature-spec.md`); keep the signed PDF with the mandate's
+records too.
 
 - **Time window.** `signed_at` is fixed inside the PDF, and `create_mandate` accepts it
   only within `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` (default 900 seconds) of its
   clock. Generate, sign and register within that window, or generate a new PDF.
-- **Link to a mandate.** A PDF matches a registered mandate only if that mandate was
-  created with the same arguments, the same `signed_at` and a principal signature; a
-  mandate created without a signature keeps no `signed_at`, so nothing ties a PDF to it.
+- **Link to a mandate.** For a mandate the principal signed with its Ed25519 key, a PDF
+  matches only if it carries the very bytes signed (same arguments, same `signed_at`).
+  A mandate created without that signature keeps no `signed_at`: a PDF matches it when
+  its content describes the mandate (principal, agent, scope, legal basis, parent,
+  metadata, duration, perimeter) and its `signed_at` is within
+  `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` of the mandate's creation.
 - **Text in values.** A scope or metadata value can contain any printable text,
   including text that looks like a fingerprint: compare the footer's SHA-256, or
   `payload_sha256`, with the attached file, not a value in the body.

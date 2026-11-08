@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # Refuse to answer from a snapshot older than this (None: no limit, age shown).
     public_snapshot_max_age_seconds: int | None = Field(default=None, gt=0)
 
+    # Signed mandate PDFs (see docs/mandate-pdf-signature-spec.md): a PEM file of the
+    # certificate authorities whose signatures attach_signed_mandate_pdf accepts. None:
+    # no signed PDF is accepted. AMR does not read the EU trusted lists itself.
+    pdf_trust_roots_path: Path | None = None
+
     # report_issue (see docs/report-issue-spec.md) files issues on this repository.
     # Its token, AMR_ISSUE_TOKEN, is deliberately not a setting: report_issue reads it
     # from the process environment only, never from a .env file.

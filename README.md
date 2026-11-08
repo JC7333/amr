@@ -235,6 +235,12 @@ control of the domain at registration time, not a qualified signature. Consumers
 rely on a `did:web` principal must check `did_web_unverified: false` in the Proof Pack,
 the attestation or the insurer dossier.
 
+The principal can also sign the mandate as a PDF with its own signature tool
+(`prepare_mandate_pdf`, then `attach_signed_mandate_pdf`): the registry checks the
+PAdES signature offline against the trust roots the operator chose and records the
+signer named by the certificate. It does not read the EU trusted lists or check
+revocation, and does not decide whether the signer may act for the principal.
+
 **Behaviour change (did:web keys):** with the default configuration, registering a key
 for a `did:web:` identifier is now refused (`did_web_resolution_disabled`) instead of
 "first registration wins"; keys already registered stay valid and are reported as
@@ -480,11 +486,33 @@ signature): `{"pdf_base64", "filename", "pdf_sha256", "attachment_name",
 "payload_sha256", "payload", "payload_b64url", "signed_at"}`. The PDF carries the exact
 payload of `prepare_mandate_signature` as the attached file `amr-mandate.json` and prints
 its SHA-256 on every page. The same arguments and `signed_at` always give the same PDF.
-The registry does not sign this PDF and, in this version, does not check a signature
-made on it: the mandate is still accepted on the principal's Ed25519 signature of the
-same payload, with `signed_at` within `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS`
-(default 900 seconds) of the registry clock; generate, sign and register within that
-window (see `docs/principal-signature-spec.md`, section 2 bis).
+The registry does not sign this PDF. The mandate is still accepted on the principal's
+Ed25519 signature of the same payload, with `signed_at` within
+`AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` (default 900 seconds) of the registry clock;
+generate, sign and register within that window (see `docs/principal-signature-spec.md`,
+section 2 bis). Once the principal has signed the PDF itself, record it with
+`attach_signed_mandate_pdf`.
+
+---
+
+### `attach_signed_mandate_pdf`
+
+`attach_signed_mandate_pdf(mandate_id, signed_pdf_base64)`, after `create_mandate`.
+Checks, offline, the PDF of `prepare_mandate_pdf` once the principal signed it with its
+own tool (PAdES, for example with a qualified certificate): the file starts with the
+exact mandate PDF and its attached content is this mandate; what was appended only adds
+signatures; every signature verifies, covers the document and its certificate chains to
+a root of `AMR_PDF_TRUST_ROOTS_PATH` (a PEM file the operator chooses) at the time of the
+check. The signed file, the signers (names, organisation identifier, qualified
+certificate statements) and the SHA-256 of the roots used are recorded, chained, and
+shown in `get_proof` (`pdf_signatures`, `chain_integrity.pdf_signatures_intact`).
+Without `AMR_PDF_TRUST_ROOTS_PATH`, nothing is accepted (`pdf_trust_roots_missing`).
+
+It does not read the EU trusted lists, does not check certificate revocation
+(`revocation_checked: false`; no network call) and does not compare the signer with the
+principal: `declared_level` (`qualified_on_qscd`, `qualified`, `not_qualified`) is what
+the certificate declares under the operator's roots. See
+`docs/mandate-pdf-signature-spec.md`.
 
 ---
 
@@ -944,6 +972,7 @@ src/amr/
 ├── tools/
 │   ├── create_mandate.py
 │   ├── prepare_mandate_pdf.py   # the mandate as a PDF the principal signs itself
+│   ├── attach_signed_mandate_pdf.py   # records that PDF once signed (PAdES, offline)
 │   ├── verify_mandate.py
 │   ├── log_action.py
 │   ├── get_proof.py
@@ -956,6 +985,7 @@ src/amr/
 ├── attestation.py     # offline attestation verifier (no DB, no network)
 ├── did_web.py         # did:web key check, network opt-in (AMR_DID_WEB_RESOLVE)
 ├── mandate_pdf.py     # deterministic mandate PDF, payload attached (stdlib only)
+├── pades.py           # offline check of a PAdES signature on that PDF (pyHanko)
 ├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
 └── templates/         # Sector mandate templates (agent-sante-rgpd)
@@ -975,6 +1005,7 @@ tests/
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
 | `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
 | `AMR_DID_WEB_RESOLVE` | unset | `1` lets `register_principal_key` read the DID document of a `did:web` principal (one HTTPS GET to that domain). Read from the process environment only, never from `.env`. Unset: `did:web` keys are refused |
+| `AMR_PDF_TRUST_ROOTS_PATH` | unset | PEM file of the certificate authorities whose PDF signatures `attach_signed_mandate_pdf` accepts. Unset: no signed PDF is accepted |
 | `AMR_ISSUE_REPOSITORY` | `JC7333/amr` | Repository `report_issue` files issues on (`owner/name`) |
 | `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
 | `AMR_PUBLIC_EXPORT_PATH` | `amr_public_registry.jws` | Signed snapshot written by `python -m amr.public_registry export` and served by its app |

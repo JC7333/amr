@@ -83,7 +83,28 @@ def _signature_matches(
     payload_text = signature["payload"]
     if not verify(public_key_raw, payload_text.encode("utf-8"), signature_raw):
         return False
+    return payload_matches_mandate(
+        mandate, payload_text, signature["signed_at"], parent_perimeter_json
+    )
+
+
+def payload_matches_mandate(
+    mandate: dict[str, Any],
+    payload_text: str,
+    signed_at: str | None,
+    parent_perimeter_json: str | None,
+) -> bool:
+    """True if a mandate payload (prepare_mandate_signature) describes this mandate.
+
+    Compares principal, agent, scope, legal basis, parent, metadata, the duration
+    (created_at + duration_hours == expires_at, to the second), the perimeter (for a
+    sub-mandate, the payload's perimeter narrowed by the parent's) and, unless signed_at
+    is None (a mandate registered without a principal signature), signed_at.
+    Raises ValueError, TypeError, KeyError or AttributeError on a damaged field.
+    """
     payload = json.loads(payload_text)
+    if not isinstance(payload, dict):
+        return False
     expected = {
         "context": MANDATE_CONTEXT,
         "principal_id": mandate["principal_id"],
@@ -92,8 +113,9 @@ def _signature_matches(
         "legal_basis": mandate["legal_basis"],
         "parent_mandate_id": mandate["parent_mandate_id"],
         "metadata": mandate["metadata"],
-        "signed_at": signature["signed_at"],
     }
+    if signed_at is not None:
+        expected["signed_at"] = signed_at
     if any(payload.get(key) != value for key, value in expected.items()):
         return False
     if mandate["parent_mandate_id"] is None:
@@ -112,6 +134,91 @@ def _signature_matches(
         return False
     granted = _aware(mandate["expires_at"]) - _aware(mandate["created_at"])
     return abs(granted - timedelta(hours=duration)) <= timedelta(seconds=1)
+
+
+PDF_SIGNATURE_EVENT = "pdf_signature_attached"
+
+
+def pdf_signature_hash_data(row: Any) -> dict[str, Any]:
+    """The fields of a mandate_pdf_signatures row sealed into its chain_hash."""
+    return {
+        "mandate_id": row["mandate_id"],
+        "mandate_chain_hash": row["mandate_chain_hash"],
+        "payload_sha256": row["payload_sha256"],
+        "pdf_sha256": row["pdf_sha256"],
+        "signed_pdf_sha256": row["signed_pdf_sha256"],
+        "signers": json.loads(row["signers_json"]),
+        "trust_roots_sha256": row["trust_roots_sha256"],
+        "checked_at": row["checked_at"],
+    }
+
+
+async def _pdf_signatures(
+    db: aiosqlite.Connection, mandate_row: Any, events: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], bool | None]:
+    """The signed mandate PDFs recorded for a mandate, and whether they are intact.
+
+    Intact is None when there is none (and no event says there was one); False when a
+    record's chain_hash does not recompute from its row and the previous record, its
+    stored file does not hash to signed_pdf_sha256, it names another mandate hash or
+    payload, or a record and its "pdf_signature_attached" event do not match.
+    """
+    cursor = await db.execute(
+        """
+        SELECT s.mandate_id, s.mandate_chain_hash, s.payload_sha256, s.pdf_sha256,
+               s.signed_pdf_sha256, s.signed_pdf, s.signers_json, s.trust_roots_sha256,
+               s.checked_at, s.chain_hash,
+               (SELECT p.chain_hash FROM mandate_pdf_signatures p WHERE p.rowid < s.rowid
+                ORDER BY p.rowid DESC LIMIT 1) AS previous_hash
+        FROM mandate_pdf_signatures s WHERE s.mandate_id = ? ORDER BY s.rowid
+        """,
+        (mandate_row["id"],),
+    )
+    rows = await cursor.fetchall()
+    named = {
+        str(event["reason"]).removeprefix("signed PDF ")
+        for event in events
+        if event["event_type"] == PDF_SIGNATURE_EVENT
+    }
+    if not rows and not named:
+        return [], None
+    stored_payload = mandate_row["principal_signed_payload"]
+    intact = True
+    records = []
+    for row in rows:
+        try:
+            signers = json.loads(row["signers_json"])
+            hash_ok = compute_hash(
+                pdf_signature_hash_data(row), row["previous_hash"] or ""
+            ) == row["chain_hash"]
+        except (ValueError, TypeError):
+            signers, hash_ok = None, False
+        if not (
+            hash_ok
+            and hashlib.sha256(row["signed_pdf"]).hexdigest() == row["signed_pdf_sha256"]
+            and row["mandate_chain_hash"] == mandate_row["chain_hash"]
+            and (
+                stored_payload is None
+                or hashlib.sha256(stored_payload.encode("utf-8")).hexdigest()
+                == row["payload_sha256"]
+            )
+        ):
+            intact = False
+        records.append(
+            {
+                "payload_sha256": row["payload_sha256"],
+                "pdf_sha256": row["pdf_sha256"],
+                "signed_pdf_sha256": row["signed_pdf_sha256"],
+                "signers": signers,
+                "trust_roots_sha256": row["trust_roots_sha256"],
+                "checked_at": row["checked_at"],
+                "chain_hash": row["chain_hash"],
+            }
+        )
+    if named != {record["signed_pdf_sha256"] for record in records}:
+        # attach_signed_mandate_pdf writes the record and its event together.
+        intact = False
+    return records, intact
 
 
 async def _key_hash_seals(db: aiosqlite.Connection, key_row: Any, proof_row: Any) -> bool:
@@ -287,6 +394,12 @@ async def get_proof(
             days_left, deadline_passed}, principal_signature, chain_hash and
             principal_signature_valid (null when unsigned and the contesting principal
             had no key then); empty when nothing is contested
+          - pdf_signatures: the signed PDFs of this mandate recorded by
+            attach_signed_mandate_pdf (signers under the operator's trust roots; AMR
+            does not check that a signer is the principal), oldest first, each with
+            payload_sha256, pdf_sha256, signed_pdf_sha256, signers, trust_roots_sha256,
+            checked_at (the signatures are as checked then, not re-checked now) and
+            chain_hash; empty when none
           - chain_integrity: dict with actions_chain_valid (bool),
             principal_signature_valid (bool; null for an unsigned mandate whose
             principal had no key when it was created), revocation_signature_valid
@@ -298,7 +411,11 @@ async def get_proof(
             contest's chain_hash does not recompute from
             its row and the previous contest, when a contest names an action that is
             not in this mandate's log or whose hash changed, or when a contest
-            signature does not verify), total_actions, total_events
+            signature does not verify), pdf_signatures_intact (null when no signed
+            PDF was recorded; false when a record does not recompute from its row and
+            the previous record, its stored file does not hash to signed_pdf_sha256,
+            it names another mandate hash or payload, or records and their
+            "pdf_signature_attached" events do not match), total_actions, total_events
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -482,6 +599,11 @@ async def get_proof(
             # contest_action writes the record and its event together.
             contests_intact = False
 
+        # Signed mandate PDFs (attach_signed_mandate_pdf), as checked when attached.
+        pdf_signatures, pdf_signatures_intact = await _pdf_signatures(
+            db, mandate_row, events
+        )
+
         # Verify the action chain integrity
         # Action chains are anchored to the mandate's chain_hash (not "")
         actions_chain_valid = verify_chain(
@@ -498,11 +620,13 @@ async def get_proof(
             "actions": actions,
             "events": events,
             "action_contests": action_contests,
+            "pdf_signatures": pdf_signatures,
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,
                 "revocation_signature_valid": revocation_valid,
                 "contests_intact": contests_intact,
+                "pdf_signatures_intact": pdf_signatures_intact,
                 "total_actions": len(actions),
                 "total_events": len(events),
             },

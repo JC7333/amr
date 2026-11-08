@@ -40,14 +40,15 @@ async def prepare_mandate_pdf(
     arguments and signed_at; the SHA-256 of these bytes is printed on every page.
     The same arguments and signed_at always give the same PDF.
 
-    The registry does not sign this PDF and does not check a signature made on it in
-    this version: the principal signs it with its own tool (for example a PAdES
-    signature), and keeps the signed file. An agent cannot sign in the principal's
+    The registry does not sign this PDF: the principal signs it with its own tool (for
+    example a PAdES signature), keeps the signed file and can record it, after
+    create_mandate, with attach_signed_mandate_pdf. An agent cannot sign in the principal's
     place. create_mandate accepts signed_at only within
     AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS (default 900 s) of its clock: generate,
     sign and register within that window, or generate a new PDF. The PDF matches a
-    registered mandate only if that mandate was created with the same arguments, the
-    same signed_at and a principal signature.
+    mandate the principal signed only if it was created with the same arguments and
+    signed_at; it matches a mandate created without that signature if its content
+    describes it (attach_signed_mandate_pdf).
 
     Args:
         signed_at: ISO 8601 timestamp with timezone to place in the content.

@@ -147,6 +147,24 @@ CREATE TABLE IF NOT EXISTS principal_key_domain_proofs (
     verified_at      TEXT NOT NULL
 );
 
+-- Schema v10: PAdES signatures the principal made on the mandate PDF
+-- (attach_signed_mandate_pdf), checked when attached. Append-only, chained with SHA-256
+-- across the table; one row per (mandate, signed file). signers_json is the checked
+-- signers as attach_signed_mandate_pdf returned them.
+CREATE TABLE IF NOT EXISTS mandate_pdf_signatures (
+    mandate_id          TEXT NOT NULL REFERENCES mandates(id),
+    mandate_chain_hash  TEXT NOT NULL,
+    payload_sha256      TEXT NOT NULL,
+    pdf_sha256          TEXT NOT NULL,
+    signed_pdf_sha256   TEXT NOT NULL,
+    signed_pdf          BLOB NOT NULL,
+    signers_json        TEXT NOT NULL,
+    trust_roots_sha256  TEXT NOT NULL,
+    checked_at          TEXT NOT NULL,
+    chain_hash          TEXT NOT NULL,
+    UNIQUE (mandate_id, signed_pdf_sha256)
+);
+
 CREATE INDEX IF NOT EXISTS idx_action_contests_mandate ON action_contests(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_contester ON action_contests(contested_by);
 CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate
@@ -217,7 +235,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
     7: token amounts for cumulative ceilings, 8: action contests,
-    9: did:web key domain proofs).
+    9: did:web key domain proofs, 10: signed mandate PDFs).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -297,6 +315,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (9,),
+        )
+        # Schema v10: mandate_pdf_signatures, created by the script above
+        # (attach_signed_mandate_pdf). Existing mandates and their hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (10,),
         )
         await db.commit()
 
