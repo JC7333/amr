@@ -8,7 +8,7 @@ candidate itself, recognize emotions, categorize people from biometric data, inf
 sensitive data, export candidate data, or create a sub-agent (delegation is off, and
 ``agent.create`` is forbidden).
 
-Every decision about a person stays with a human: the agent proposes, it does not decide.
+Every decision to reject, select or make an offer stays with a human: the agent proposes.
 No allowed action is irreversible, so the template sets no risk class; a mandate may add
 one (``create_mandate_kwargs(risk_classes=...)``).
 

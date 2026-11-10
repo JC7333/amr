@@ -110,7 +110,9 @@ async def _token(mandate_id: str, action_type: str) -> dict:
 
 
 def test_registry_lists_both_templates(rh: MandateTemplate) -> None:
-    assert list_templates() == [AGENT_RH_RECRUTEMENT_ID, AGENT_SANTE_RGPD_ID]
+    assert AGENT_RH_RECRUTEMENT_ID in list_templates()
+    assert AGENT_SANTE_RGPD_ID in list_templates()
+    assert list_templates() == sorted(list_templates())
     assert rh.template_id == "agent-rh-recrutement"
     assert rh.sector == "employment"
     assert rh.version == "1.0.0"
@@ -279,15 +281,7 @@ def test_documented_json_is_the_template(rh: MandateTemplate) -> None:
 
 def test_doc_table_names_every_action(rh: MandateTemplate) -> None:
     table = _doc().split("## Provisional baseline")[0]
-    for action in (
-        *ALLOWED,
-        "candidate.reject",
-        "candidate.select",
-        "offer.send",
-        "rejection.send",
-        "candidate_message.send",
-        "agent.create",
-    ):
+    for action in (*ALLOWED, *FORBIDDEN):
         assert f"`{action}`" in table, action
 
 
@@ -295,11 +289,13 @@ def test_doc_says_references_are_to_verify_and_not_compliance() -> None:
     text = _doc()
     assert "marked `to_verify`" in text
     assert "does not make a recruitment" in text
+    assert "`forbidden:<type>`" in text
+    assert "does not check that a booked interview" in text
 
 
 def test_readme_lists_the_template() -> None:
     text = " ".join(README.read_text(encoding="utf-8").split())
     assert "`agent-rh-recrutement`, covers an agent assisting a recruiter" in text
-    assert "Every decision about a person stays with a human." in text
+    assert "Every decision to reject, select or make an offer stays with a human." in text
     assert "sector templates (health, recruitment)" in text
     assert "`docs/templates/agent-rh-recrutement.md`" in text

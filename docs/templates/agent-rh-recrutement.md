@@ -9,10 +9,11 @@ other structured perimeter.
 | read the applications received (`application.read`) | reject or select a candidate (`candidate.reject`, `candidate.select`) |
 | draft a job posting (`job_posting.draft`) | send a job offer or a rejection (`offer.send`, `rejection.send`) |
 | propose a reasoned shortlist to a human recruiter (`shortlist.propose`) | send any message to a candidate itself (`candidate_message.send`) |
-| propose and book interview slots in the company calendar (`interview.propose`, `interview.book`) | recognize emotions, categorize people from biometric data, infer sensitive data |
-| draft candidate messages (`candidate_message.draft`) | export candidate data; create a sub-agent (`agent.create`; delegation is off) |
+| propose and book interview slots in the company calendar (`interview.propose`, `interview.book`) | recognize emotions, categorize people from biometric data, infer sensitive data (`emotion_recognition`, `biometric_categorisation`, `sensitive_data.infer`) |
+| draft candidate messages (`candidate_message.draft`) | export candidate data (`candidate_data.export`); create a sub-agent (`agent.create`; delegation is off) |
 
-Anything not listed on the left is refused (`not_allowed`). Every decision about a person
+The actions on the right are refused (`forbidden:<type>`), and so is anything not listed
+on the left (`not_allowed:<type>`). Every decision to reject, select or make an offer
 stays with a human: the agent proposes a shortlist, a recruiter decides. The mandate
 records the template it was built from in its metadata (`template_id`,
 `template_version`, `template_digest`, `template_status`), shown in the Proof Pack. That
@@ -39,7 +40,11 @@ When a body (board, committee) authorized the agent, the mandate can record its 
 ## Limits
 
 - `interview.book` must not notify the candidate: a confirmation sent to the candidate
-  is a candidate message, which this template forbids.
+  is a candidate message, which this template forbids. Many calendar systems invite
+  attendees by default: the system that receives the token must turn that off.
+- AMR does not check that a booked interview is for a candidate on a shortlist a human
+  approved. A principal who wants a human to confirm every booking leaves
+  `interview.book` out, or narrows it with a short risk class.
 - The agent names the action type it asks a token for. The system that receives the
   token must map each real operation to the right type (a draft that is actually sent is
   `candidate_message.send`, `offer.send` or `rejection.send`).

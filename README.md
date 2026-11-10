@@ -286,11 +286,11 @@ record, handle the schedule, draft letters and patient messages for a human to s
 and order supplies under a ceiling; it may never prescribe, diagnose, change or export
 the record, contact a patient itself, or create a sub-agent. The second one,
 `agent-rh-recrutement`, covers an agent assisting a recruiter: it may read the
-applications, draft a job posting, propose a shortlist to a human recruiter, book
-interview slots and draft candidate messages; it may never reject or select a candidate,
+applications, draft a job posting, propose a shortlist to a human recruiter, propose
+and book interview slots and draft candidate messages; it may never reject or select a candidate,
 send an offer, a rejection or any candidate message, recognize emotions, categorize
 people from biometric data, infer sensitive data, export candidate data, or create a
-sub-agent. Every decision about a person stays with a human.
+sub-agent. Every decision to reject, select or make an offer stays with a human.
 
 ```python
 from amr.templates import get_template
