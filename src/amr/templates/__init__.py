@@ -18,7 +18,7 @@ Usage::
 """
 
 from amr.templates.agent_sante_rgpd import AGENT_SANTE_RGPD
-from amr.templates.base import LegalReference, MandateTemplate
+from amr.templates.base import LegalReference, MandateTemplate, Stewardship
 
 AGENT_SANTE_RGPD_ID = AGENT_SANTE_RGPD.template_id
 
@@ -46,6 +46,7 @@ __all__ = [
     "AGENT_SANTE_RGPD_ID",
     "LegalReference",
     "MandateTemplate",
+    "Stewardship",
     "get_template",
     "list_templates",
 ]

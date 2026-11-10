@@ -223,8 +223,8 @@ def test_template_is_immutable(sante: MandateTemplate) -> None:
 
 def test_health_template_digest_is_pinned(sante: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
-    assert sante.version == "1.1.0"
-    assert sante.digest() == ("41117c040efcc7c96d8cf1dbda89fa025e4061a1cd252789163df57e1d5b16b3")
+    assert sante.version == "1.2.0"
+    assert sante.digest() == ("f150977f08f9f3c8f4e9a8e88ed86c42e53649c2157aa028896836a7f00a2391")
 
 
 def test_legal_reference_status_is_restricted() -> None:
@@ -252,8 +252,9 @@ def test_create_mandate_kwargs(sante: MandateTemplate) -> None:
     assert kwargs["amount_actions"] == ["supplies.order"]
     assert kwargs["metadata"] == {
         "template_id": "agent-sante-rgpd",
-        "template_version": "1.1.0",
+        "template_version": "1.2.0",
         "template_digest": sante.digest(),
+        "template_status": "provisional",
     }
 
 
@@ -272,8 +273,9 @@ def test_principal_metadata_is_merged_and_template_keys_are_reserved(
     assert kwargs["metadata"] == {
         "client_ref": "CAB-001",
         "template_id": "agent-sante-rgpd",
-        "template_version": "1.1.0",
+        "template_version": "1.2.0",
         "template_digest": sante.digest(),
+        "template_status": "provisional",
     }
     for key in ("template_id", "template_digest", "template_other"):
         with pytest.raises(ValueError, match="reserved"):

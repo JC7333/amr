@@ -18,6 +18,47 @@ built from in its metadata (`template_id`, `template_version`, `template_digest`
 in the Proof Pack. That metadata is a label: like other mandate metadata (except
 `organ_decision`, below) it is not sealed into the chain hash. What is sealed, and enforced, is the perimeter itself.
 
+## Provisional baseline and minimum thresholds
+
+This template is a **provisional** sector baseline. The code records who holds it and
+whether the sector has taken it over (`stewardship` in the JSON below):
+
+- status: `provisional`, held by the AMR registry (mandatia.eu) until a body of the
+  health sector takes it over;
+- practitioner reviewers: none recorded. The list stays empty until a real review is
+  recorded; no name is filled in for one.
+
+The stewardship block is part of the template's canonical form, so it is covered by
+`template_digest`, and `create_mandate_kwargs()` copies the status into the mandate
+metadata as `template_status`. Like the other `template_*` keys, it is a label, not
+sealed into the chain hash.
+
+The template sets a minimum threshold per risk class, with the risk-class mechanism the
+code already has (`risk_classes` of the perimeter, sealed in the mandate):
+
+| Class | Actions | Token lifetime at most | Registry re-check |
+|---|---|---|---|
+| `irreversible` | `supplies.order` | 30 seconds | yes (`amr_registry_check`, see `check_action_token`) |
+
+A mandate built from the template may tighten a threshold, never loosen it:
+
+```python
+template.create_mandate_kwargs(risk_classes=[
+    # same class, shorter window: accepted
+    {"name": "irreversible", "actions": ["supplies.order"], "max_token_seconds": 10,
+     "registry_check": True},
+    # new class: added
+    {"name": "booking", "actions": ["appointment.book"], "max_token_seconds": 60},
+])
+```
+
+A class with the name of a template class that allows a longer lifetime, leaves out an
+action the template class reaches, or drops `registry_check` is refused with a
+`ValueError` that says which threshold would be loosened. Template classes that are not
+named are kept as they are. This check is in `create_mandate_kwargs`: a principal who
+calls `create_mandate` directly, without the template, is not bound by it, and the
+`template_*` metadata is then only what the caller declares.
+
 ## Decision of a body (organ decision)
 
 In a facility, an agent is often authorized by a body (an AI or digital strategy
@@ -49,6 +90,8 @@ a body leaves the decision out; the mandate and its hash are then unchanged.
 
 ## Limits
 
+- An order token lives at most 30 seconds and carries `amr_registry_check`: the system
+  that receives the order must call `check_action_token` before acting.
 - The ceiling applies to each order. AMR keeps no running total: the principal or the
   ordering system must cap the total spent.
 - `appointment.book` must not notify the patient: a confirmation sent to the patient is
@@ -164,7 +207,8 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     "appointment.book must not notify the patient: a confirmation sent to the patient is a patient message, which this template forbids.",
     "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is letter.send or patient_message.send).",
     "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
-    "When a body authorized the agent, record its decision (organ_decision) with the persons or roles it designates. AMR records what the principal declares: it does not check that the decision exists or that the people named are who they say."
+    "When a body authorized the agent, record its decision (organ_decision) with the persons or roles it designates. AMR records what the principal declares: it does not check that the decision exists or that the people named are who they say.",
+    "Minimum threshold per risk class: an order of supplies cannot be undone, so its token lives at most 30 seconds and carries amr_registry_check. A mandate may shorten the window or widen the class, never lengthen it or drop the check."
   ],
   "organ_decision": "optional",
   "perimeter": {
@@ -192,12 +236,28 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
       "patient_record.write",
       "prescription"
     ],
-    "max_amount": "100"
+    "max_amount": "100",
+    "risk_classes": [
+      {
+        "actions": [
+          "supplies.order"
+        ],
+        "max_token_seconds": 30,
+        "name": "irreversible",
+        "registry_check": true
+      }
+    ]
   },
   "sector": "health",
+  "stewardship": {
+    "handover": "Provisional baseline published by the registry until a body of the health sector takes it over; that body then holds the template and its versions.",
+    "held_by": "AMR registry (mandatia.eu)",
+    "reviewers": [],
+    "status": "provisional"
+  },
   "summary": "Assist a medical practice or facility: read the patient record, handle the practice schedule, draft letters and patient messages for human validation, order supplies under a ceiling. Never prescribe, diagnose, change or export the record, contact a patient directly, or create a sub-agent.",
   "template_id": "agent-sante-rgpd",
   "title": "Healthcare practice assistant agent (GDPR health data)",
-  "version": "1.1.0"
+  "version": "1.2.0"
 }
 ```

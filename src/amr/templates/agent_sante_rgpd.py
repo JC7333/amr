@@ -12,16 +12,22 @@ decision (``organ_decision``: body, title, date, reference, authorized personnel
 predefined actions are the closed list of allowed actions below. A practice without such
 a body simply leaves it out.
 
+This template is a provisional sector baseline (``stewardship``): published by the AMR
+registry until a body of the health sector takes it over, with no practitioner review
+recorded yet. Its minimum threshold per risk class: an order of supplies is an
+irreversible action, so its token lives at most 30 seconds and the receiver re-checks the
+registry before acting (``registry_check``). A mandate may tighten this, never loosen it.
+
 The legal references are pointers for the principal, all marked ``to_verify``: they are
 not legal advice and have not been reviewed by counsel.
 """
 
-from amr.models.perimeter import Perimeter
-from amr.templates.base import LegalReference, MandateTemplate
+from amr.models.perimeter import Perimeter, RiskClass
+from amr.templates.base import LegalReference, MandateTemplate, Stewardship
 
 AGENT_SANTE_RGPD = MandateTemplate(
     template_id="agent-sante-rgpd",
-    version="1.1.0",
+    version="1.2.0",
     title="Healthcare practice assistant agent (GDPR health data)",
     sector="health",
     summary=(
@@ -54,6 +60,14 @@ AGENT_SANTE_RGPD = MandateTemplate(
         max_amount="100",
         currency="EUR",
         amount_actions=("supplies.order",),
+        risk_classes=(
+            RiskClass(
+                name="irreversible",
+                actions=("supplies.order",),
+                max_token_seconds=30,
+                registry_check=True,
+            ),
+        ),
     ),
     actions={
         "patient_record.read": "Read the patient record needed for the task at hand.",
@@ -107,6 +121,18 @@ AGENT_SANTE_RGPD = MandateTemplate(
         "When a body authorized the agent, record its decision (organ_decision) with the "
         "persons or roles it designates. AMR records what the principal declares: it does "
         "not check that the decision exists or that the people named are who they say.",
+        "Minimum threshold per risk class: an order of supplies cannot be undone, so its "
+        "token lives at most 30 seconds and carries amr_registry_check. A mandate may "
+        "shorten the window or widen the class, never lengthen it or drop the check.",
     ),
     organ_decision="optional",
+    stewardship=Stewardship(
+        status="provisional",
+        held_by="AMR registry (mandatia.eu)",
+        handover=(
+            "Provisional baseline published by the registry until a body of the health "
+            "sector takes it over; that body then holds the template and its versions."
+        ),
+        reviewers=(),
+    ),
 )

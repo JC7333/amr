@@ -563,7 +563,9 @@ async def test_insurer_dossier_lists_the_classes() -> None:
 
 
 def test_template_passes_its_classes_to_create_mandate() -> None:
-    assert "risk_classes" not in AGENT_SANTE_RGPD.create_mandate_kwargs()
+    assert AGENT_SANTE_RGPD.create_mandate_kwargs()["risk_classes"] == [
+        rc.canonical() for rc in AGENT_SANTE_RGPD.perimeter.risk_classes
+    ]
     classed = AGENT_SANTE_RGPD.perimeter.model_copy(
         update={"risk_classes": (RiskClass.model_validate(IRREVERSIBLE),)}
     )

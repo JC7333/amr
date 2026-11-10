@@ -293,13 +293,22 @@ template = get_template("agent-sante-rgpd")
 await create_mandate(..., **template.create_mandate_kwargs())
 ```
 
-The mandate records `template_id`, `template_version` and `template_digest` in its
-metadata. That metadata is a label, not sealed into the chain hash; the perimeter is
+The mandate records `template_id`, `template_version`, `template_digest` and, when the
+template has a stewardship block, `template_status` in its metadata. That metadata is a label, not sealed into the chain hash; the perimeter is
 sealed and is what the token issuer enforces. Templates only fill in existing
 `create_mandate` arguments: existing mandates and their hashes are unchanged. They are a
 Python API for now (no MCP tool lists them yet). Like every perimeter, the template
 holds only if the agent cannot call `create_mandate` itself (see the deployment rule
 above). See `docs/templates/agent-sante-rgpd.md`.
+
+Each template published here is a provisional sector baseline. Its `stewardship` block
+says so (status `provisional` until a body of the sector takes it over, who holds it,
+the practitioner reviewers recorded: none so far); the block is part of the template
+digest and its status is copied into the mandate metadata as `template_status`. The
+template's risk classes are minimum thresholds (for `agent-sante-rgpd`, version 1.2.0:
+an order token lives at most 30 seconds and asks for a registry re-check):
+`create_mandate_kwargs(risk_classes=[...])` may tighten them or add classes, and refuses
+with a `ValueError` anything that would loosen them.
 
 When a body (committee, board) authorized the agent, the mandate can record its decision
 (`organ_decision`: body, title, date, optional reference, designated persons or roles);
