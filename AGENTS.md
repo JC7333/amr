@@ -23,6 +23,16 @@ uvx mandatia
   or AMR writes them in the client's current directory. Never commit the `.pem` file.
 - Runnable end-to-end example: `examples/quickstart_agent.py`.
 
+## Which tools you get
+
+`AMR_TOOL_PROFILE` decides which tools the server exposes. If you are the agent that acts
+under a mandate, run `agent`: you can check your mandate, ask for tokens, log your acts,
+show attestations, and create sub-mandates under your own mandate, but you cannot create,
+sign or revoke a root mandate. That is the principal's server, profile `principal`. A third
+party that receives your tokens runs `receiver`. `full` (default) exposes every tool, for
+tests and single-user setups. Never give yourself the principal's tools: a mandate you
+granted to yourself proves nothing.
+
 ## What it does
 
 | Tool | Use it to |

@@ -22,7 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SERVER_PATH = ROOT / "src" / "amr" / "server.py"
 SERVER = SERVER_PATH.read_text(encoding="utf-8")
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-REGISTERED_TOOLS = set(re.findall(r"^mcp\.tool\(\)\((\w+)\)", SERVER, flags=re.MULTILINE))
+TOOLS_BLOCK = SERVER.split("TOOLS = (", 1)[1].split(")", 1)[0]
+REGISTERED_TOOLS = set(re.findall(r"^    (\w+),\r?$", TOOLS_BLOCK, flags=re.MULTILINE))
 DOCS = {
     name: (ROOT / name).read_text(encoding="utf-8")
     for name in ("README.md", "AGENTS.md", "llms.txt")

@@ -1,6 +1,6 @@
 # AMR (Agent Mandate Registry)
 
-> Open-source MCP server (Apache-2.0) that records which principal authorized which AI agent to do what, verifies it, and keeps a hash-chained, append-only journal of the agent's actions. Runs locally over stdio; makes no network call (except report_issue, only when the operator sets AMR_ISSUE_TOKEN). Not legal advice; does not make anyone compliant.
+> Open-source MCP server (Apache-2.0) that records which principal authorized which AI agent to do what, verifies it, and keeps a hash-chained, append-only journal of the agent's actions. Runs locally over stdio; makes no network call (except report_issue when the operator sets AMR_ISSUE_TOKEN, and the did:web key check when the operator sets AMR_DID_WEB_RESOLVE=1). Not legal advice; does not make anyone compliant.
 
 Install and run (needs uv; the PyPI package is `mandatia`, `uvx amr` installs a different project):
 
@@ -9,6 +9,8 @@ Install and run (needs uv; the PyPI package is `mandatia`, `uvx amr` installs a 
 Latest code of the repository instead (works with version 1 and version 2 of the MCP Python SDK, no extra pin):
 
     uvx --from git+https://github.com/JC7333/amr amr
+
+Give each side only its tools with AMR_TOOL_PROFILE: `principal` (grant, sign, revoke), `agent` (token, log, attestation; sub-mandates only), `receiver` (check a token), `full` (default, every tool). An agent must not run the principal's tools: a mandate it granted to itself proves nothing.
 
 ## Docs
 - [AGENTS.md](https://github.com/JC7333/amr/blob/main/AGENTS.md): what AMR does and does not do, tools, how to report a problem

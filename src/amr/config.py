@@ -1,6 +1,7 @@
 """AMR configuration - loads from environment variables or .env file."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
@@ -13,7 +14,12 @@ class Settings(BaseSettings):
     hash_algorithm: str = "sha256"
     log_level: str = "INFO"
     server_name: str = "Agent Mandate Registry"
-    server_version: str = "0.1.1"
+    server_version: str = "0.1.2"
+
+    # Which tools the server exposes (see amr.server.TOOL_PROFILES): "full" (every tool),
+    # "principal" (grant, sign, revoke, contest, prove), "agent" (act under a mandate:
+    # token, log, attestation; sub-mandates only) or "receiver" (check a token).
+    tool_profile: Literal["full", "principal", "agent", "receiver"] = "full"
 
     # Token issuance
     signing_key_path: Path = Path("amr_signing_key.pem")

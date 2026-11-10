@@ -347,9 +347,10 @@ def test_source_archive_carries_only_code_tests_and_docs(tmp_path: Path) -> None
         names = [n.split("/", 1)[1] for n in sdist.getnames() if "/" in n]
     assert "src/amr/server.py" in names
     assert "LICENSE" in names
+    assert "NOTICE" in names  # Apache-2.0, section 4(d): the NOTICE travels with the work
     assert "tests/test_release_packaging.py" in names
     top = {n.split("/")[0] for n in names}
     allowed = {"src", "tests", "docs", "examples", "README.md", "AGENTS.md", "llms.txt"}
-    allowed |= {"server.json", "LICENSE", "pyproject.toml", "PKG-INFO", ".gitignore"}
+    allowed |= {"server.json", "LICENSE", "NOTICE", "pyproject.toml", "PKG-INFO", ".gitignore"}
     assert top <= allowed, top
     assert not [n for n in names if n.endswith((".pem", ".key", ".db", ".sqlite", ".ps1"))]

@@ -66,6 +66,20 @@ To run the repository code instead, the arguments are
 Set the three paths: by default AMR writes its database and its signing key in the
 current directory of the client. Keep the `.pem` private key out of version control.
 
+**Give each side only its own tools.** An agent that can create, sign or revoke its own
+mandate authorizes itself, and the mandate then proves nothing. Set `AMR_TOOL_PROFILE`
+in the `env` block of each client, all pointing at the same `AMR_DB_PATH`:
+
+| `AMR_TOOL_PROFILE` | Who runs it | Tools |
+|---|---|---|
+| `principal` | the person or body that grants mandates | create, sign, revoke, contest, prove (`create_mandate`, `register_principal_key`, `revoke_mandate`, `contest_action`, `get_proof`, `export_insurer_dossier`, ...) |
+| `agent` | the agent that acts under a mandate | `verify_mandate`, `issue_action_token`, `log_action`, `issue_mandate_attestation`, `get_registry_public_key`; `create_mandate` for sub-mandates under its own mandate only |
+| `receiver` | a third party the agent acts upon | `check_action_token`, `get_registry_public_key` |
+| `full` (default) | tests and single-user setups | every tool |
+
+With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
+(`root_mandate_needs_principal`).
+
 **3. Reach a first verified mandate.** The tools, in the order an agent uses them:
 
 1. `create_mandate`: register who authorizes what (`principal_id`, `agent_id`, `scope`,
@@ -74,17 +88,28 @@ current directory of the client. Keep the `.pem` private key out of version cont
    enforces it).
 2. `verify_mandate(agent_id, action)`: `authorized: true` while the agent has an active
    mandate. It does not check `action` against the perimeter; `issue_action_token` does.
-3. `log_action(mandate_id, action)`: append an entry to the hash-chained journal.
-4. `issue_mandate_attestation` + `get_registry_public_key`: a signed document a third
+3. `issue_action_token(mandate_id, agent_id, action, audience, action_type,
+   action_metadata_json)`: before acting, the agent asks for a signed token. Under a
+   perimeter, `action_type` is required (e.g. `"invoice.pay"`), and an amount goes in
+   `action_metadata_json` as a decimal string: `'{"amount": "120", "currency": "EUR"}'`.
+   Outside the perimeter or above a ceiling the answer is `denied: true` with
+   `reason: "action_out_of_scope"` and a `detail` (`forbidden:agent.create`,
+   `amount_above_limit:500 EUR`, ...). No token, no action. The receiver checks the token
+   with `check_action_token` (profile `receiver`).
+4. `log_action(mandate_id, action)`: append an entry to the hash-chained journal. Logging
+   is a statement by the agent's operator, not a check: it is not tied to a token, so put
+   the token's `jti` in `evidence` to link the two.
+5. `issue_mandate_attestation` + `get_registry_public_key`: a signed document a third
    party checks offline with `python -m amr.verify_attestation`.
-5. `revoke_mandate(mandate_id, reason)`: the stop button; `verify_mandate` then answers
-   `authorized: false`. Tokens and attestations already issued stay valid until they
-   expire, except for a receiver that re-checks the token with `check_action_token`.
-6. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
+6. `revoke_mandate(mandate_id, reason)`: the stop button. That mandate then issues no
+   token, and `verify_mandate` answers `authorized: false` unless the agent holds another
+   active mandate. Tokens and attestations already issued stay valid until they expire,
+   except for a receiver that re-checks the token with `check_action_token`.
+7. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
    If the agent already did something it should not have, `contest_action(mandate_id,
    action_id, reason, response_days)` records that the act is disputed, and
    `list_action_contests` reminds the deadline the operator chose.
-7. `report_issue(title, description, version, context)`: report a problem with AMR
+8. `report_issue(title, description, version, context)`: report a problem with AMR
    itself. Without `AMR_ISSUE_TOKEN` it makes no network call and returns a pre-filled
    link to open; with it, it files the issue on GitHub. See
    [`docs/report-issue-spec.md`](https://github.com/JC7333/amr/blob/main/docs/report-issue-spec.md).
@@ -309,10 +334,11 @@ file. Existing mandates and their hashes are unchanged; issuances are logged in 
 new append-only table, `issued_attestations` (schema v5). See
 `docs/mandate-attestation-spec.md`.
 
-### Public registry: online verification without an account
+### Public registry: a verification point the operator hosts (no account for the receiver)
 
 AMR runs over stdio next to each operator, so nobody else can query it. The public
-registry is a separate, read-only verification point: the operator exports a **signed
+registry is a separate, read-only verification point that each operator hosts on its own
+domain (this repository deploys none, and mandatia.eu hosts none): the operator exports a **signed
 snapshot** of the registry, and a small WSGI application (standard library only)
 serves it. A receiver checks a mandate identifier or pastes an attestation, in a
 browser (HTML) or from a script (JSON), with no account.
@@ -345,7 +371,7 @@ AMR started as a **mandate registry** — it stores, verifies, and audits mandat
 
 The problem: if the mandate check is a voluntary call, agents skip it. The system degrades to advisory compliance within weeks of real-world deployment.
 
-AMR now provides **structural enforcement**: it is the layer that issues execution authorizations (`issue_action_token`). No valid mandate → no authorization → no action possible. The system refuses to work without the mandate — not because someone recommends checking, but because the architecture makes it impossible to bypass.
+AMR now provides **structural enforcement**: it is the layer that issues execution authorizations (`issue_action_token`). No valid mandate → no authorization → no action possible. The system refuses to work without the mandate — not because someone recommends checking, but because the receiver accepts no action without a token the registry signed.
 
 | Layer | What it does | Status |
 |---|---|---|
@@ -540,6 +566,44 @@ check the action against the perimeter: `issue_action_token` does.
   "expires_at": "2026-05-13T20:00:00+00:00"
 }
 ```
+
+---
+
+### `issue_action_token`
+
+The hard-stop. Before acting, the agent asks the registry for a signed token (JWS, EdDSA).
+It is issued only if the mandate and every mandate above it are active and unexpired, and
+the action fits the perimeter at every level: allowed, not forbidden, under the amount
+ceiling per action and over the period. No token, no action: the receiver checks the token
+offline with the registry's public key, or with `check_action_token` when it must know the
+mandate still stands at the moment it acts.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `mandate_id` | str | UUID of the mandate the agent invokes |
+| `agent_id` | str | Must be the mandate's `agent_id` |
+| `action` | str | Description of the action. E.g. `"Pay invoice FAC-001"` |
+| `audience` | str | Where the token will be presented. E.g. `"platform:payments"` |
+| `action_type` | str \| null | Dotted type checked against the perimeter (required under one). E.g. `"invoice.pay"` |
+| `action_metadata_json` | str | JSON object as a string. An amount is a decimal string: `'{"amount": "120", "currency": "EUR"}'` |
+| `lifetime_override_seconds` | int \| null | Shorter lifetime (never longer than the default, the mandate or a risk class) |
+
+**Returns** (issued):
+```json
+{"token": "eyJhbGciOiJFZERTQSIs...", "jti": "ab2331ad-...", "expires_at": "2026-11-09T20:17:02+00:00", "key_id": "f37c94e3eb51d1d4"}
+```
+
+**Returns** (refused):
+```json
+{"denied": true, "reason": "action_out_of_scope", "detail": "amount_above_limit:500 EUR", "mandate_id": "...", "refused_by": "..."}
+```
+
+Other reasons: `mandate_status_revoked`, `mandate_expired`, `agent_mismatch`,
+`action_type_required`, `invalid_input`; perimeter details include `forbidden:<type>`,
+`not_allowed:<type>`, `amount_required`, `currency_mismatch:<code>`. See
+[`docs/token-issuance-spec.md`](https://github.com/JC7333/amr/blob/main/docs/token-issuance-spec.md).
 
 ---
 
@@ -896,7 +960,7 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                       PROOF PACK (JSON)                             │
 │  mandate + actions + chain_integrity + compliance_notes             │
-│  Ready for regulatory audit, eIDAS submission, or archival          │
+│  Ready for an audit, an insurer, or archival                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -912,7 +976,9 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 
 4. **SHA-256 cryptographic chain** — Each mandate and each action log entry is linked to the previous one via a SHA-256 hash (git-style). Any tampering invalidates all subsequent hashes, making the trail tamper-evident.
 
-5. **stdio transport only** — AMR runs as a local MCP server over stdio. No listening port, no inbound network exposure, no outbound HTTP from tools, with one opt-in exception: `report_issue` sends one HTTPS request to the GitHub API, and only when the operator has set `AMR_ISSUE_TOKEN`. The attack surface is minimal.
+5. **stdio transport only** — AMR runs as a local MCP server over stdio. No listening port, no inbound network exposure, no outbound HTTP from tools, with two opt-in exceptions: `report_issue` sends one HTTPS request to the GitHub API, only when the operator has set `AMR_ISSUE_TOKEN`; `register_principal_key` reads the DID document of a `did:web` principal, only when the operator has set `AMR_DID_WEB_RESOLVE=1`. The attack surface is minimal.
+
+6. **One profile per side** — `AMR_TOOL_PROFILE` keeps the principal's tools (grant, sign, revoke) away from the agent's server, so an agent cannot authorize itself.
 
 ---
 
@@ -999,6 +1065,9 @@ tests/
 | `AMR_DB_PATH` | `amr_mandates.db` | Path to the SQLite database file |
 | `AMR_LOG_LEVEL` | `INFO` | Logging verbosity |
 | `AMR_SERVER_NAME` | `Agent Mandate Registry` | MCP server display name |
+| `AMR_TOOL_PROFILE` | `full` | Tools this server exposes: `principal`, `agent`, `receiver` or `full` (see Quickstart) |
+| `AMR_SIGNING_KEY_PATH` | `amr_signing_key.pem` | Registry Ed25519 private key, created on first use; keep it out of version control |
+| `AMR_TOKEN_ISSUER` | `amr://localhost` | `iss` of tokens and attestations; set it to an identifier of your registry (e.g. `https://registry.example.org`) so receivers can tell registries apart |
 | `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
 | `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
@@ -1016,7 +1085,7 @@ tests/
 
 Apache License 2.0 — See [LICENSE](https://github.com/JC7333/amr/blob/main/LICENSE) for full terms.
 
-Free to use in commercial products. Compatible with EU AI Act open-source provisions.
+Free to use, including in commercial products.
 
 ---
 

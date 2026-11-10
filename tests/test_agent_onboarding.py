@@ -7,13 +7,15 @@ from pathlib import Path
 
 import pytest
 
+from amr.server import TOOLS
+
 ROOT = Path(__file__).resolve().parent.parent
 SERVER = (ROOT / "src" / "amr" / "server.py").read_text(encoding="utf-8")
 AGENTS = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 LLMS = (ROOT / "llms.txt").read_text(encoding="utf-8")
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
-REGISTERED_TOOLS = set(re.findall(r"^mcp\.tool\(\)\((\w+)\)", SERVER, flags=re.MULTILINE))
+REGISTERED_TOOLS = {tool.__name__ for tool in TOOLS}
 INSTALL = 'uvx --from git+https://github.com/JC7333/amr amr'
 
 

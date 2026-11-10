@@ -724,7 +724,7 @@ def test_tools_are_registered() -> None:
         encoding="utf-8"
     )
     for tool in ("contest_action", "prepare_contest_signature", "list_action_contests"):
-        assert f"mcp.tool()({tool})" in server
+        assert f"    {tool}," in server.split("TOOLS = (", 1)[1].split(")", 1)[0]
 
 
 async def test_edited_unsigned_contest_is_detected(temp_db: Path) -> None:

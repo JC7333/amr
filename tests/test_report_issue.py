@@ -396,7 +396,7 @@ def test_settings_refuse_odd_repository(monkeypatch: pytest.MonkeyPatch, reposit
 
 def test_server_registers_report_issue() -> None:
     server = (ROOT / "src" / "amr" / "server.py").read_text(encoding="utf-8")
-    assert "mcp.tool()(report_issue)" in server
+    assert "    report_issue," in server.split("TOOLS = (", 1)[1].split(")", 1)[0]
 
 
 NETWORK_MODULES = (

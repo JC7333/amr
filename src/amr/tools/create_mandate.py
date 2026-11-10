@@ -398,6 +398,15 @@ async def create_mandate(
             perimeter=perimeter,
         )
 
+        # An agent may delegate inside its own mandate, never grant itself a root one.
+        if settings.tool_profile == "agent" and mandate_data.parent_mandate_id is None:
+            return _error(
+                "root_mandate_needs_principal",
+                "this server runs the agent profile: an agent may only create a sub-mandate "
+                "under its own mandate (parent_mandate_id); a root mandate is granted from a "
+                "server running the principal profile",
+            )
+
         organ_decision = organ_decision_from_metadata(mandate_data.metadata)
         if organ_decision is not None:
             # A body decides for the root principal only; an agent cannot declare one for
