@@ -284,7 +284,13 @@ that says in plain words what each action type means. The first one,
 `agent-sante-rgpd`, covers an assistant agent in a medical practice: it may read the
 record, handle the schedule, draft letters and patient messages for a human to send,
 and order supplies under a ceiling; it may never prescribe, diagnose, change or export
-the record, contact a patient itself, or create a sub-agent.
+the record, contact a patient itself, or create a sub-agent. The second one,
+`agent-rh-recrutement`, covers an agent assisting a recruiter: it may read the
+applications, draft a job posting, propose a shortlist to a human recruiter, propose
+and book interview slots and draft candidate messages; it may never reject or select a candidate,
+send an offer, a rejection or any candidate message, recognize emotions, categorize
+people from biometric data, infer sensitive data, export candidate data, or create a
+sub-agent. Every decision to reject, select or make an offer stays with a human.
 
 ```python
 from amr.templates import get_template
@@ -299,14 +305,16 @@ sealed and is what the token issuer enforces. Templates only fill in existing
 `create_mandate` arguments: existing mandates and their hashes are unchanged. They are a
 Python API for now (no MCP tool lists them yet). Like every perimeter, the template
 holds only if the agent cannot call `create_mandate` itself (see the deployment rule
-above). See `docs/templates/agent-sante-rgpd.md`.
+above). See `docs/templates/agent-sante-rgpd.md` and
+`docs/templates/agent-rh-recrutement.md`.
 
 Each template published here is a provisional sector baseline. Its `stewardship` block
 says so (status `provisional` until a body of the sector takes it over, who holds it,
 the practitioner reviewers recorded: none so far); the block is part of the template
 digest and its status is copied into the mandate metadata as `template_status`. The
 template's risk classes are minimum thresholds (for `agent-sante-rgpd`, version 1.2.0:
-an order token lives at most 30 seconds and asks for a registry re-check):
+an order token lives at most 30 seconds and asks for a registry re-check;
+`agent-rh-recrutement` 1.0.0 sets none, since none of its allowed actions is irreversible):
 `create_mandate_kwargs(risk_classes=[...])` may tighten them or add classes, and refuses
 with a `ValueError` anything that would loosen them.
 
@@ -1006,7 +1014,7 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 
 | Status | Features |
 |---|---|
-| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · sector template (health) · MCP SDK v1 and v2 · PyPI package `mandatia` |
+| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · sector templates (health, recruitment) · MCP SDK v1 and v2 · PyPI package `mandatia` |
 | **Planned** | PDF Proof Pack export · remote transport for MCP clients · PostgreSQL backend · multi-tenant support · REST API alongside MCP · eIDAS 2.0 qualified electronic signatures · cross-border mandate recognition · webhook notifications · dashboard and alerting |
 
 ---
@@ -1061,7 +1069,7 @@ src/amr/
 ├── pades.py           # offline check of a PAdES signature on that PDF (pyHanko)
 ├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
-└── templates/         # Sector mandate templates (agent-sante-rgpd)
+└── templates/         # Sector mandate templates (agent-sante-rgpd, agent-rh-recrutement)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)
 └── test_*.py                # One file per tool or feature (`uv run pytest -q`)
