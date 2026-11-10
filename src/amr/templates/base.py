@@ -9,7 +9,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from amr.models.organ_decision import ORGAN_DECISION_KEY, OrganDecision
-from amr.models.perimeter import Perimeter, RiskClass, parse_amount, pattern_reaches
+from amr.models.perimeter import (
+    MAX_RISK_CLASSES,
+    Perimeter,
+    RiskClass,
+    parse_amount,
+    pattern_reaches,
+)
 
 TEMPLATE_ID_RE = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 VERSION_RE = r"^[0-9]+\.[0-9]+\.[0-9]+$"
@@ -297,6 +303,11 @@ class MandateTemplate(BaseModel):
             if floor is not None and rc is not floor:
                 self._check_not_looser(rc, floor)
             merged[rc.name] = rc
+        if len(merged) > MAX_RISK_CLASSES:
+            raise ValueError(
+                f"at most {MAX_RISK_CLASSES} risk classes, template classes included "
+                f"({len(merged)} asked)"
+            )
         return tuple(sorted(merged.values(), key=lambda rc: rc.name))
 
     def _check_not_looser(self, rc: RiskClass, floor: RiskClass) -> None:

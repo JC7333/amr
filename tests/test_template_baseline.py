@@ -191,6 +191,10 @@ def test_bad_risk_class_input_is_refused(sante: MandateTemplate) -> None:
         sante.create_mandate_kwargs(risk_classes=FLOOR)  # type: ignore[arg-type]
     with pytest.raises(ValueError):
         sante.create_mandate_kwargs(risk_classes=[{**FLOOR, "max_token_seconds": 0}])
+    many = [{"name": f"c{i}", "actions": ["doc.read"], "max_token_seconds": 5} for i in range(20)]
+    with pytest.raises(ValueError, match="at most 20 risk classes, template classes included"):
+        sante.create_mandate_kwargs(risk_classes=many)
+    assert len(sante.create_mandate_kwargs(risk_classes=many[:19])["risk_classes"]) == 20
 
 
 def test_a_template_without_classes_accepts_new_ones() -> None:

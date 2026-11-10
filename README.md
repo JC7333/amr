@@ -293,8 +293,8 @@ template = get_template("agent-sante-rgpd")
 await create_mandate(..., **template.create_mandate_kwargs())
 ```
 
-The mandate records `template_id`, `template_version` and `template_digest` in its
-metadata. That metadata is a label, not sealed into the chain hash; the perimeter is
+The mandate records `template_id`, `template_version`, `template_digest` and, when the
+template has a stewardship block, `template_status` in its metadata. That metadata is a label, not sealed into the chain hash; the perimeter is
 sealed and is what the token issuer enforces. Templates only fill in existing
 `create_mandate` arguments: existing mandates and their hashes are unchanged. They are a
 Python API for now (no MCP tool lists them yet). Like every perimeter, the template
