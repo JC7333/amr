@@ -2,14 +2,14 @@
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from amr.models.organ_decision import ORGAN_DECISION_KEY, OrganDecision
-from amr.models.perimeter import Perimeter, parse_amount, pattern_reaches
+from amr.models.perimeter import Perimeter, RiskClass, parse_amount, pattern_reaches
 
 TEMPLATE_ID_RE = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 VERSION_RE = r"^[0-9]+\.[0-9]+\.[0-9]+$"
@@ -25,6 +25,56 @@ class LegalReference(BaseModel):
     status: Literal["to_verify", "verified"] = "to_verify"
 
 
+class Stewardship(BaseModel):
+    """Who holds a template (the sector baseline) and how the sector may take it over.
+
+    ``status`` is ``provisional`` while the registry publishes the baseline itself, and
+    ``sector`` once a body of the sector holds it. ``reviewers`` lists the practitioners
+    whose review has actually been recorded: it stays empty until then, and nothing in
+    the code fills it in.
+    """
+
+    model_config = {"extra": "forbid", "frozen": True}
+
+    status: Literal["provisional", "sector"]
+    held_by: str = Field(..., min_length=1, max_length=200)
+    handover: str = Field(..., min_length=1, max_length=1000)
+    reviewers: tuple[str, ...] = ()
+
+    @field_validator("held_by", "handover")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("reviewers")
+    @classmethod
+    def _reviewers_are_named(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not name.strip() or len(name) > 200 for name in value):
+            raise ValueError("every reviewer needs a name of 1 to 200 characters")
+        if len(set(value)) != len(value):
+            raise ValueError("reviewers must be unique")
+        return value
+
+    def canonical(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "held_by": self.held_by,
+            "handover": self.handover,
+            "reviewers": list(self.reviewers),
+        }
+
+
+def _reach_covers(outer: str, inner: str) -> bool:
+    """True if every action type that ``inner`` reaches (broad match) ``outer`` reaches."""
+    if outer == "*":
+        return True
+    if inner == "*":
+        return False
+    return pattern_reaches(outer, inner.removesuffix(".*"))
+
+
 class MandateTemplate(BaseModel):
     """A ready-made perimeter for one kind of agent. Immutable once defined.
 
@@ -35,6 +85,11 @@ class MandateTemplate(BaseModel):
     ``organ_decision`` says whether a mandate built from the template records the
     decision of a body (committee, board) that authorized the agent: ``none`` (not
     asked), ``optional`` (recorded when given) or ``required`` (refused without it).
+
+    ``stewardship`` says who holds the template as a sector baseline, whether it is still
+    provisional and which practitioners reviewed it. The perimeter's ``risk_classes`` are
+    the baseline's minimum thresholds per risk class: a mandate built from the template
+    may tighten them, never loosen them (see ``create_mandate_kwargs``).
     """
 
     model_config = {"extra": "forbid", "frozen": True}
@@ -50,6 +105,7 @@ class MandateTemplate(BaseModel):
     legal_references: tuple[LegalReference, ...] = ()
     notes: tuple[str, ...] = ()
     organ_decision: Literal["none", "optional", "required"] = "none"
+    stewardship: Stewardship | None = None
 
     @field_validator("actions", mode="after")
     @classmethod
@@ -94,8 +150,12 @@ class MandateTemplate(BaseModel):
     # --- serialization -------------------------------------------------------------
 
     def canonical(self) -> dict[str, Any]:
-        """Canonical dict, stable across runs (used for the digest and the docs)."""
-        return {
+        """Canonical dict, stable across runs (used for the digest and the docs).
+
+        ``stewardship`` appears only when set, so a template without it keeps its exact
+        form and digest.
+        """
+        canonical: dict[str, Any] = {
             "template_id": self.template_id,
             "version": self.version,
             "title": self.title,
@@ -108,6 +168,9 @@ class MandateTemplate(BaseModel):
             "notes": list(self.notes),
             "organ_decision": self.organ_decision,
         }
+        if self.stewardship is not None:
+            canonical["stewardship"] = self.stewardship.canonical()
+        return canonical
 
     def to_json(self, indent: int | None = None) -> str:
         """Canonical JSON (sorted keys). Compact unless ``indent`` is given."""
@@ -131,6 +194,7 @@ class MandateTemplate(BaseModel):
         max_amount: str | None = None,
         metadata: dict[str, str] | None = None,
         organ_decision: OrganDecision | None = None,
+        risk_classes: Sequence[RiskClass | Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Return the perimeter arguments and metadata to pass to ``create_mandate``.
 
@@ -140,6 +204,14 @@ class MandateTemplate(BaseModel):
         are reserved. ``organ_decision`` records the decision of the body that authorized
         the agent (allowed when the template's ``organ_decision`` is not ``none``,
         mandatory when it is ``required``); create_mandate seals it into the chain hash.
+
+        ``risk_classes`` lets the principal tighten the template's minimum thresholds:
+        a class with the name of a template class replaces it only if it is at least as
+        strict (no longer ``max_token_seconds``, reaches every action the template class
+        reaches, keeps ``registry_check``); a class with a new name is added. Anything
+        looser is refused with a ValueError. Template classes not named are kept as is.
+        When the template has a stewardship block, its status is recorded as
+        ``template_status``.
 
         The ``template_*`` metadata is a label: like other mandate metadata (except the
         ``organ_decision`` key, which create_mandate seals) it is not sealed
@@ -183,8 +255,10 @@ class MandateTemplate(BaseModel):
             if perimeter.period_max_amount is not None
             else {}
         )
-        risk = (
-            {"risk_classes": canonical["risk_classes"]} if perimeter.risk_classes else {}
+        classes = self._hardened_risk_classes(risk_classes or ())
+        risk = {"risk_classes": [rc.canonical() for rc in classes]} if classes else {}
+        status = (
+            {"template_status": self.stewardship.status} if self.stewardship is not None else {}
         )
         return {
             **period,
@@ -201,5 +275,46 @@ class MandateTemplate(BaseModel):
                 "template_id": self.template_id,
                 "template_version": self.version,
                 "template_digest": self.digest(),
+                **status,
             },
         }
+
+    def _hardened_risk_classes(
+        self, given: Sequence[RiskClass | Mapping[str, Any]]
+    ) -> tuple[RiskClass, ...]:
+        """The template's risk classes, tightened by ``given``; refuse any loosening."""
+        if isinstance(given, (str, bytes, Mapping)):
+            raise ValueError("risk_classes must be a list of risk classes")
+        parsed = tuple(
+            rc if isinstance(rc, RiskClass) else RiskClass.model_validate(rc) for rc in given
+        )
+        names = [rc.name for rc in parsed]
+        if len(set(names)) != len(names):
+            raise ValueError("risk class names must be unique")
+        merged = {rc.name: rc for rc in self.perimeter.risk_classes}
+        for rc in parsed:
+            floor = merged.get(rc.name)
+            if floor is not None and rc is not floor:
+                self._check_not_looser(rc, floor)
+            merged[rc.name] = rc
+        return tuple(sorted(merged.values(), key=lambda rc: rc.name))
+
+    def _check_not_looser(self, rc: RiskClass, floor: RiskClass) -> None:
+        where = (
+            f"risk class {rc.name!r} of template {self.template_id!r}: a mandate may "
+            "tighten the template's thresholds, never loosen them"
+        )
+        if rc.max_token_seconds > floor.max_token_seconds:
+            raise ValueError(
+                f"{where} ({rc.max_token_seconds} s asked, template minimum threshold "
+                f"{floor.max_token_seconds} s)"
+            )
+        if floor.registry_check and not rc.registry_check:
+            raise ValueError(f"{where} (registry_check cannot be dropped)")
+        uncovered = sorted(
+            action
+            for action in floor.actions
+            if not any(_reach_covers(pattern, action) for pattern in rc.actions)
+        )
+        if uncovered:
+            raise ValueError(f"{where} (actions left out: {uncovered})")

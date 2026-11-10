@@ -301,6 +301,15 @@ Python API for now (no MCP tool lists them yet). Like every perimeter, the templ
 holds only if the agent cannot call `create_mandate` itself (see the deployment rule
 above). See `docs/templates/agent-sante-rgpd.md`.
 
+Each template published here is a provisional sector baseline. Its `stewardship` block
+says so (status `provisional` until a body of the sector takes it over, who holds it,
+the practitioner reviewers recorded: none so far); the block is part of the template
+digest and its status is copied into the mandate metadata as `template_status`. The
+template's risk classes are minimum thresholds (for `agent-sante-rgpd`, version 1.2.0:
+an order token lives at most 30 seconds and asks for a registry re-check):
+`create_mandate_kwargs(risk_classes=[...])` may tighten them or add classes, and refuses
+with a `ValueError` anything that would loosen them.
+
 When a body (committee, board) authorized the agent, the mandate can record its decision
 (`organ_decision`: body, title, date, optional reference, designated persons or roles);
 the health template accepts it, `create_mandate` seals it into the chain hash (root
