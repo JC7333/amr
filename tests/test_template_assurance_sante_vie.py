@@ -112,12 +112,8 @@ async def _token(mandate_id: str, action_type: str) -> dict:
 
 def test_registry_lists_the_template(insurance: MandateTemplate) -> None:
     ids = list_templates()
-    assert ids == [
-        AGENT_ASSURANCE_SANTE_VIE_ID,
-        AGENT_CREDIT_ID,
-        AGENT_RH_RECRUTEMENT_ID,
-        AGENT_SANTE_RGPD_ID,
-    ]
+    assert AGENT_ASSURANCE_SANTE_VIE_ID in ids
+    assert {AGENT_CREDIT_ID, AGENT_RH_RECRUTEMENT_ID, AGENT_SANTE_RGPD_ID} <= set(ids)
     assert insurance.template_id == "agent-assurance-sante-vie"
     assert insurance.sector == "insurance"
     assert insurance.version == "1.0.0"
@@ -325,5 +321,8 @@ def test_readme_lists_the_template() -> None:
     text = " ".join(README.read_text(encoding="utf-8").split())
     assert "`agent-assurance-sante-vie`, covers an agent assisting a life or health" in text
     assert "Every decision on an application stays with a human." in text
-    assert "sector templates (health, recruitment, credit, life and health insurance)" in text
+    assert (
+        "sector templates (health, recruitment, credit, life and health insurance, "
+        "customer support)" in text
+    )
     assert "`docs/templates/agent-assurance-sante-vie.md`" in text

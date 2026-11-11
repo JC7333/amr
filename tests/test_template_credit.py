@@ -298,7 +298,10 @@ def test_readme_lists_the_template() -> None:
     text = " ".join(README.read_text(encoding="utf-8").split())
     assert "`agent-credit`, covers an agent assisting a credit analyst" in text
     assert "Every decision on a credit stays with a human." in text
-    assert "sector templates (health, recruitment, credit, life and health insurance)" in text
+    assert (
+        "sector templates (health, recruitment, credit, life and health insurance, "
+        "customer support)" in text
+    )
     assert "`docs/templates/agent-credit.md`" in text
 
 
