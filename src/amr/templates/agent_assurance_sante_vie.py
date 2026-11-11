@@ -65,9 +65,9 @@ AGENT_ASSURANCE_SANTE_VIE = MandateTemplate(
         "insured_message.draft": "Draft a message to the insured person, sent only by a "
         "human.",
         "application.accept": "Forbidden: accept an application; a human decides.",
-        "application.refuse": "Forbidden: refuse an application or add an exclusion; a "
-        "human decides.",
-        "premium.set": "Forbidden: set the final premium.",
+        "application.refuse": "Forbidden: refuse or postpone an application, or add an "
+        "exclusion; a human decides.",
+        "premium.set": "Forbidden: set the final premium, including a surcharge.",
         "insured_message.send": "Forbidden: send any message to the insured person "
         "without a human.",
         "genetic_test_result.use": "Forbidden: ask for, read or use the result of a "
@@ -112,13 +112,15 @@ AGENT_ASSURANCE_SANTE_VIE = MandateTemplate(
         ),
         LegalReference(
             reference="Code de la santé publique (FR), Art. L1141-5",
-            topic="Right to be forgotten: delay after the end of treatment for cancer or "
-            "hepatitis C beyond which no medical information on it may be collected.",
+            topic="Insurance covering a loan under the AERAS convention (Art. L1141-2): delay "
+            "after the end of treatment for cancer or hepatitis C beyond which no medical "
+            "information on it may be collected.",
         ),
         LegalReference(
             reference="Code des assurances (FR), Art. L113-2-1",
-            topic="Borrower insurance: no health questionnaire or medical examination "
-            "within the insured amount and age limits set by the article.",
+            topic="Borrower insurance for home loans: no health information or medical "
+            "examination may be asked within the insured amount and age limits set by the "
+            "article.",
         ),
         LegalReference(
             reference="Code de la mutualité (FR), Art. L112-1",
@@ -139,8 +141,9 @@ AGENT_ASSURANCE_SANTE_VIE = MandateTemplate(
         "human decision: the reviewer must be able to depart from it.",
         "The agent names the action type it asks a token for: the system that receives "
         "the token must map each real operation to the right type (a draft that is "
-        "actually sent is insured_message.send; a premium recorded in the policy system "
-        "is premium.set).",
+        "actually sent is insured_message.send; a premium or a surcharge recorded in the "
+        "policy system is premium.set; an exclusion or a postponement is "
+        "application.refuse).",
         "No allowed action is irreversible, so the template sets no risk class; a "
         "mandate may add one.",
         "Delegation is off for mandates under this one. The agent must not have access to "

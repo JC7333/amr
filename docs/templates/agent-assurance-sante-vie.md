@@ -47,7 +47,8 @@ its decision (`organ_decision`), as described for the health template in
 
 - The agent names the action type it asks a token for. The system that receives the
   token must map each real operation to the right type (a draft that is actually sent is
-  `insured_message.send`; a premium recorded in the policy system is `premium.set`).
+  `insured_message.send`; a premium or a surcharge recorded in the policy system is
+  `premium.set`; an exclusion or a postponement is `application.refuse`).
 - AMR checks action types, not content: it does not read a risk assessment or a proposed
   premium to see whether its reasons are lawful, and it does not check which data the
   agent used. Forbidding `genetic_test_result.use` refuses a token for that action type;
@@ -104,14 +105,14 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   "actions": {
     "agent.create": "Forbidden: create a sub-agent (delegation is off as well).",
     "application.accept": "Forbidden: accept an application; a human decides.",
-    "application.refuse": "Forbidden: refuse an application or add an exclusion; a human decides.",
+    "application.refuse": "Forbidden: refuse or postpone an application, or add an exclusion; a human decides.",
     "contract_documents.draft": "Draft the contract documents for a human to review.",
     "genetic_test_result.use": "Forbidden: ask for, read or use the result of a genetic test.",
     "health_data.export": "Forbidden: export or transfer health data.",
     "insured_message.draft": "Draft a message to the insured person, sent only by a human.",
     "insured_message.send": "Forbidden: send any message to the insured person without a human.",
     "premium.propose": "Propose a reasoned premium to a human underwriter, who decides.",
-    "premium.set": "Forbidden: set the final premium.",
+    "premium.set": "Forbidden: set the final premium, including a surcharge.",
     "risk_assessment.draft": "Draft a risk assessment for a human underwriter.",
     "underwriting_file.read": "Read the underwriting file and the documents the applicant provided."
   },
@@ -155,12 +156,12 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     {
       "reference": "Code de la santé publique (FR), Art. L1141-5",
       "status": "to_verify",
-      "topic": "Right to be forgotten: delay after the end of treatment for cancer or hepatitis C beyond which no medical information on it may be collected."
+      "topic": "Insurance covering a loan under the AERAS convention (Art. L1141-2): delay after the end of treatment for cancer or hepatitis C beyond which no medical information on it may be collected."
     },
     {
       "reference": "Code des assurances (FR), Art. L113-2-1",
       "status": "to_verify",
-      "topic": "Borrower insurance: no health questionnaire or medical examination within the insured amount and age limits set by the article."
+      "topic": "Borrower insurance for home loans: no health information or medical examination may be asked within the insured amount and age limits set by the article."
     },
     {
       "reference": "Code de la mutualité (FR), Art. L112-1",
@@ -174,7 +175,7 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     "Claims handling is not part of this template.",
     "The rules differ between insurers (Code des assurances), mutual insurers (Code de la mutualité) and provident institutions (Code de la sécurité sociale): the principal checks the ones that apply to it.",
     "A human review that only signs off the agent's proposal may not count as a human decision: the reviewer must be able to depart from it.",
-    "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is insured_message.send; a premium recorded in the policy system is premium.set).",
+    "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is insured_message.send; a premium or a surcharge recorded in the policy system is premium.set; an exclusion or a postponement is application.refuse).",
     "No allowed action is irreversible, so the template sets no risk class; a mandate may add one.",
     "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
     "When a body authorized the agent, record its decision (organ_decision) with the persons or roles it designates. AMR records what the principal declares: it does not check that the decision exists or that the people named are who they say."

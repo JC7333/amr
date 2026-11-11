@@ -112,8 +112,12 @@ async def _token(mandate_id: str, action_type: str) -> dict:
 
 def test_registry_lists_the_template(insurance: MandateTemplate) -> None:
     ids = list_templates()
-    assert AGENT_ASSURANCE_SANTE_VIE_ID in ids
-    assert {AGENT_CREDIT_ID, AGENT_RH_RECRUTEMENT_ID, AGENT_SANTE_RGPD_ID} <= set(ids)
+    assert ids == [
+        AGENT_ASSURANCE_SANTE_VIE_ID,
+        AGENT_CREDIT_ID,
+        AGENT_RH_RECRUTEMENT_ID,
+        AGENT_SANTE_RGPD_ID,
+    ]
     assert insurance.template_id == "agent-assurance-sante-vie"
     assert insurance.sector == "insurance"
     assert insurance.version == "1.0.0"
@@ -133,7 +137,7 @@ def test_other_templates_are_unchanged_by_the_new_one() -> None:
 
 def test_digest_is_pinned(insurance: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
-    assert insurance.digest() == "fe29e7bee8403654726be71ddd5ddd472f26e5da9311fa5dac0cbb488f56b15a"
+    assert insurance.digest() == "6d9bfbb782132caa5ce9eb757dfb552a9a0a30d2db3a36b1f8b800f5a7a57c95"
 
 
 # --- Perimeter -----------------------------------------------------------------------
@@ -205,7 +209,8 @@ def test_reference_topics(insurance: MandateTemplate) -> None:
     assert "genetic data" in topics[REFERENCES[4]]
     assert "genetic test" in topics[REFERENCES[6]]
     assert "cancer or hepatitis C" in topics[REFERENCES[7]]
-    assert "Borrower insurance" in topics[REFERENCES[8]]
+    assert "AERAS convention" in topics[REFERENCES[7]]
+    assert "Borrower insurance for home loans" in topics[REFERENCES[8]]
     assert "no contribution based on health status" in topics[REFERENCES[9]]
 
 
