@@ -51,6 +51,7 @@ FORBIDDEN = (
 REFERENCES = (
     "Regulation (EU) 2024/1689 (AI Act), Annex III, point 5(b)",
     "Regulation (EU) 2024/1689 (AI Act), Art. 26",
+    "Regulation (EU) 2024/1689 (AI Act), Art. 27",
     "Regulation (EU) 2024/1689 (AI Act), Art. 86",
     "Regulation (EU) 2016/679 (GDPR), Art. 22",
     "Directive (EU) 2023/2225 (consumer credit), Art. 18, including Art. 18(8)",
@@ -121,7 +122,7 @@ def test_other_templates_are_unchanged_by_the_new_one() -> None:
 
 def test_digest_is_pinned(credit: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
-    assert credit.digest() == "f84e13212f776426cff8a3f62fff2485db9fc485f0600022085205c42e52bb78"
+    assert credit.digest() == "3a6d5d5df9ac2a7016a16544c1dd72cf2d6a7bcb6626bb3b82b1a573fda335a4"
 
 
 # --- Perimeter -----------------------------------------------------------------------
@@ -289,6 +290,7 @@ def test_doc_says_references_are_to_verify_and_not_compliance() -> None:
     assert "does not make a credit" in text
     assert "`forbidden:<type>`" in text
     assert "Fraud detection is not part of this template" in text
+    assert "Mortgage credit and credit to businesses have other texts" in " ".join(text.split())
     assert "does not check which data the agent used" in " ".join(text.split())
 
 
@@ -300,10 +302,11 @@ def test_readme_lists_the_template() -> None:
     assert "`docs/templates/agent-credit.md`" in text
 
 
-def test_reference_topics_name_the_application_date_and_the_fraud_exclusion(
+def test_reference_topics_name_the_date_the_impact_assessment_and_the_fraud_exclusion(
     credit: MandateTemplate,
 ) -> None:
     topics = {ref.reference: ref.topic for ref in credit.legal_references}
     assert "except systems used to detect financial fraud" in topics[REFERENCES[0]]
-    assert "Applied from 20 November 2026 (Art. 48(1))" in topics[REFERENCES[4]]
-    assert "human intervention" in topics[REFERENCES[4]]
+    assert "Applies from 20 November 2026 (Art. 48(1))" in topics[REFERENCES[5]]
+    assert "human intervention" in topics[REFERENCES[5]]
+    assert "Annex III, point 5(b)" in topics[REFERENCES[2]]

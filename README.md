@@ -294,7 +294,7 @@ sub-agent. Every decision to reject, select or make an offer stays with a human.
 third one, `agent-credit`, covers an agent assisting a credit analyst: it may read the
 credit application and the documents provided, draft a creditworthiness analysis,
 propose a reasoned decision to a human analyst and draft messages to the applicant; it
-may never grant or refuse a credit, set the final rate or amount, send any message to
+may never grant or refuse a credit, set the final rate, amount or duration, send any message to
 the applicant, execute a payment, export the credit file, or create a sub-agent. Every
 decision on a credit stays with a human. Fraud detection is not part of it.
 

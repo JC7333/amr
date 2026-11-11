@@ -21,6 +21,11 @@ chain hash. What is sealed, and enforced, is the perimeter itself.
 Fraud detection is not part of this template: the AI Act excludes systems used to detect
 financial fraud from its creditworthiness point (Annex III, point 5(b)).
 
+The legal references point to consumer credit to natural persons. Mortgage credit and
+credit to businesses have other texts, not listed here. A human review that only signs
+off the agent's proposal may not count as a human decision: the analyst must be able to
+depart from it.
+
 ## Provisional baseline
 
 This template is a **provisional** sector baseline (`stewardship` in the JSON below):
@@ -120,6 +125,11 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
       "topic": "Obligations of deployers of high-risk AI systems."
     },
     {
+      "reference": "Regulation (EU) 2024/1689 (AI Act), Art. 27",
+      "status": "to_verify",
+      "topic": "Fundamental rights impact assessment, to be performed before use by deployers of the high-risk systems of Annex III, point 5(b)."
+    },
+    {
       "reference": "Regulation (EU) 2024/1689 (AI Act), Art. 86",
       "status": "to_verify",
       "topic": "Right of a person affected by a decision taken on the basis of a high-risk AI system's output to obtain explanations from the deployer."
@@ -132,7 +142,7 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     {
       "reference": "Directive (EU) 2023/2225 (consumer credit), Art. 18, including Art. 18(8)",
       "status": "to_verify",
-      "topic": "Creditworthiness assessment; where it involves automated processing, the consumer's right to human intervention, an explanation and a review. Applied from 20 November 2026 (Art. 48(1))."
+      "topic": "Creditworthiness assessment; where it involves automated processing, the consumer's right to human intervention, an explanation and a review. Applies from 20 November 2026 (Art. 48(1)), through national transposing measures."
     },
     {
       "reference": "Code de la consommation (FR), Art. L312-16",
@@ -142,8 +152,10 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   ],
   "notes": [
     "Legal references are pointers to check, not legal advice.",
-    "Every decision on a credit (grant, refuse, final rate or amount) stays with a human: the agent proposes a decision, it does not decide.",
+    "Every decision on a credit (grant, refuse, final rate, amount or duration) stays with a human: the agent proposes a decision, it does not decide.",
     "Fraud detection is not part of this template.",
+    "The references point to consumer credit to natural persons; mortgage credit and credit to businesses have other texts, not listed here.",
+    "A human review that only signs off the agent's proposal may not count as a human decision: the reviewer must be able to depart from it.",
     "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is applicant_message.send; an approval recorded in the credit system is credit.grant).",
     "No allowed action is irreversible, so the template sets no risk class; a mandate may add one.",
     "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
@@ -178,7 +190,7 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     "reviewers": [],
     "status": "provisional"
   },
-  "summary": "Assist a credit analyst: read the credit application and the documents provided, draft a creditworthiness analysis, propose a reasoned decision to a human analyst, draft messages to the applicant for a human to send. Never grant or refuse a credit, set the final rate or amount, send any message to the applicant, execute a payment, export the credit file, or create a sub-agent.",
+  "summary": "Assist a credit analyst: read the credit application and the documents provided, draft a creditworthiness analysis, propose a reasoned decision to a human analyst, draft messages to the applicant for a human to send. Never grant or refuse a credit, set the final rate, amount or duration, send any message to the applicant, execute a payment, export the credit file, or create a sub-agent.",
   "template_id": "agent-credit",
   "title": "Credit analysis assistant agent (human decides on every credit)",
   "version": "1.0.0"

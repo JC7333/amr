@@ -7,7 +7,7 @@ rate or amount, send any message to the applicant itself, execute a payment, exp
 credit file, or create a sub-agent (delegation is off, and ``agent.create`` is
 forbidden).
 
-Every decision on a credit (grant, refuse, final rate or amount) stays with a human: the
+Every decision on a credit (grant, refuse, final rate, amount or duration) stays with a human: the
 agent proposes. No allowed action is irreversible, so the template sets no risk class; a
 mandate may add one (``create_mandate_kwargs(risk_classes=...)``). Fraud detection is not
 part of this template: the AI Act excludes it from the creditworthiness point of
@@ -33,7 +33,7 @@ AGENT_CREDIT = MandateTemplate(
         "Assist a credit analyst: read the credit application and the documents provided, "
         "draft a creditworthiness analysis, propose a reasoned decision to a human "
         "analyst, draft messages to the applicant for a human to send. Never grant or "
-        "refuse a credit, set the final rate or amount, send any message to the "
+        "refuse a credit, set the final rate, amount or duration, send any message to the "
         "applicant, execute a payment, export the credit file, or create a sub-agent."
     ),
     perimeter=Perimeter(
@@ -87,6 +87,11 @@ AGENT_CREDIT = MandateTemplate(
             topic="Obligations of deployers of high-risk AI systems.",
         ),
         LegalReference(
+            reference="Regulation (EU) 2024/1689 (AI Act), Art. 27",
+            topic="Fundamental rights impact assessment, to be performed before use by "
+            "deployers of the high-risk systems of Annex III, point 5(b).",
+        ),
+        LegalReference(
             reference="Regulation (EU) 2024/1689 (AI Act), Art. 86",
             topic="Right of a person affected by a decision taken on the basis of a "
             "high-risk AI system's output to obtain explanations from the deployer.",
@@ -100,7 +105,8 @@ AGENT_CREDIT = MandateTemplate(
             "Art. 18(8)",
             topic="Creditworthiness assessment; where it involves automated processing, "
             "the consumer's right to human intervention, an explanation and a review. "
-            "Applied from 20 November 2026 (Art. 48(1)).",
+            "Applies from 20 November 2026 (Art. 48(1)), through national transposing "
+            "measures.",
         ),
         LegalReference(
             reference="Code de la consommation (FR), Art. L312-16",
@@ -110,9 +116,13 @@ AGENT_CREDIT = MandateTemplate(
     ),
     notes=(
         "Legal references are pointers to check, not legal advice.",
-        "Every decision on a credit (grant, refuse, final rate or amount) stays with a "
+        "Every decision on a credit (grant, refuse, final rate, amount or duration) stays with a "
         "human: the agent proposes a decision, it does not decide.",
         "Fraud detection is not part of this template.",
+        "The references point to consumer credit to natural persons; mortgage credit "
+        "and credit to businesses have other texts, not listed here.",
+        "A human review that only signs off the agent's proposal may not count as a "
+        "human decision: the reviewer must be able to depart from it.",
         "The agent names the action type it asks a token for: the system that receives "
         "the token must map each real operation to the right type (a draft that is "
         "actually sent is applicant_message.send; an approval recorded in the credit "
