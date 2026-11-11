@@ -296,7 +296,14 @@ credit application and the documents provided, draft a creditworthiness analysis
 propose a reasoned decision to a human analyst and draft messages to the applicant; it
 may never grant or refuse a credit, set the final rate, amount or duration, send any message to
 the applicant, execute a payment, export the credit file, or create a sub-agent. Every
-decision on a credit stays with a human. Fraud detection is not part of it.
+decision on a credit stays with a human. Fraud detection is not part of it. The fourth
+one, `agent-assurance-sante-vie`, covers an agent assisting a life or health insurance
+underwriter: it may read the underwriting file, draft a risk assessment, propose a
+reasoned premium to a human underwriter and draft the contract documents and messages
+to the insured person; it may never accept or refuse an application, set the final
+premium, send any message to the insured person, use the result of a genetic test,
+export health data, or create a sub-agent. Every decision on an application stays with
+a human. Claims handling is not part of it.
 
 ```python
 from amr.templates import get_template
@@ -312,7 +319,8 @@ sealed and is what the token issuer enforces. Templates only fill in existing
 Python API for now (no MCP tool lists them yet). Like every perimeter, the template
 holds only if the agent cannot call `create_mandate` itself (see the deployment rule
 above). See `docs/templates/agent-sante-rgpd.md`,
-`docs/templates/agent-rh-recrutement.md` and `docs/templates/agent-credit.md`.
+`docs/templates/agent-rh-recrutement.md`, `docs/templates/agent-credit.md` and
+`docs/templates/agent-assurance-sante-vie.md`.
 
 Each template published here is a provisional sector baseline. Its `stewardship` block
 says so (status `provisional` until a body of the sector takes it over, who holds it,
@@ -320,8 +328,8 @@ the practitioner reviewers recorded: none so far); the block is part of the temp
 digest and its status is copied into the mandate metadata as `template_status`. The
 template's risk classes are minimum thresholds (for `agent-sante-rgpd`, version 1.2.0:
 an order token lives at most 30 seconds and asks for a registry re-check;
-`agent-rh-recrutement` 1.0.0 and `agent-credit` 1.0.0 set none, since none of their allowed
-actions is irreversible):
+`agent-rh-recrutement` 1.0.0, `agent-credit` 1.0.0 and `agent-assurance-sante-vie` 1.0.0 set
+none, since none of their allowed actions is irreversible):
 `create_mandate_kwargs(risk_classes=[...])` may tighten them or add classes, and refuses
 with a `ValueError` anything that would loosen them.
 
@@ -1021,7 +1029,7 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 
 | Status | Features |
 |---|---|
-| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · sector templates (health, recruitment, credit) · MCP SDK v1 and v2 · PyPI package `mandatia` |
+| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · sector templates (health, recruitment, credit, life and health insurance) · MCP SDK v1 and v2 · PyPI package `mandatia` |
 | **Planned** | PDF Proof Pack export · remote transport for MCP clients · PostgreSQL backend · multi-tenant support · REST API alongside MCP · eIDAS 2.0 qualified electronic signatures · cross-border mandate recognition · webhook notifications · dashboard and alerting |
 
 ---
@@ -1076,7 +1084,7 @@ src/amr/
 ├── pades.py           # offline check of a PAdES signature on that PDF (pyHanko)
 ├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
-└── templates/         # Sector mandate templates (agent-sante-rgpd, agent-rh-recrutement, agent-credit)
+└── templates/         # Sector mandate templates (agent-sante-rgpd, agent-rh-recrutement, agent-credit, agent-assurance-sante-vie)
 tests/
 ├── conftest.py              # Isolated temp DB fixture (autouse)
 └── test_*.py                # One file per tool or feature (`uv run pytest -q`)

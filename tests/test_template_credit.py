@@ -104,8 +104,8 @@ async def _token(mandate_id: str, action_type: str) -> dict:
 # --- Registry ------------------------------------------------------------------------
 
 
-def test_registry_lists_the_three_templates(credit: MandateTemplate) -> None:
-    assert list_templates() == [AGENT_CREDIT_ID, AGENT_RH_RECRUTEMENT_ID, AGENT_SANTE_RGPD_ID]
+def test_registry_lists_the_template(credit: MandateTemplate) -> None:
+    assert {AGENT_CREDIT_ID, AGENT_RH_RECRUTEMENT_ID, AGENT_SANTE_RGPD_ID} <= set(list_templates())
     assert credit.template_id == "agent-credit"
     assert credit.sector == "credit"
     assert credit.version == "1.0.0"
@@ -298,7 +298,7 @@ def test_readme_lists_the_template() -> None:
     text = " ".join(README.read_text(encoding="utf-8").split())
     assert "`agent-credit`, covers an agent assisting a credit analyst" in text
     assert "Every decision on a credit stays with a human." in text
-    assert "sector templates (health, recruitment, credit)" in text
+    assert "sector templates (health, recruitment, credit, life and health insurance)" in text
     assert "`docs/templates/agent-credit.md`" in text
 
 
