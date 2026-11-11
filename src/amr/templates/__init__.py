@@ -17,16 +17,19 @@ Usage::
                          duration_hours=template.default_duration_hours, **kwargs)
 """
 
+from amr.templates.agent_assurance_sante_vie import AGENT_ASSURANCE_SANTE_VIE
 from amr.templates.agent_credit import AGENT_CREDIT
 from amr.templates.agent_rh_recrutement import AGENT_RH_RECRUTEMENT
 from amr.templates.agent_sante_rgpd import AGENT_SANTE_RGPD
 from amr.templates.base import LegalReference, MandateTemplate, Stewardship
 
+AGENT_ASSURANCE_SANTE_VIE_ID = AGENT_ASSURANCE_SANTE_VIE.template_id
 AGENT_CREDIT_ID = AGENT_CREDIT.template_id
 AGENT_RH_RECRUTEMENT_ID = AGENT_RH_RECRUTEMENT.template_id
 AGENT_SANTE_RGPD_ID = AGENT_SANTE_RGPD.template_id
 
 _TEMPLATES: dict[str, MandateTemplate] = {
+    AGENT_ASSURANCE_SANTE_VIE.template_id: AGENT_ASSURANCE_SANTE_VIE,
     AGENT_CREDIT.template_id: AGENT_CREDIT,
     AGENT_RH_RECRUTEMENT.template_id: AGENT_RH_RECRUTEMENT,
     AGENT_SANTE_RGPD.template_id: AGENT_SANTE_RGPD,
@@ -49,6 +52,7 @@ def get_template(template_id: str) -> MandateTemplate:
 
 
 __all__ = [
+    "AGENT_ASSURANCE_SANTE_VIE_ID",
     "AGENT_CREDIT_ID",
     "AGENT_RH_RECRUTEMENT_ID",
     "AGENT_SANTE_RGPD_ID",

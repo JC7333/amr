@@ -297,5 +297,5 @@ def test_readme_lists_the_template() -> None:
     text = " ".join(README.read_text(encoding="utf-8").split())
     assert "`agent-rh-recrutement`, covers an agent assisting a recruiter" in text
     assert "Every decision to reject, select or make an offer stays with a human." in text
-    assert "sector templates (health, recruitment, credit)" in text
+    assert "sector templates (health, recruitment, credit, life and health insurance)" in text
     assert "`docs/templates/agent-rh-recrutement.md`" in text
