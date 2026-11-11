@@ -13,19 +13,36 @@ enforces it like any other structured perimeter.
 | grant a commercial gesture under the ceiling (`commercial_gesture.grant`) | create a sub-agent (`agent.create`; delegation is off) |
 
 The actions on the right are refused (`forbidden:<type>`), and so is anything not listed
-on the left (`not_allowed:<type>`). Every decision that goes against the customer stays
-with a human. The mandate records the template it was built from in its metadata
+on the left (`not_allowed:<type>`). Every decision that goes against the customer is a
+forbidden action type, for a human to take. AMR enforces this on the action types only:
+see the limits below for what an answer or a routing could still say. The mandate records the template it was built from in its metadata
 (`template_id`, `template_version`, `template_digest`, `template_status`), shown in the
 Proof Pack. That metadata is a label, not sealed into the chain hash. What is sealed, and
 enforced, is the perimeter itself.
 
 ## Ceiling of a commercial gesture
 
-`commercial_gesture.grant` is the only action that commits money. A token for it needs
-`amount` and `currency` in the action metadata (`amount_required` otherwise), at or below
-the ceiling: 50 EUR per gesture by default (`amount_above_limit:50 EUR` above it). A
-mandate may lower the ceiling with `create_mandate_kwargs(max_amount="20")`, never raise
-it. There is no cumulative ceiling per period in this template.
+`commercial_gesture.grant` is the only allowed action type meant to commit money. A
+token for it needs `amount` and `currency` in the action metadata (`amount_required`
+without an amount, `currency_required` without a currency, `currency_mismatch:EUR` in
+another currency), at or below the ceiling: 50 EUR per gesture by default
+(`amount_above_limit:50 EUR` above it). A mandate may lower the ceiling with
+`create_mandate_kwargs(max_amount="20")`, never raise it.
+
+There is no cumulative ceiling per period in this template: tokens are refused only for
+an identical request still active, so several gestures to the same customer can add up.
+A principal who needs a total cap adds `period_max_amount` and `period_days` to the
+arguments before calling `create_mandate`:
+
+```python
+kwargs = template.create_mandate_kwargs()
+kwargs.update(period_max_amount="200", period_days=30)
+```
+
+Any action that states an amount is checked against the same ceiling. A proposal of a
+larger gesture (`commercial_gesture.propose`) is refused if its token states the amount
+(`amount_above_limit:50 EUR`); the agent asks for it without the amount and puts the
+figure in the proposal itself.
 
 ## Provisional baseline
 
@@ -51,7 +68,10 @@ its decision (`organ_decision`), as described for the health template in
   ticketing system is `refund.refuse`; a gesture actually credited is
   `commercial_gesture.grant`).
 - AMR checks action types, not content: it does not read an answer to see whether it
-  says that it comes from an AI, and it does not check which data the agent used.
+  says that it comes from an AI, and it does not check which data the agent used. An
+  answer could still tell the customer that a refund is refused or promise money, and a
+  routing could send a ticket to a closed queue: the system that receives the token must
+  keep refusals and promises out of `ticket.answer` and closures out of `ticket.route`.
   Article 50(1) of the AI Act is addressed to the provider of the AI system; the
   template does not say that an answer meets it.
 - Delegation is off for mandates under this one. The agent must not have access to
@@ -145,8 +165,10 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   "notes": [
     "Legal references are pointers to check, not legal advice.",
     "Every decision that goes against the customer (refusing a refund or a complaint, terminating a contract, closing an account) stays with a human.",
+    "AMR does not read answers or routings: an answer must not carry a refusal or a promise of money, and routing must not close a ticket; the system that receives the token checks that.",
     "The template does not say that the business must answer with an AI or that an AI answer meets the information duty of Art. 50(1): saying it is an AI is part of the action type ticket.answer, and AMR does not read the answer.",
-    "The ceiling of a commercial gesture is 50 EUR per gesture by default; a mandate may lower it (create_mandate_kwargs(max_amount=...)), never raise it. There is no cumulative ceiling per period in this template.",
+    "The ceiling of a commercial gesture is 50 EUR per gesture by default; a mandate may lower it (create_mandate_kwargs(max_amount=...)), never raise it. There is no cumulative ceiling per period in this template: several gestures can add up, so a principal who needs a total cap adds period_max_amount and period_days to the create_mandate arguments.",
+    "Any action that states an amount is checked against the ceiling: a proposal of a larger gesture is refused if its token states the amount, and is made without it.",
     "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a refund refused in the ticketing system is refund.refuse; a gesture actually credited is commercial_gesture.grant).",
     "The template sets no risk class; a mandate may add one, for example to shorten the tokens of commercial_gesture.grant.",
     "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
@@ -186,7 +208,7 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   },
   "summary": "Answer customers for a business: read the customer's account and history, answer a ticket while saying the answer comes from an AI, route a ticket, propose a commercial gesture, grant a commercial gesture under a ceiling. Never refuse a refund or a complaint, terminate a contract, close an account, change payment details, export the customer's data, or create a sub-agent.",
   "template_id": "agent-support-client",
-  "title": "Customer support agent (says it is an AI; human decides against the customer)",
+  "title": "Customer support agent (human decides against the customer)",
   "version": "1.0.0"
 }
 ```

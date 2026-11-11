@@ -9,8 +9,9 @@ customer's data, or create a sub-agent (delegation is off, and ``agent.create`` 
 forbidden).
 
 Every decision that goes against the customer (refusing a refund or a complaint,
-terminating, closing) stays with a human. Granting a gesture is the only allowed action
-that commits money: it must carry ``amount`` and ``currency``, at or below the ceiling.
+terminating, closing) is a forbidden action type: AMR enforces it on the action types,
+it does not read what an answer says. Granting a gesture is the only allowed action type
+meant to commit money: it must carry ``amount`` and ``currency``, at or below the ceiling.
 The template sets no risk class; a mandate may add one, for example to shorten the
 tokens of ``commercial_gesture.grant`` (``create_mandate_kwargs(risk_classes=...)``).
 
@@ -28,7 +29,7 @@ from amr.templates.base import LegalReference, MandateTemplate, Stewardship
 AGENT_SUPPORT_CLIENT = MandateTemplate(
     template_id="agent-support-client",
     version="1.0.0",
-    title="Customer support agent (says it is an AI; human decides against the customer)",
+    title="Customer support agent (human decides against the customer)",
     sector="customer-support",
     summary=(
         "Answer customers for a business: read the customer's account and history, answer "
@@ -104,12 +105,20 @@ AGENT_SUPPORT_CLIENT = MandateTemplate(
         "Legal references are pointers to check, not legal advice.",
         "Every decision that goes against the customer (refusing a refund or a "
         "complaint, terminating a contract, closing an account) stays with a human.",
+        "AMR does not read answers or routings: an answer must not carry a refusal or a "
+        "promise of money, and routing must not close a ticket; the system that receives "
+        "the token checks that.",
         "The template does not say that the business must answer with an AI or that an "
         "AI answer meets the information duty of Art. 50(1): saying it is an AI is part "
         "of the action type ticket.answer, and AMR does not read the answer.",
         "The ceiling of a commercial gesture is 50 EUR per gesture by default; a mandate "
         "may lower it (create_mandate_kwargs(max_amount=...)), never raise it. There is no "
-        "cumulative ceiling per period in this template.",
+        "cumulative ceiling per period in this template: several gestures can add up, so "
+        "a principal who needs a total cap adds period_max_amount and period_days to the "
+        "create_mandate arguments.",
+        "Any action that states an amount is checked against the ceiling: a proposal of a "
+        "larger gesture is refused if its token states the amount, and is made without "
+        "it.",
         "The agent names the action type it asks a token for: the system that receives "
         "the token must map each real operation to the right type (a refund refused in "
         "the ticketing system is refund.refuse; a gesture actually credited is "

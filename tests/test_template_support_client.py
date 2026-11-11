@@ -138,7 +138,7 @@ def test_other_templates_are_unchanged_by_the_new_one() -> None:
 
 def test_digest_is_pinned(support: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
-    assert support.digest() == "692ab59c7b33ae69b5bd718c6e3d4f235799a68d0d6dfef2341974f00c566eaf"
+    assert support.digest() == "3d2d83ff8131a7ec0606ec2a40ec10e31b889ad6a847fff80976c4ffd6ddfbd0"
 
 
 # --- Perimeter -----------------------------------------------------------------------
@@ -162,6 +162,16 @@ def test_ceiling_is_50_eur_per_gesture(support: MandateTemplate) -> None:
     assert p.check_action(GESTURE, _eur("50.01")) == "amount_above_limit:50 EUR"
     assert p.check_action(GESTURE, {}) == "amount_required"
     assert p.check_action(GESTURE, {"amount": "10", "currency": "USD"}) == "currency_mismatch:EUR"
+    assert p.check_action(GESTURE, {"amount": "10"}) == "currency_required"
+    assert p.check_action(GESTURE, _eur("-30")) == "amount_invalid"
+    assert p.check_action(f"{GESTURE}.bulk", _eur("10")) == f"not_allowed:{GESTURE}.bulk"
+
+
+def test_a_proposal_that_states_a_larger_amount_is_refused(support: MandateTemplate) -> None:
+    # Documented limit: every stated amount is checked against the ceiling.
+    p = support.perimeter
+    assert p.check_action("commercial_gesture.propose", {}) is None
+    assert p.check_action("commercial_gesture.propose", _eur("80")) == "amount_above_limit:50 EUR"
 
 
 def test_other_allowed_actions_need_no_amount(support: MandateTemplate) -> None:
@@ -262,6 +272,30 @@ async def test_end_to_end_gesture_above_ceiling_or_without_amount_is_refused(
     assert missing["detail"] == "amount_required"
 
 
+async def test_end_to_end_cumulative_cap_added_by_the_principal(
+    support: MandateTemplate,
+) -> None:
+    kwargs = support.create_mandate_kwargs()
+    kwargs.update(period_max_amount="60", period_days=30)
+    mandate = json.loads(
+        await create_mandate(
+            principal_id=PRINCIPAL,
+            agent_id=AGENT,
+            scope=support.summary,
+            legal_basis_regulation="Mandat de gestion",
+            legal_basis_article="Art. 1984 Code civil",
+            duration_hours=support.default_duration_hours,
+            **kwargs,
+        )
+    )
+    assert mandate["status"] == "created", mandate
+    first = await _token(mandate["mandate_id"], GESTURE, {**_eur("40"), "ref": "a"})
+    assert "token" in first, first
+    second = await _token(mandate["mandate_id"], GESTURE, {**_eur("40"), "ref": "b"})
+    assert second.get("denied") is True, second
+    assert second["detail"].startswith("period_amount_above_limit:60 EUR/30d"), second
+
+
 async def test_end_to_end_lowered_ceiling_holds(support: MandateTemplate) -> None:
     mandate = await _mandate_from(support, max_amount="20")
     assert "token" in await _token(mandate["mandate_id"], GESTURE, _eur("20"))
@@ -338,7 +372,13 @@ def test_doc_says_references_are_to_verify_and_not_compliance() -> None:
     assert "does not make a customer support process compliant" in text
     assert "`forbidden:<type>`" in text
     assert "50 EUR per gesture by default" in text
-    assert "There is no cumulative ceiling per period in this template." in text
+    assert "(`amount_above_limit:50 EUR` above it)" in text
+    assert "`currency_required` without a currency" in text
+    assert "several gestures to the same customer can add up" in text
+    assert "kwargs.update(period_max_amount=" in text
+    assert "is refused if its token states the amount" in text
+    assert "keep refusals and promises out of `ticket.answer`" in text
+    assert "There is no cumulative ceiling per period in this template:" in text
     assert "the template does not say that an answer meets it" in text
     assert "does not check which data the agent used" in text
 
@@ -347,6 +387,7 @@ def test_readme_lists_the_template() -> None:
     text = " ".join(README.read_text(encoding="utf-8").split())
     assert "`agent-support-client`, covers an agent answering customers" in text
     assert "Every decision that goes against the customer stays with a human." in text
+    assert "AMR does not read the answers: they must not carry a refusal" in text
     assert (
         "sector templates (health, recruitment, credit, life and health insurance, "
         "customer support)" in text

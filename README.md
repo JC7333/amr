@@ -310,7 +310,8 @@ propose a commercial gesture and grant one under a ceiling (50 EUR per gesture b
 default, which a mandate may lower, never raise); it may never refuse a refund or a
 complaint, terminate a contract, close an account, change payment details, export the
 customer's data, or create a sub-agent. Every decision that goes against the customer
-stays with a human.
+stays with a human. AMR does not read the answers: they must not carry a refusal or a
+promise of money.
 
 ```python
 from amr.templates import get_template
