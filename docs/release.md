@@ -76,12 +76,32 @@ By hand, only if the job fails: install `mcp-publisher`
 repository on the tagged commit `mcp-publisher login github` (GitHub sign-in as JC7333)
 and `mcp-publisher publish`.
 
+## Directories that read the code
+
+Some MCP directories list a server's tools by reading its source code, and only see
+functions declared with a decorator (`@mcp.tool`). AMR registers its tools in a loop
+(`src/amr/server.py`, so that `AMR_TOOL_PROFILE` can choose them), and these directories
+show no tool. They accept the `tools/list` response pasted by hand instead. Print it
+with:
+
+```bash
+uv run python -m amr.tools_list --profile full        # from a copy of the repository
+uvx --from mandatia python -m amr.tools_list --profile full   # from the version on PyPI
+```
+
+The output is the JSON a real MCP client receives from `tools/list` for that profile
+(`full`, `principal`, `agent` or `receiver`; default: `AMR_TOOL_PROFILE`, else `full`);
+a test starts the server over stdio and checks they are identical. Nothing is started,
+written or sent. After a release that adds, removes or changes a tool, paste the
+`--profile full` output of the published version wherever a directory asks for it.
+
 ## Next releases
 
 Raise `version` in `pyproject.toml`, in `server.json` (twice: top level and the
 package) and `server_version` in `src/amr/config.py` in the same pull request (a test
 checks they agree); after the merge, tag `vX.Y.Z` as in step 5: the same approval
-publishes on PyPI, then lists the version in the MCP registry. A version published on PyPI can never be replaced, only
+publishes on PyPI, then lists the version in the MCP registry; if a tool changed, paste
+the new `tools/list` output in the directories that read the code (section above). A version published on PyPI can never be replaced, only
 followed by a new one. Machines that already ran `uvx mandatia` keep their cached version
 until `uvx mandatia@latest` (or `uv cache clean`).
 
