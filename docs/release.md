@@ -81,18 +81,20 @@ and `mcp-publisher publish`.
 Some MCP directories list a server's tools by reading its source code, and only see
 functions declared with a decorator (`@mcp.tool`). AMR registers its tools in a loop
 (`src/amr/server.py`, so that `AMR_TOOL_PROFILE` can choose them), and these directories
-show no tool. They accept the `tools/list` response pasted by hand instead. Print it
-with:
+show no tool. They accept the `tools/list` response pasted by hand instead. Print its
+`tools` array with:
 
 ```bash
 uv run python -m amr.tools_list --profile full        # from a copy of the repository
-uvx --from mandatia python -m amr.tools_list --profile full   # from the version on PyPI
+uvx --from mandatia python -m amr.tools_list --profile full   # from PyPI, versions after 0.1.2
 ```
 
-The output is the JSON a real MCP client receives from `tools/list` for that profile
-(`full`, `principal`, `agent` or `receiver`; default: `AMR_TOOL_PROFILE`, else `full`);
-a test starts the server over stdio and checks they are identical. Nothing is started,
-written or sent. After a release that adds, removes or changes a tool, paste the
+The output is `{"tools": [...]}`, the tools a real MCP client receives from `tools/list`
+for that profile (`full`, `principal`, `agent` or `receiver`; default: `AMR_TOOL_PROFILE`
+from the environment or a `.env` file, else `full`); a test starts the server over stdio
+for each profile and checks every tool is identical. Other fields of the response (SDK 2
+adds cache hints) are left out. Nothing is started, written or sent. The module is new
+after 0.1.2: version 0.1.2 on PyPI does not have it. After a release that adds, removes or changes a tool, paste the
 `--profile full` output of the published version wherever a directory asks for it.
 
 ## Next releases

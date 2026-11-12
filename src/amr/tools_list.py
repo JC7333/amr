@@ -2,12 +2,12 @@
 
 Some MCP directories read the tools from the source code and only see decorated
 functions; AMR registers its tools in a loop (see server.py), so they show none. They
-accept the tools/list response pasted by hand instead. This prints exactly that response,
-for one profile, from the installed package:
+accept the tools/list response pasted by hand instead. This prints the tools of that
+response, as a client receives them, for one profile, from the installed package:
 
     uv run python -m amr.tools_list                 # profile from AMR_TOOL_PROFILE
     uv run python -m amr.tools_list --profile full  # every tool
-    uvx --from mandatia python -m amr.tools_list    # the version published on PyPI
+    uvx --from mandatia python -m amr.tools_list    # from PyPI, versions after 0.1.2
 
 Nothing is started, written or sent: the tools are registered on a server object that is
 never run, listed, and printed as JSON.
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         choices=sorted(TOOL_PROFILES),
         default=settings.tool_profile,
-        help="tool profile to list (default: AMR_TOOL_PROFILE, else full)",
+        help="tool profile to list (default: AMR_TOOL_PROFILE or .env, else full)",
     )
     args = parser.parse_args(argv)
     sys.stdout.write(json.dumps(tools_list(args.profile), indent=2, ensure_ascii=False) + "\n")

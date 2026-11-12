@@ -95,7 +95,7 @@ def test_main_refuses_an_unknown_profile(capsys) -> None:
     assert excinfo.value.code == 2
 
 
-@pytest.mark.parametrize("profile", ["full", "receiver"])
+@pytest.mark.parametrize("profile", sorted(TOOL_PROFILES))
 def test_output_matches_what_a_real_client_receives(tmp_path, profile: str) -> None:
     """Start the real server over stdio and compare its tools/list with the printed one."""
     from mcp import ClientSession, StdioServerParameters
@@ -120,26 +120,27 @@ def test_output_matches_what_a_real_client_receives(tmp_path, profile: str) -> N
             return [t.model_dump(mode="json", by_alias=True, exclude_none=True) for t in tools]
 
     received = asyncio.run(asyncio.wait_for(session(), timeout=60))
-    printed = tools_list(profile)["tools"]
-    assert [t["name"] for t in printed] == [t["name"] for t in received]
-    for mine, theirs in zip(printed, received, strict=True):
-        for key in ("description", "inputSchema", "outputSchema"):
-            assert mine.get(key) == theirs.get(key), (mine["name"], key)
+    assert tools_list(profile)["tools"] == received
 
 
-def test_the_command_runs_as_a_module() -> None:
+def test_the_command_runs_as_a_module_and_writes_nothing(tmp_path) -> None:
     import subprocess
 
+    env = {k: v for k, v in os.environ.items() if not k.startswith("AMR_")}
     out = subprocess.run(  # noqa: S603 - fixed arguments, no shell
         [sys.executable, "-m", "amr.tools_list", "--profile", "receiver"],
         capture_output=True,
         text=True,
         check=True,
         timeout=60,
+        cwd=tmp_path,
+        env=env,
     ).stdout
     assert set(_names(json.loads(out))) == set(TOOL_PROFILES["receiver"])
+    assert list(tmp_path.iterdir()) == []  # no database, no key, no file of any kind
 
 
 def test_release_guide_gives_the_command() -> None:
     assert "python -m amr.tools_list" in RELEASE
     assert "uvx --from mandatia python -m amr.tools_list" in RELEASE
+    assert "0.1.2 on PyPI does not have it" in RELEASE
