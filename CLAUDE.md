@@ -1,6 +1,7 @@
 # AMR — Agent Mandate Registry
 
-AMR is an open-source MCP server that registers and verifies legal mandates for AI agents.
+AMR is an open-source MCP server that registers and verifies mandates for AI agents: the written
+authorization a person or a body gives for its agent (it binds the one who gives it, not the agent).
 It provides a cryptographically chained audit trail of agent authorizations and actions,
 designed for compliance with EU AI Act Art.26 and eIDAS 2.0.
 
@@ -105,7 +106,7 @@ uv run python -c "from amr.config import settings; print(settings.server_name)"
 
 | Tool | Description |
 |---|---|
-| `create_mandate` | Register a new legal mandate for an AI agent (principal → agent) |
+| `create_mandate` | Register a new mandate for an AI agent (principal → agent) |
 | `verify_mandate` | Check if an agent has an active, non-expired mandate |
 | `log_action` | Log an agent action under an active mandate (append-only, chained) |
 | `get_proof` | Generate a full Proof Pack JSON for a mandate (mandate + actions + integrity) |

@@ -1,7 +1,7 @@
 [project]
 name = "mandatia"
 version = "0.1.2"
-description = "Agent Mandate Registry - Legal mandate chain for AI agents. MCP server."
+description = "Agent Mandate Registry - records who authorized an AI agent to do what, until when. MCP server."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
