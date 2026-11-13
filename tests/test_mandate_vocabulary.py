@@ -26,9 +26,11 @@ ROOT = Path(__file__).resolve().parent.parent
 # Texts shipped with the code. CLAUDE.md and pyproject.toml are protected files, changed on
 # their own reviewed branch; they are not checked here.
 SHIPPED = sorted(
-    [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "llms.txt", ROOT / "server.json"]
+    [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "llms.txt", ROOT / "server.json",
+     ROOT / "run_integration_test.py"]
     + list((ROOT / "docs").rglob("*.md"))
     + list((ROOT / "src").rglob("*.py"))
+    + list((ROOT / "examples").rglob("*.py"))
 )
 LEGAL_MANDATE = re.compile(r"legal\s+mandates?", re.IGNORECASE)
 CIVIL_CODE_AGENCY = re.compile(r"\b1984\b")
@@ -72,7 +74,7 @@ def test_readme_tagline_is_the_registry_description() -> None:
     assert f"> **{TAGLINE}.**" in readme
 
 
-def test_readme_defines_the_word_mandate_once() -> None:
+def test_readme_defines_the_word_mandate_in_the_overview() -> None:
     readme = _text(ROOT / "README.md")
     assert readme.count(DEFINITION) == 1
     assert "it binds the one who gives it, not the agent, which is not a person" in readme
