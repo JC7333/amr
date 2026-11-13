@@ -222,8 +222,8 @@ async def _mandate(sante: MandateTemplate, **kwargs: object) -> dict:
             principal_id=PRINCIPAL,
             agent_id=AGENT,
             scope=sante.summary,
-            legal_basis_regulation="Mandat de gestion",
-            legal_basis_article="Art. 1984 Code civil",
+            legal_basis_regulation="Delegation of authority",
+            legal_basis_article="Section 2",
             duration_hours=sante.default_duration_hours,
             **sante.create_mandate_kwargs(**kwargs),  # type: ignore[arg-type]
         )

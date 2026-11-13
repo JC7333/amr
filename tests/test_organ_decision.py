@@ -40,8 +40,8 @@ BASE = {
     "principal_id": PRINCIPAL,
     "agent_id": AGENT,
     "scope": "Handle the outpatient schedule",
-    "legal_basis_regulation": "Mandat de gestion",
-    "legal_basis_article": "Art. 1984 Code civil",
+    "legal_basis_regulation": "Delegation of authority",
+    "legal_basis_article": "Section 2",
     "duration_hours": 24.0,
     "allowed_actions": ["appointment.book"],
 }

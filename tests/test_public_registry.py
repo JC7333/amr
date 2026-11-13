@@ -47,7 +47,7 @@ def isolated_signing_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
 async def _mandate(principal: str = PERSON, agent: str = "agent:buyer", **kw: Any) -> str:
     result = json.loads(await create_mandate(
         principal_id=principal, agent_id=agent, scope=SCOPE,
-        legal_basis_regulation="Code civil", legal_basis_article="Art. 1984",
+        legal_basis_regulation="Delegation of authority", legal_basis_article="Section 2",
         duration_hours=kw.pop("duration_hours", 24.0),
         metadata={"contact": PERSON}, **kw,
     ))
@@ -93,7 +93,7 @@ async def test_export_never_contains_a_name_scope_metadata_or_reason() -> None:
     token = await pr.build_export()
     text = json.dumps(_claims(token), ensure_ascii=False)
     assert mandate_id in text
-    for secret in (PERSON, "Exemple", "Code civil", "Art. 1984", "left the practice",
+    for secret in (PERSON, "Exemple", "Delegation of authority", "Section 2", "left the practice",
                    "contact"):
         assert secret not in text, secret
     entry = _claims(token)["amr_public_registry"]["mandates"][0]
@@ -530,7 +530,7 @@ async def test_attestation_under_parent_revoked_since_is_refused() -> None:
                             allowed_actions=["order.*"], delegation_allowed=True)
     child = json.loads(await create_mandate(
         principal_id="agent:lead", agent_id="agent:buyer", scope="sub",
-        legal_basis_regulation="Code civil", legal_basis_article="Art. 1984",
+        legal_basis_regulation="Delegation of authority", legal_basis_article="Section 2",
         duration_hours=1.0, parent_mandate_id=parent, allowed_actions=["order.small"],
     ))
     assert "error" not in child, child

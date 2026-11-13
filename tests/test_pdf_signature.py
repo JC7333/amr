@@ -32,8 +32,8 @@ BASE = {
     "principal_id": "org:clinic",
     "agent_id": "agent:scheduler",
     "scope": "Book and cancel patient appointments (no clinical data)",
-    "legal_basis_regulation": "Code civil",
-    "legal_basis_article": "Art. 1984",
+    "legal_basis_regulation": "Delegation of authority",
+    "legal_basis_article": "Section 2",
     "duration_hours": 24.0,
     "allowed_actions": ["calendar.book", "calendar.cancel"],
 }

@@ -73,8 +73,8 @@ await create_mandate(
     principal_id="org:insurer",
     agent_id="agent:underwriting-assistant",
     scope=template.summary,
-    legal_basis_regulation="Mandat de gestion",
-    legal_basis_article="Art. 1984 Code civil",
+    legal_basis_regulation="Delegation of authority",
+    legal_basis_article="Section 2",
     duration_hours=template.default_duration_hours,
     **template.create_mandate_kwargs(metadata={"client_ref": "UW-001"}),
 )

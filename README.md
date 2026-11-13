@@ -2,9 +2,9 @@
 
 <!-- mcp-name: io.github.JC7333/mandatia -->
 
-> **The legal mandate layer for AI agents.**
+> **Records who authorized an AI agent to do what, until when.**
 
-AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that registers, verifies, and audits legal mandates authorizing AI agents to act on behalf of principals. It provides a cryptographically chained audit trail of who authorized which agent to do what, until when: evidence that supports the human-oversight and record-keeping duties of deployers under **EU AI Act Article 26**, with **eIDAS 2.0** electronic mandates in mind. AMR is a technical tool: it does not by itself make a system compliant.
+AMR is an open-source [MCP](https://modelcontextprotocol.io/) server that registers, verifies, and audits mandates authorizing AI agents to act on behalf of principals. Here a mandate is the written authorization a person or a body gives for its agent: it binds the one who gives it, not the agent, which is not a person. It provides a cryptographically chained audit trail of who authorized which agent to do what, until when: evidence that supports the human-oversight and record-keeping duties of deployers under **EU AI Act Article 26**, with **eIDAS 2.0** electronic mandates in mind. AMR is a technical tool: it does not by itself make a system compliant.
 
 ---
 
@@ -131,7 +131,7 @@ into it).
 
 ## Why AMR?
 
-Modern AI agent infrastructure covers many concerns — but the legal mandate layer is missing:
+Modern AI agent infrastructure covers many concerns — but the record of who authorized an agent, for what and until when, is missing:
 
 | Concern | Existing tools | AMR |
 |---|---|---|
@@ -139,7 +139,7 @@ Modern AI agent infrastructure covers many concerns — but the legal mandate la
 | Security & sandboxing | ✅ Docker, RBAC, network policies | — |
 | Permission & access control | ✅ OAuth, IAM, API keys | — |
 | Observability & tracing | ✅ OpenTelemetry, Langfuse | — |
-| **Legal mandate & accountability** | ❌ **Not covered** | ✅ **AMR** |
+| **Authorization record & accountability** | ❌ **Not covered** | ✅ **AMR** |
 
 **EU AI Act Article 26** ([Regulation (EU) 2024/1689](https://eur-lex.europa.eu/eli/reg/2024/1689/oj)) requires deployers of high-risk AI systems to assign human oversight and to keep the logs the system generates, to the extent they are under their control, for at least six months (Art. 26(6)). It applies from 2 December 2027 for Annex III systems and 2 August 2028 for Annex I systems ([Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj)). Non-compliance with Article 26 can be fined up to **€15 million or 3% of worldwide annual turnover**, whichever is higher (Art. 99(4); for SMEs and start-ups, whichever is lower, Art. 99(6)). AMR records who authorized an agent, for what and until when, and what it did, in a tamper-evident form that this oversight can rely on; it complements the system's own logs, it does not replace them.
 
@@ -456,7 +456,7 @@ Restart Claude Desktop. All AMR tools will be available immediately.
 
 ### `create_mandate`
 
-Register a new legal mandate authorizing an AI agent to act on behalf of a principal.
+Register a new mandate: the written authorization a principal (a person or a body) gives for an AI agent to act on its behalf.
 
 **Parameters:**
 
@@ -465,8 +465,8 @@ Register a new legal mandate authorizing an AI agent to act on behalf of a princ
 | `principal_id` | str | Principal granting the mandate. E.g. `"user:audric"` |
 | `agent_id` | str | Agent receiving authorization. E.g. `"agent:korvex-advisor-v1"` |
 | `scope` | str | What the agent is authorized to do |
-| `legal_basis_regulation` | str | Regulation or contract. E.g. `"EU AI Act Art.26"` |
-| `legal_basis_article` | str | Specific article or clause. E.g. `"Art.26(1)(a)"` |
+| `legal_basis_regulation` | str | The act that gives the signer the power to authorize: delegation of authority, body decision, contract. E.g. `"Delegation of authority"` |
+| `legal_basis_article` | str | Section, item or clause of that act. E.g. `"Section 2"` |
 | `duration_hours` | float | Duration in hours (max 8760 = 1 year) |
 | `legal_basis_jurisdiction` | str | Jurisdiction code (default `"EU"`) |
 | `parent_mandate_id` | str \| null | UUID of parent mandate for delegation chains (parent must allow delegation) |

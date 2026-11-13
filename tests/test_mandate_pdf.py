@@ -27,8 +27,8 @@ BASE = {
     "principal_id": "org:clinic",
     "agent_id": "agent:scheduler",
     "scope": "Book and cancel patient appointments (no clinical data) \\ backslash",
-    "legal_basis_regulation": "Code civil",
-    "legal_basis_article": "Art. 1984",
+    "legal_basis_regulation": "Delegation of authority",
+    "legal_basis_article": "Section 2",
     "duration_hours": 24.0,
     "allowed_actions": ["calendar.book", "calendar.cancel"],
     "signed_at": SIGNED_AT,
@@ -266,7 +266,7 @@ async def test_summary_names_principal_agent_and_legal_basis() -> None:
     shown = [t for c in _page_contents(pdf) for t in _shown_text(c)]
     assert "Principal: org:clinic" in shown
     assert "Agent: agent:scheduler" in shown
-    assert "Legal basis: Code civil, Art. 1984 (EU)" in shown
+    assert "Legal basis: Delegation of authority, Section 2 (EU)" in shown
     assert "Parent mandate: none (root mandate)" in shown
     assert f"Signed at (in the content): {SIGNED_AT}" in shown
 

@@ -49,8 +49,8 @@ async def _mandate(**overrides: object) -> dict:
         "principal_id": "org:clinic",
         "agent_id": "agent:billing",
         "scope": "Handle supplier invoices",
-        "legal_basis_regulation": "Mandat de gestion",
-        "legal_basis_article": "Art. 1984 Code civil",
+        "legal_basis_regulation": "Delegation of authority",
+        "legal_basis_article": "Section 2",
         "duration_hours": 24,
     }
     params.update(overrides)

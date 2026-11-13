@@ -127,8 +127,8 @@ await create_mandate(
     principal_id="org:cabinet-medical",
     agent_id="agent:assistant-cabinet",
     scope=template.summary,
-    legal_basis_regulation="Mandat de gestion",
-    legal_basis_article="Art. 1984 Code civil",
+    legal_basis_regulation="Delegation of authority",
+    legal_basis_article="Section 2",
     duration_hours=template.default_duration_hours,
     **template.create_mandate_kwargs(
         max_amount="50",  # optional lower ceiling

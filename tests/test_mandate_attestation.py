@@ -40,8 +40,8 @@ BASE = {
     "principal_id": PRINCIPAL,
     "agent_id": AGENT,
     "scope": "Order medical supplies for the practice",
-    "legal_basis_regulation": "Code civil",
-    "legal_basis_article": "Art. 1984",
+    "legal_basis_regulation": "Delegation of authority",
+    "legal_basis_article": "Section 2",
     "duration_hours": 24.0,
 }
 
@@ -108,7 +108,7 @@ async def test_attestation_is_verified_offline_with_the_public_key_only() -> Non
     assert summary["principal_id"] == PRINCIPAL
     assert summary["agent_id"] == AGENT
     assert summary["scope"] == BASE["scope"]
-    assert summary["legal_basis"]["article"] == "Art. 1984"
+    assert summary["legal_basis"]["article"] == "Section 2"
     assert summary["perimeter"]["allowed_actions"] == ["supplies.order"]
     assert summary["perimeter"]["forbidden_actions"] == ["rx.*"]
     assert summary["mandate_expires_at"] == m["expires_at"]
