@@ -264,8 +264,8 @@ async def create_mandate(
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
 ) -> str:
-    """Create and register a new legal mandate authorizing an AI agent
-    to act on behalf of a principal.
+    """Create and register a new mandate: the written authorization a
+    principal (a person or a body) gives for an AI agent to act on its behalf.
 
     A mandate defines the legal basis, scope, and duration of an agent's authorization.
     Each mandate is cryptographically linked to the previous one (SHA-256 chain).
@@ -295,10 +295,11 @@ async def create_mandate(
                   Example: "agent:korvex-advisor-v1"
         scope: Human-readable description of what the agent is authorized to do.
                Example: "Compare and recommend financial products to retail clients"
-        legal_basis_regulation: Name of the regulation or contract granting authority.
-                                Example: "EU AI Act Art.26" or "Service Agreement 2026"
-        legal_basis_article: Specific article, clause, or reference number.
-                             Example: "Art.26(1)(a)" or "Mandat conseil 2026-042"
+        legal_basis_regulation: The act that gives the signer the power to authorize
+                                (delegation of authority, body decision, contract).
+                                Example: "Delegation of authority" or "Service contract"
+        legal_basis_article: Section, item or clause of that act.
+                             Example: "Section 2" or "Clause 4"
         duration_hours: Duration of the mandate in hours. Max 8760 (1 year).
                         Example: 720 (30 days), 168 (1 week), 24 (1 day)
         legal_basis_jurisdiction: Jurisdiction code. Default "EU".
