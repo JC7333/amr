@@ -241,3 +241,16 @@ def test_ci_runs_the_suite_against_mcp_v2() -> None:
     assert V2_RUN in ci
     assert 'EXPECTED_MCP_MAJOR: "2"' in ci
     assert 'EXPECTED_MCP_MAJOR: "1"' in ci
+
+
+def test_sdk_before_tool_annotations_still_registers_every_tool(monkeypatch) -> None:
+    """mcp 1.2 to 1.6 (still allowed by pyproject) have no ToolAnnotations: no crash."""
+    v1 = _fake_module("mcp.server.fastmcp", "FastMCP")
+    old_types = types.ModuleType("mcp.types")
+    probe = _load_server_copy(
+        monkeypatch,
+        {"mcp.server.mcpserver": None, "mcp.server.fastmcp": v1, "mcp.types": old_types},
+    )
+    assert probe.ToolAnnotations is None
+    assert set(probe.mcp.tools) == REGISTERED_TOOLS
+    assert all(probe.mcp.annotations[name] is None for name in probe.mcp.tools)

@@ -16,7 +16,10 @@ except ModuleNotFoundError as exc:  # mcp 1.x has no mcp.server.mcpserver
         raise  # a dependency of mcp 2.x is missing: show that error, not a misleading one
     from mcp.server.fastmcp import FastMCP
 
-from mcp.types import ToolAnnotations
+try:  # mcp 1.7 added tool annotations; pyproject still allows mcp from 1.2
+    from mcp.types import ToolAnnotations
+except ImportError:  # older SDK: it cannot send annotations, so tools register without
+    ToolAnnotations = None
 
 from amr.config import settings
 from amr.tools.attach_signed_mandate_pdf import attach_signed_mandate_pdf
@@ -103,10 +106,11 @@ TOOL_PROFILES: dict[str, frozenset[str]] = {
 }
 
 
-# MCP tool annotations (specification 2025-06-18 onwards), read by clients to decide
-# which calls to approve. They are hints, not a security boundary: AMR enforces its own
-# rules whatever a client does with them.
-#   read-only:   adds nothing to the registry or the disk and sends nothing.
+# MCP tool annotations (specification 2025-03-26 onwards, mcp SDK 1.7 onwards), read by
+# clients to decide which calls to approve. They are hints, not a security boundary: AMR
+# enforces its own rules whatever a client does with them.
+#   read-only:   records nothing (no mandate, action, token, contest or key) and sends
+#                nothing; like every tool, it may create the empty database on first use.
 #   destructive: ends something for good (a revoked mandate is never reactivated).
 #   idempotent:  calling again with the same arguments adds nothing more.
 #   open world:  may reach the network (only when the operator opts in, see README).
@@ -145,9 +149,11 @@ _TOOL_HINTS: dict[str, dict[str, bool]] = {
     "report_issue": {**_APPENDS, "openWorldHint": True},
 }
 
-TOOL_ANNOTATIONS: dict[str, ToolAnnotations] = {
-    name: ToolAnnotations.model_validate(hints) for name, hints in _TOOL_HINTS.items()
-}
+TOOL_ANNOTATIONS: dict = (
+    {name: ToolAnnotations.model_validate(hints) for name, hints in _TOOL_HINTS.items()}
+    if ToolAnnotations is not None
+    else {}
+)
 
 
 def tools_for(profile: str) -> tuple:
@@ -159,7 +165,10 @@ def tools_for(profile: str) -> tuple:
 def register_tools(server, profile: str) -> None:
     """Register the tools of this profile on a server, each with its MCP annotations."""
     for tool in tools_for(profile):
-        server.tool(annotations=TOOL_ANNOTATIONS[tool.__name__])(tool)
+        if ToolAnnotations is None:
+            server.tool()(tool)
+        else:
+            server.tool(annotations=TOOL_ANNOTATIONS[tool.__name__])(tool)
 
 
 mcp = FastMCP(settings.server_name)

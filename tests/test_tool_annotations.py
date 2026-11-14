@@ -1,7 +1,7 @@
 """Every tool carries MCP annotations that tell the truth about what it does.
 
 MCP clients read readOnlyHint, destructiveHint, idempotentHint and openWorldHint
-(specification 2025-06-18 onwards) to decide which calls need the user's approval. A
+(specification 2025-03-26 onwards) to decide which calls need the user's approval. A
 read-only tool that writes would be approved silently; a write tool with no annotation
 looks like a read in some directories. The class of each tool is frozen here, checked in
 the tools/list response a client receives, and read-only tools are run against a real
@@ -234,7 +234,7 @@ async def test_get_registry_public_key_creates_the_key_once(isolated_signing_key
     assert isolated_signing_keys.read_bytes() == content
 
 
-async def test_append_tools_do_add_to_the_registry(
+async def test_create_mandate_and_log_action_do_add_to_the_registry(
     temp_db: Path, isolated_signing_keys: Path
 ) -> None:
     await _registry_with_one_action()
@@ -261,7 +261,20 @@ def test_readme_table_matches_the_annotations() -> None:
         by_hints.setdefault(hints, set()).add(name)
     assert classes["read-only"] == by_hints[READ]
     assert classes["appends to the registry"] == by_hints[APPEND]
-    assert classes["appends, may reach the network"] == by_hints[(False, False, False, True)]
+    assert classes["writes, may reach the network"] == by_hints[(False, False, False, True)]
     assert classes["destructive"] == by_hints[(False, True, False, False)]
     assert classes["idempotent write"] == by_hints[(False, False, True, False)]
     assert set().union(*classes.values()) == set(EXPECTED)
+
+
+async def test_a_read_only_tool_on_a_fresh_directory_records_nothing(temp_db: Path) -> None:
+    """The only trace a read-only tool may leave is the empty database it opens."""
+    assert not temp_db.exists()
+    await verify_mandate("agent-example", "supplies.order")
+    conn = sqlite3.connect(str(temp_db))
+    try:
+        for table in ("mandates", "action_logs", "mandate_events", "issued_tokens"):
+            count = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]  # noqa: S608
+            assert count == 0, table
+    finally:
+        conn.close()

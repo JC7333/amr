@@ -455,13 +455,14 @@ Restart Claude Desktop. All AMR tools will be available immediately.
 ## Tools
 
 Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
-`openWorldHint`), which clients use to decide which calls need the user's approval:
+`openWorldHint`, MCP specification 2025-03-26 onwards), which clients use to decide which
+calls need the user's approval (with mcp SDK 1.7 or later; an older SDK cannot send them):
 
 | Class | Tools |
 |---|---|
-| read-only (adds nothing to the registry or the disk, sends nothing) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests` |
+| read-only (records no mandate, action, token, contest or key and sends nothing; like every tool, may create the empty database on first use) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests` |
 | appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action` |
-| appends, may reach the network (opt-in) | `register_principal_key` (`did:web` with `AMR_DID_WEB_RESOLVE=1`), `report_issue` (with `AMR_ISSUE_TOKEN`) |
+| writes, may reach the network (opt-in) | `register_principal_key` (appends the key; reads the `did:web` domain with `AMR_DID_WEB_RESOLVE=1`), `report_issue` (files a GitHub issue with `AMR_ISSUE_TOKEN`, otherwise writes nothing) |
 | destructive (final) | `revoke_mandate` |
 | idempotent write | `get_registry_public_key` (creates the registry signing key on its first call, then only reads it) |
 
