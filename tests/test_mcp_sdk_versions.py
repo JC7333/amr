@@ -52,10 +52,12 @@ class _FakeServer:
     def __init__(self, name: str) -> None:
         self.name = name
         self.tools: list[str] = []
+        self.annotations: dict[str, object] = {}
 
-    def tool(self):
+    def tool(self, annotations=None):
         def register(fn):
             self.tools.append(fn.__name__)
+            self.annotations[fn.__name__] = annotations
             return fn
 
         return register
@@ -108,6 +110,8 @@ def test_v2_class_is_preferred_when_present(monkeypatch) -> None:
     probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": v2, "mcp.server.fastmcp": v1})
     assert type(probe.mcp) is v2.MCPServer
     assert set(probe.mcp.tools) == REGISTERED_TOOLS
+    # Each tool reaches the SDK with its MCP annotations, whatever the SDK version.
+    assert all(probe.mcp.annotations[name] is not None for name in probe.mcp.tools)
 
 
 def test_v1_class_is_used_when_v2_module_is_missing(monkeypatch) -> None:
@@ -117,6 +121,8 @@ def test_v1_class_is_used_when_v2_module_is_missing(monkeypatch) -> None:
     probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": None, "mcp.server.fastmcp": v1})
     assert type(probe.mcp) is v1.FastMCP
     assert set(probe.mcp.tools) == REGISTERED_TOOLS
+    # Each tool reaches the SDK with its MCP annotations, whatever the SDK version.
+    assert all(probe.mcp.annotations[name] is not None for name in probe.mcp.tools)
 
 
 def test_missing_sdk_is_still_reported(monkeypatch) -> None:
@@ -235,3 +241,16 @@ def test_ci_runs_the_suite_against_mcp_v2() -> None:
     assert V2_RUN in ci
     assert 'EXPECTED_MCP_MAJOR: "2"' in ci
     assert 'EXPECTED_MCP_MAJOR: "1"' in ci
+
+
+def test_sdk_before_tool_annotations_still_registers_every_tool(monkeypatch) -> None:
+    """mcp 1.2 to 1.6 (still allowed by pyproject) have no ToolAnnotations: no crash."""
+    v1 = _fake_module("mcp.server.fastmcp", "FastMCP")
+    old_types = types.ModuleType("mcp.types")
+    probe = _load_server_copy(
+        monkeypatch,
+        {"mcp.server.mcpserver": None, "mcp.server.fastmcp": v1, "mcp.types": old_types},
+    )
+    assert probe.ToolAnnotations is None
+    assert set(probe.mcp.tools) == REGISTERED_TOOLS
+    assert all(probe.mcp.annotations[name] is None for name in probe.mcp.tools)

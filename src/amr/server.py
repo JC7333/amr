@@ -16,6 +16,11 @@ except ModuleNotFoundError as exc:  # mcp 1.x has no mcp.server.mcpserver
         raise  # a dependency of mcp 2.x is missing: show that error, not a misleading one
     from mcp.server.fastmcp import FastMCP
 
+try:  # mcp 1.7 added tool annotations; pyproject still allows mcp from 1.2
+    from mcp.types import ToolAnnotations
+except ImportError:  # older SDK: it cannot send annotations, so tools register without
+    ToolAnnotations = None
+
 from amr.config import settings
 from amr.tools.attach_signed_mandate_pdf import attach_signed_mandate_pdf
 from amr.tools.check_action_token import check_action_token
@@ -101,17 +106,75 @@ TOOL_PROFILES: dict[str, frozenset[str]] = {
 }
 
 
+# MCP tool annotations (specification 2025-03-26 onwards, mcp SDK 1.7 onwards), read by
+# clients to decide which calls to approve. They are hints, not a security boundary: AMR
+# enforces its own rules whatever a client does with them.
+#   read-only:   records nothing (no mandate, action, token, contest or key) and sends
+#                nothing; like every tool, it may create the empty database on first use.
+#   destructive: ends something for good (a revoked mandate is never reactivated).
+#   idempotent:  calling again with the same arguments adds nothing more.
+#   open world:  may reach the network (only when the operator opts in, see README).
+# A tool that writes the registry, creates the signing key or may reach the network is
+# never read-only.
+_READ_ONLY = {"readOnlyHint": True, "openWorldHint": False}
+_APPENDS = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": False,
+    "openWorldHint": False,
+}
+
+_TOOL_HINTS: dict[str, dict[str, bool]] = {
+    "create_mandate": _APPENDS,
+    "verify_mandate": _READ_ONLY,
+    "log_action": _APPENDS,
+    "get_proof": _READ_ONLY,
+    "issue_action_token": _APPENDS,
+    "check_action_token": _READ_ONLY,
+    # did:web principals: the domain is fetched when AMR_DID_WEB_RESOLVE=1.
+    "register_principal_key": {**_APPENDS, "openWorldHint": True},
+    "prepare_mandate_signature": _READ_ONLY,
+    "prepare_mandate_pdf": _READ_ONLY,
+    "attach_signed_mandate_pdf": _APPENDS,
+    "issue_mandate_attestation": _APPENDS,
+    # Creates the registry signing key on the very first call, then only reads it.
+    "get_registry_public_key": {**_APPENDS, "idempotentHint": True},
+    "export_insurer_dossier": _READ_ONLY,
+    "revoke_mandate": {**_APPENDS, "destructiveHint": True},
+    "prepare_revocation_signature": _READ_ONLY,
+    "contest_action": _APPENDS,
+    "prepare_contest_signature": _READ_ONLY,
+    "list_action_contests": _READ_ONLY,
+    # Files a GitHub issue when the operator sets AMR_ISSUE_TOKEN.
+    "report_issue": {**_APPENDS, "openWorldHint": True},
+}
+
+TOOL_ANNOTATIONS: dict = (
+    {name: ToolAnnotations.model_validate(hints) for name, hints in _TOOL_HINTS.items()}
+    if ToolAnnotations is not None
+    else {}
+)
+
+
 def tools_for(profile: str) -> tuple:
     """The tools a server started with this profile exposes, in TOOLS order."""
     allowed = TOOL_PROFILES[profile]
     return tuple(tool for tool in TOOLS if tool.__name__ in allowed)
 
 
+def register_tools(server, profile: str) -> None:
+    """Register the tools of this profile on a server, each with its MCP annotations."""
+    for tool in tools_for(profile):
+        if ToolAnnotations is None:
+            server.tool()(tool)
+        else:
+            server.tool(annotations=TOOL_ANNOTATIONS[tool.__name__])(tool)
+
+
 mcp = FastMCP(settings.server_name)
 
 # Register tools - FastMCP generates schemas from type hints + docstrings
-for _tool in tools_for(settings.tool_profile):
-    mcp.tool()(_tool)
+register_tools(mcp, settings.tool_profile)
 
 
 def main() -> None:

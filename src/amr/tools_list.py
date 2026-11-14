@@ -19,7 +19,7 @@ import json
 import sys
 
 from amr.config import settings
-from amr.server import TOOL_PROFILES, FastMCP, tools_for
+from amr.server import TOOL_PROFILES, FastMCP, register_tools
 
 
 def tool_as_json(tool) -> dict:
@@ -30,8 +30,7 @@ def tool_as_json(tool) -> dict:
 def tools_list(profile: str) -> dict:
     """The tools/list result a client receives from a server started with this profile."""
     server = FastMCP(settings.server_name)
-    for tool in tools_for(profile):
-        server.tool()(tool)
+    register_tools(server, profile)
     tools = asyncio.run(server.list_tools())
     return {"tools": [tool_as_json(tool) for tool in tools]}
 
