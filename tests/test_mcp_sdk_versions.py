@@ -52,10 +52,12 @@ class _FakeServer:
     def __init__(self, name: str) -> None:
         self.name = name
         self.tools: list[str] = []
+        self.annotations: dict[str, object] = {}
 
-    def tool(self):
+    def tool(self, annotations=None):
         def register(fn):
             self.tools.append(fn.__name__)
+            self.annotations[fn.__name__] = annotations
             return fn
 
         return register
@@ -108,6 +110,8 @@ def test_v2_class_is_preferred_when_present(monkeypatch) -> None:
     probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": v2, "mcp.server.fastmcp": v1})
     assert type(probe.mcp) is v2.MCPServer
     assert set(probe.mcp.tools) == REGISTERED_TOOLS
+    # Each tool reaches the SDK with its MCP annotations, whatever the SDK version.
+    assert all(probe.mcp.annotations[name] is not None for name in probe.mcp.tools)
 
 
 def test_v1_class_is_used_when_v2_module_is_missing(monkeypatch) -> None:
@@ -117,6 +121,8 @@ def test_v1_class_is_used_when_v2_module_is_missing(monkeypatch) -> None:
     probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": None, "mcp.server.fastmcp": v1})
     assert type(probe.mcp) is v1.FastMCP
     assert set(probe.mcp.tools) == REGISTERED_TOOLS
+    # Each tool reaches the SDK with its MCP annotations, whatever the SDK version.
+    assert all(probe.mcp.annotations[name] is not None for name in probe.mcp.tools)
 
 
 def test_missing_sdk_is_still_reported(monkeypatch) -> None:

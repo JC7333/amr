@@ -454,6 +454,20 @@ Restart Claude Desktop. All AMR tools will be available immediately.
 
 ## Tools
 
+Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`,
+`openWorldHint`), which clients use to decide which calls need the user's approval:
+
+| Class | Tools |
+|---|---|
+| read-only (adds nothing to the registry or the disk, sends nothing) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests` |
+| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action` |
+| appends, may reach the network (opt-in) | `register_principal_key` (`did:web` with `AMR_DID_WEB_RESOLVE=1`), `report_issue` (with `AMR_ISSUE_TOKEN`) |
+| destructive (final) | `revoke_mandate` |
+| idempotent write | `get_registry_public_key` (creates the registry signing key on its first call, then only reads it) |
+
+They are hints for the client, not a protection: AMR applies its own rules whatever the
+client does with them. `python -m amr.tools_list` prints them with each tool.
+
 ### `create_mandate`
 
 Register a new mandate: the written authorization a principal (a person or a body) gives for an AI agent to act on its behalf.
