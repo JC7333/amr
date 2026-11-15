@@ -24,7 +24,7 @@ mandate with a revocation row as revoked:
 |---|---|
 | `issue_action_token` | `{"denied": true, "reason": "mandate_status_revoked"}` |
 | `issue_action_token` on any sub-mandate below | `parent_mandate_revoked`, `refused_by` = the revoked mandate |
-| `verify_mandate` | the revoked mandate is skipped (an older unrevoked mandate of the same agent, if any, is returned) |
+| `verify_mandate` | the revoked mandate is skipped (an older unrevoked mandate of the same agent, if any, is returned); asked by `mandate_id`, `authorized: false`, reason `Mandate revoked` |
 | `create_mandate` with it as parent | `parent_mandate_revoked` |
 | `issue_mandate_attestation` | `{"denied": true, "reason": "mandate_status_revoked"}` |
 | `issue_mandate_attestation` on any sub-mandate below | `parent_mandate_revoked`, `refused_by` = the revoked mandate |
@@ -107,9 +107,10 @@ revocation record (record deleted); `null` otherwise.
   expiry, none is renewed by another).
 - An unsigned revocation proves nothing about who revoked; a principal that registers
   its key afterwards does not make it signed (`revocation_signature_valid` stays null).
-- `verify_mandate` looks only at the agent's most recent active, unexpired, unrevoked
-  mandate: if that one is a sub-mandate under a revoked parent, it answers "chain
-  broken" even when the agent holds another, older valid mandate.
+- Without `mandate_id`, `verify_mandate` looks only at the agent's most recent active,
+  unexpired, unrevoked mandate: if that one is a sub-mandate under a revoked parent, it
+  answers "chain broken" even when the agent holds another, older valid mandate. Pass
+  `mandate_id` to ask about one named mandate.
 - Two revocations written at the same instant by two processes could chain to the same
   previous hash (no exclusive transaction), as for the other chains of the registry.
 - `log_action` checks the mandate and the chain above it, then writes, without one

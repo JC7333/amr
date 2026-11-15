@@ -88,6 +88,7 @@ With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
    enforces it).
 2. `verify_mandate(agent_id, action)`: `authorized: true` while the agent has an active
    mandate. It does not check `action` against the perimeter; `issue_action_token` does.
+   Add `mandate_id` to check the one mandate the agent shows you: that mandate only.
 3. `issue_action_token(mandate_id, agent_id, action, audience, action_type,
    action_metadata_json)`: before acting, the agent asks for a signed token. Under a
    perimeter, `action_type` is required (e.g. `"invoice.pay"`), and an amount goes in
@@ -103,7 +104,8 @@ With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
    party checks offline with `python -m amr.verify_attestation`.
 6. `revoke_mandate(mandate_id, reason)`: the stop button. That mandate then issues no
    token, and `verify_mandate` answers `authorized: false` unless the agent holds another
-   active mandate. Tokens and attestations already issued stay valid until they expire,
+   active mandate (with `mandate_id` set to the revoked mandate, it answers
+   `authorized: false` in every case). Tokens and attestations already issued stay valid until they expire,
    except for a receiver that re-checks the token with `check_action_token`.
 7. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
    If the agent already did something it should not have, `contest_action(mandate_id,
@@ -602,6 +604,14 @@ Check whether an AI agent has a currently active, non-expired mandate (for a
 sub-mandate, every mandate above it must be active and unexpired too). It does not
 check the action against the perimeter: `issue_action_token` does.
 
+Without `mandate_id`, the answer is about the agent's most recent active, unexpired,
+unrevoked mandate: if one of its mandates was revoked and another is still in force, the
+answer is `authorized: true`, for the other one. With `mandate_id`, the answer is about
+that mandate only: revoked (`"Mandate revoked"`), expired (`"Mandate expired"`), not
+active, under a broken chain, unknown or held by another agent means
+`authorized: false`. For an unknown mandate or one held by another agent, nothing about
+it is returned (`mandate_id`, `scope`, `perimeter` and `expires_at` empty).
+
 **Parameters:**
 
 | Parameter | Type | Description |
@@ -609,6 +619,7 @@ check the action against the perimeter: `issue_action_token` does.
 | `agent_id` | str | Agent to check. E.g. `"agent:korvex-advisor-v1"` |
 | `action` | str | Action the agent wants to perform |
 | `context` | str | Optional context for audit logging |
+| `mandate_id` | str | Optional UUID of the one mandate to check. Empty (default): any active mandate of the agent |
 
 **Returns:**
 ```json
@@ -718,7 +729,7 @@ with `prepare_revocation_signature(mandate_id, reason, signed_at=None)`.
 **Effect, as soon as it returns:** `issue_action_token` and `issue_mandate_attestation`
 refuse the mandate (`mandate_status_revoked`) and every sub-mandate below it
 (`parent_mandate_revoked`);
-`verify_mandate` no longer returns it; no sub-mandate can be created under it;
+`verify_mandate` no longer returns it (and answers `authorized: false` when asked about it by `mandate_id`); no sub-mandate can be created under it;
 `log_action` refuses it and every sub-mandate below it; `get_proof` and `export_insurer_dossier` report it. Tokens already issued cannot be
 called back and stay valid until their `exp`: the response gives their number and the
 last expiry, unless the receiver re-checks the token with `check_action_token` when it
