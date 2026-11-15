@@ -65,7 +65,11 @@ async def _check_named_mandate(
         return row, "Mandate revoked"
     if row["status"] != "active":
         return row, f"Mandate is {row['status']}"
-    if is_expired(row["expires_at"], now):
+    try:
+        expired = is_expired(row["expires_at"], now)
+    except (TypeError, ValueError):
+        return row, "Mandate expiry unreadable"
+    if expired:
         return row, "Mandate expired"
     return row, None
 

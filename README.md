@@ -105,8 +105,9 @@ With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
 6. `revoke_mandate(mandate_id, reason)`: the stop button. That mandate then issues no
    token, and `verify_mandate` answers `authorized: false` unless the agent holds another
    active mandate (with `mandate_id` set to the revoked mandate, it answers
-   `authorized: false` in every case). Tokens and attestations already issued stay valid until they expire,
-   except for a receiver that re-checks the token with `check_action_token`.
+   `authorized: false` in every case). Tokens and attestations already issued stay
+   valid until they expire, except for a receiver that re-checks the token with
+   `check_action_token`.
 7. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
    If the agent already did something it should not have, `contest_action(mandate_id,
    action_id, reason, response_days)` records that the act is disputed, and

@@ -125,7 +125,7 @@ async def test_unknown_named_mandate_is_refused() -> None:
     assert missing in result["reason"]
 
 
-async def test_invalid_mandate_id_is_refused_before_any_lookup() -> None:
+async def test_invalid_mandate_id_is_refused() -> None:
     await _create()
     result = await _verify(mandate_id="not-a-uuid' OR 1=1 --")
     assert result["authorized"] is False
@@ -196,6 +196,55 @@ async def test_named_sub_mandate_under_revoked_parent_is_refused() -> None:
     assert result["authorized"] is False
     assert result["reason"] == "Delegation chain broken: parent_mandate_revoked"
     assert result["mandate_id"] == sub
+
+
+async def test_named_sub_mandate_under_expired_parent_is_refused(temp_db: Path) -> None:
+    root = await _create()
+    sub = json.loads(
+        await create_mandate(
+            principal_id=AGENT,
+            agent_id=HELPER,
+            scope="Read invoices only",
+            legal_basis_regulation="Service contract",
+            legal_basis_article="Clause 4",
+            duration_hours=12.0,
+            parent_mandate_id=root,
+            allowed_actions=["invoice.read"],
+        )
+    )["mandate_id"]
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    con = sqlite3.connect(temp_db)
+    try:
+        con.execute("UPDATE mandates SET expires_at = ? WHERE id = ?", (past, root))
+        con.commit()
+    finally:
+        con.close()
+    result = await _verify(HELPER, sub)
+    assert result["authorized"] is False
+    assert result["reason"] == "Delegation chain broken: parent_mandate_expired"
+
+
+async def test_foreign_mandate_refused_when_agent_also_has_a_revoked_one() -> None:
+    foreign = await _create(agent_id=OTHER)
+    mine = await _create()
+    await _revoke(mine)
+    result = await _verify(mandate_id=foreign)
+    assert result["authorized"] is False
+    assert result["mandate_id"] is None
+    assert "not found for agent" in result["reason"]
+
+
+async def test_unreadable_expiry_is_refused_not_an_error(temp_db: Path) -> None:
+    mid = await _create()
+    con = sqlite3.connect(temp_db)
+    try:
+        con.execute("UPDATE mandates SET expires_at = ? WHERE id = ?", ("garbage", mid))
+        con.commit()
+    finally:
+        con.close()
+    result = await _verify(mandate_id=mid)
+    assert result["authorized"] is False
+    assert result["reason"] == "Mandate expiry unreadable"
 
 
 async def test_positional_call_without_mandate_id_still_works() -> None:
