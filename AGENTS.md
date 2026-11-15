@@ -38,7 +38,7 @@ granted to yourself proves nothing.
 | Tool | Use it to |
 |---|---|
 | `create_mandate` | Register a mandate (principal, agent, scope, legal basis, duration, optional perimeter) |
-| `verify_mandate` | Ask whether an agent has an active, unexpired mandate (does not check the action against the perimeter) |
+| `verify_mandate` | Ask whether an agent has an active, unexpired mandate, or with `mandate_id` whether that one mandate is still in force (does not check the action against the perimeter) |
 | `log_action` | Append an action to the chained journal of a mandate |
 | `get_proof` | Export the full audit bundle of a mandate |
 | `issue_action_token` | Get a signed token only if the mandate and its perimeter allow the action (this is where the perimeter is enforced) |
