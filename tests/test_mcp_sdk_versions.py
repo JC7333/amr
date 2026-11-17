@@ -49,8 +49,11 @@ def _load_server_copy(monkeypatch, modules: dict) -> types.ModuleType:
 
 
 class _FakeServer:
+    """Shaped like mcp 1.x FastMCP: no version argument, a low-level server inside."""
+
     def __init__(self, name: str) -> None:
         self.name = name
+        self._mcp_server = types.SimpleNamespace(version=None)
         self.tools: list[str] = []
         self.annotations: dict[str, object] = {}
 
@@ -61,6 +64,16 @@ class _FakeServer:
             return fn
 
         return register
+
+
+class _FakeServerV2(_FakeServer):
+    """Shaped like mcp 2.x MCPServer: takes version, no _mcp_server attribute."""
+
+    def __init__(self, name: str, version: str = "") -> None:
+        self.name = name
+        self.version = version
+        self.tools = []
+        self.annotations = {}
 
 
 def _fake_module(name: str, attr: str) -> types.ModuleType:
@@ -154,6 +167,28 @@ def test_server_name_comes_from_settings(monkeypatch) -> None:
     v2 = _fake_module("mcp.server.mcpserver", "MCPServer")
     probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": v2})
     assert probe.mcp.name == settings.server_name
+
+
+def test_v2_shaped_sdk_gets_the_amr_version(monkeypatch) -> None:
+    """An SDK that takes version= receives the AMR version from settings."""
+    from amr.config import settings
+
+    monkeypatch.setattr(settings, "server_version", "9.8.7")
+    v2 = types.ModuleType("mcp.server.mcpserver")
+    v2.MCPServer = type("MCPServer", (_FakeServerV2,), {})
+    probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": v2})
+    assert probe.mcp.version == "9.8.7"
+    assert probe.mcp.name == settings.server_name
+
+
+def test_v1_shaped_sdk_gets_the_amr_version(monkeypatch) -> None:
+    """An SDK without version= gets the AMR version on its low-level server."""
+    from amr.config import settings
+
+    monkeypatch.setattr(settings, "server_version", "9.8.7")
+    v1 = _fake_module("mcp.server.fastmcp", "FastMCP")
+    probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": None, "mcp.server.fastmcp": v1})
+    assert probe.mcp._mcp_server.version == "9.8.7"
 
 
 # --- real SDK -----------------------------------------------------------------------------

@@ -176,13 +176,11 @@ def register_tools(server, profile: str) -> None:
 def make_server():
     """Create the MCP server; it tells clients the AMR version, not the MCP SDK version."""
     if "version" in inspect.signature(FastMCP.__init__).parameters:  # mcp 2.x
-        return FastMCP(settings.server_name, version="0.1.2")
+        return FastMCP(settings.server_name, version=settings.server_version)
     server = FastMCP(settings.server_name)  # mcp 1.x: no version argument
     # The low-level server sends this in serverInfo; left unset, mcp 1.x sends its own
     # package version instead of AMR's.
-    low_level = getattr(server, "_mcp_server", None)
-    if low_level is not None:
-        low_level.version = settings.server_version
+    server._mcp_server.version = settings.server_version
     return server
 
 
