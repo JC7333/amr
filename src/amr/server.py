@@ -9,6 +9,8 @@ An agent should never be given the principal's tools: an agent that can create, 
 revoke its own root mandate authorizes itself, and the mandate proves nothing.
 """
 
+import inspect
+
 try:  # mcp 2.x renamed FastMCP to MCPServer (and kept the decorator and run API used here)
     from mcp.server.mcpserver import MCPServer as FastMCP
 except ModuleNotFoundError as exc:  # mcp 1.x has no mcp.server.mcpserver
@@ -171,7 +173,18 @@ def register_tools(server, profile: str) -> None:
             server.tool(annotations=TOOL_ANNOTATIONS[tool.__name__])(tool)
 
 
-mcp = FastMCP(settings.server_name)
+def make_server():
+    """Create the MCP server; it tells clients the AMR version, not the MCP SDK version."""
+    if "version" in inspect.signature(FastMCP.__init__).parameters:  # mcp 2.x
+        return FastMCP(settings.server_name, version=settings.server_version)
+    server = FastMCP(settings.server_name)  # mcp 1.x: no version argument
+    # The low-level server sends this in serverInfo; left unset, mcp 1.x sends its own
+    # package version instead of AMR's.
+    server._mcp_server.version = settings.server_version
+    return server
+
+
+mcp = make_server()
 
 # Register tools - FastMCP generates schemas from type hints + docstrings
 register_tools(mcp, settings.tool_profile)

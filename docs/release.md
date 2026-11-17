@@ -101,7 +101,8 @@ after 0.1.2: version 0.1.2 on PyPI does not have it. After a release that adds, 
 
 Raise `version` in `pyproject.toml`, in `server.json` (twice: top level and the
 package) and `server_version` in `src/amr/config.py` in the same pull request (a test
-checks they agree); after the merge, tag `vX.Y.Z` as in step 5: the same approval
+checks they agree; `server_version` is also what the server announces to MCP clients
+in `serverInfo.version`); after the merge, tag `vX.Y.Z` as in step 5: the same approval
 publishes on PyPI, then lists the version in the MCP registry; if a tool changed, paste
 the new `tools/list` output in the directories that read the code (section above). A version published on PyPI can never be replaced, only
 followed by a new one. Machines that already ran `uvx mandatia` keep their cached version

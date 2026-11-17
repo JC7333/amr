@@ -49,8 +49,11 @@ def _load_server_copy(monkeypatch, modules: dict) -> types.ModuleType:
 
 
 class _FakeServer:
+    """Shaped like mcp 1.x FastMCP: no version argument, a low-level server inside."""
+
     def __init__(self, name: str) -> None:
         self.name = name
+        self._mcp_server = types.SimpleNamespace(version=None)
         self.tools: list[str] = []
         self.annotations: dict[str, object] = {}
 
@@ -61,6 +64,16 @@ class _FakeServer:
             return fn
 
         return register
+
+
+class _FakeServerV2(_FakeServer):
+    """Shaped like mcp 2.x MCPServer: takes version, no _mcp_server attribute."""
+
+    def __init__(self, name: str, version: str = "") -> None:
+        self.name = name
+        self.version = version
+        self.tools = []
+        self.annotations = {}
 
 
 def _fake_module(name: str, attr: str) -> types.ModuleType:
@@ -156,6 +169,28 @@ def test_server_name_comes_from_settings(monkeypatch) -> None:
     assert probe.mcp.name == settings.server_name
 
 
+def test_v2_shaped_sdk_gets_the_amr_version(monkeypatch) -> None:
+    """An SDK that takes version= receives the AMR version from settings."""
+    from amr.config import settings
+
+    monkeypatch.setattr(settings, "server_version", "9.8.7")
+    v2 = types.ModuleType("mcp.server.mcpserver")
+    v2.MCPServer = type("MCPServer", (_FakeServerV2,), {})
+    probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": v2})
+    assert probe.mcp.version == "9.8.7"
+    assert probe.mcp.name == settings.server_name
+
+
+def test_v1_shaped_sdk_gets_the_amr_version(monkeypatch) -> None:
+    """An SDK without version= gets the AMR version on its low-level server."""
+    from amr.config import settings
+
+    monkeypatch.setattr(settings, "server_version", "9.8.7")
+    v1 = _fake_module("mcp.server.fastmcp", "FastMCP")
+    probe = _load_server_copy(monkeypatch, {"mcp.server.mcpserver": None, "mcp.server.fastmcp": v1})
+    assert probe.mcp._mcp_server.version == "9.8.7"
+
+
 # --- real SDK -----------------------------------------------------------------------------
 
 
@@ -182,7 +217,7 @@ def test_stdio_session_lists_tools_and_answers(tmp_path) -> None:
     )
     params = StdioServerParameters(command=sys.executable, args=["-m", "amr.server"], env=env)
 
-    async def session() -> tuple[str, set[str], str, bool]:
+    async def session() -> tuple[str, str, set[str], str, bool]:
         async with (
             stdio_client(params) as (read, write),
             ClientSession(read, write) as client,
@@ -193,16 +228,45 @@ def test_stdio_session_lists_tools_and_answers(tmp_path) -> None:
             ok = await client.call_tool("verify_mandate", {"agent_id": "agent-x", "action": "read"})
             bad = await client.call_tool("verify_mandate", {"agent_id": "agent-x"})
             is_error = getattr(bad, "isError", getattr(bad, "is_error", None))
-            return info.name, names, ok.content[0].text, is_error
+            return info.name, info.version, names, ok.content[0].text, is_error
 
     from amr.config import settings
 
-    server_name, names, text, is_error = asyncio.run(asyncio.wait_for(session(), timeout=60))
+    server_name, server_version, names, text, is_error = asyncio.run(
+        asyncio.wait_for(session(), timeout=60)
+    )
     assert server_name == settings.server_name
+    assert server_version == settings.server_version
+    assert server_version != importlib.metadata.version("mcp")
     assert names == REGISTERED_TOOLS
     assert '"authorized": false' in text
     assert "No active mandate found for agent 'agent-x'" in text
     assert is_error is True
+
+
+def _initialization_options(server):
+    low = getattr(server, "_mcp_server", None) or server._lowlevel_server
+    return low.create_initialization_options()
+
+
+def test_server_announces_amr_version_not_sdk_version() -> None:
+    """serverInfo.version is the AMR version, whichever SDK is installed."""
+    from amr.config import settings
+    from amr.server import mcp
+
+    options = _initialization_options(mcp)
+    assert options.server_name == settings.server_name
+    assert options.server_version == settings.server_version
+    assert options.server_version == importlib.metadata.version("mandatia")
+
+
+def test_make_server_follows_the_setting(monkeypatch) -> None:
+    """The announced version comes from settings, not a constant in server.py."""
+    import amr.server
+
+    monkeypatch.setattr(amr.server.settings, "server_version", "9.8.7")
+    options = _initialization_options(amr.server.make_server())
+    assert options.server_version == "9.8.7"
 
 
 # --- documentation and CI ----------------------------------------------------------------
