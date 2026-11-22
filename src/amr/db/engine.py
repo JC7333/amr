@@ -165,6 +165,18 @@ CREATE TABLE IF NOT EXISTS mandate_pdf_signatures (
     UNIQUE (mandate_id, signed_pdf_sha256)
 );
 
+-- Schema v11: the action token that covers a logged action (log_action with
+-- action_token). One row per covered action, written in the same transaction as the
+-- action and sealed into its chain_hash; a token covers one action only (UNIQUE jti).
+-- Actions logged without a token have no row here and keep their hash. Append-only.
+CREATE TABLE IF NOT EXISTS action_log_tokens (
+    action_id        TEXT PRIMARY KEY REFERENCES action_logs(id),
+    jti              TEXT NOT NULL UNIQUE REFERENCES issued_tokens(jti),
+    mandate_id       TEXT NOT NULL REFERENCES mandates(id),
+    action_hash      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_log_tokens_mandate ON action_log_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_mandate ON action_contests(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_contester ON action_contests(contested_by);
 CREATE INDEX IF NOT EXISTS idx_token_amounts_mandate
@@ -235,7 +247,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
     7: token amounts for cumulative ceilings, 8: action contests,
-    9: did:web key domain proofs, 10: signed mandate PDFs).
+    9: did:web key domain proofs, 10: signed mandate PDFs, 11: action log tokens).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -321,6 +333,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (10,),
+        )
+        # Schema v11: action_log_tokens, created by the script above (log_action with
+        # an action token). Existing action logs and their chain hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (11,),
         )
         await db.commit()
 
@@ -556,6 +574,20 @@ async def get_period_spend(
             if issued_at > since:
                 total += Decimal(row["amount"])
     return total
+
+
+async def get_action_token_link(
+    db: aiosqlite.Connection, jti: str
+) -> dict[str, str] | None:
+    """Return the action_log_tokens row of a token already used by log_action, or None."""
+    cursor = await db.execute(
+        "SELECT * FROM action_log_tokens WHERE jti = ?",
+        (jti,),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return None
+    return dict(row)
 
 
 async def get_issued_token(

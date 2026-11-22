@@ -1,5 +1,8 @@
-# Token Issuance Specification v1.3
+# Token Issuance Specification v1.4
 
+v1.4 (22/11/2026): `log_action` may log an action under its token (`action_token`),
+and an operator may require it (`AMR_REQUIRE_ACTION_TOKEN_FOR_LOG`). Tokens and
+their claims are unchanged.
 v1.3 (29/10/2026): a risk class may require a registry check at execution
 (`registry_check`, claim `amr_registry_check`, tool `check_action_token`).
 v1.2 (28/10/2026): risk classes bound the token lifetime by action type.
@@ -164,6 +167,54 @@ asked for it.
 Downgrade: an AMR version before v1.3 rejects a risk class carrying `registry_check`
 (`extra="forbid"`), so once such a mandate exists, rolling back fails closed for it
 (no token, no verification) rather than ignoring the flag.
+
+## Logging under a token (v1.4)
+
+`log_action` takes an optional `action_token`: the compact JWS `issue_action_token`
+returned for the action being logged. With it, the action is logged only if:
+
+1. the header and signature check as in `check_action_token` (EdDSA only, key of this
+   registry), with `iss`, `exp` and `nbf` (the token must still be within its window
+   when the action is logged);
+2. the token is one this registry issued: its `jti` is in `issued_tokens` and the
+   record's mandate, action hash, audience and agent equal the token's claims;
+3. it was issued under the very mandate the action is logged under, to that mandate's
+   agent;
+4. it has not already covered another logged action: one token, one logged action
+   (`action_log_tokens.jti` is UNIQUE, so a race cannot log two);
+5. the mandate and every mandate above it still stand (the checks `log_action` always
+   made).
+
+`aud` is not compared with a caller's identity (the registry is not the receiver), only
+with the issued record. The token's `jti` and `amr_action_hash` are then stored in
+`action_log_tokens` (schema v11, append-only) and sealed into the action's
+`chain_hash` as `action_token_jti` and `action_token_action_hash`. `get_proof` lists
+both keys on covered actions only, and counts them in
+`chain_integrity.actions_with_token`; deleting or adding a link breaks
+`actions_chain_valid`.
+
+Refusals: `{"error": "...", "reason": ...}` with `action_token_required`, `malformed`,
+`wrong_algorithm`, `key_mismatch`, `bad_signature`, `wrong_issuer`, `token_expired`,
+`token_not_yet_valid`, `missing_claim`, `unknown_token`, `token_record_mismatch`,
+`token_mandate_mismatch`, `agent_mismatch` or `token_already_used`. Nothing is written.
+
+`AMR_REQUIRE_ACTION_TOKEN_FOR_LOG=true` (default `false`) refuses every action logged
+without a token. Off, an action without a token is logged as before: same fields, same
+`chain_hash`, and nothing in the journal says it was authorized.
+
+Downgrade: an AMR version before v1.4 does not read `action_log_tokens`. Once an action
+has been logged with a token, that version's `get_proof` rebuilds the action's hash
+without the two sealed keys and reports `actions_chain_valid: false` for the mandate.
+Do not roll back a registry that has logged an action under a token.
+
+Strict mode and short tokens: the token must still be within its window when the
+action is logged. With `AMR_REQUIRE_ACTION_TOKEN_FOR_LOG=true`, log right after acting:
+an action logged after its token's `exp` (a risk class may cut it to seconds) is
+refused and cannot be logged later.
+
+What it does not prove: that the action described in `action` is the one the token
+was issued for. The registry never sees the action itself; the receiver's
+`amr_action_hash` check (consumer contract, check 5) is what binds them.
 
 ## Replay Prevention
 The `issued_tokens` table stores every issued jti with its expiration.

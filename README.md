@@ -97,9 +97,12 @@ With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
    `reason: "action_out_of_scope"` and a `detail` (`forbidden:agent.create`,
    `amount_above_limit:500 EUR`, ...). No token, no action. The receiver checks the token
    with `check_action_token` (profile `receiver`).
-4. `log_action(mandate_id, action)`: append an entry to the hash-chained journal. Logging
-   is a statement by the agent's operator, not a check: it is not tied to a token, so put
-   the token's `jti` in `evidence` to link the two.
+4. `log_action(mandate_id, action, action_token=...)`: append an entry to the
+   hash-chained journal. With the token of step 3, the action is logged only if that
+   token is valid, was issued under this mandate and has not covered another action;
+   its `jti` is sealed into the entry. Without a token, logging is a statement by the
+   agent's operator, not a check; set `AMR_REQUIRE_ACTION_TOKEN_FOR_LOG=true` to refuse
+   every action logged without one.
 5. `issue_mandate_attestation` + `get_registry_public_key`: a signed document a third
    party checks offline with `python -m amr.verify_attestation`.
 6. `revoke_mandate(mandate_id, reason)`: the stop button. That mandate then issues no
@@ -687,6 +690,7 @@ Log an agent action under an active mandate. Cryptographically chained to previo
 | `action` | str | Description of the action performed |
 | `evidence` | str | Optional reference or evidence. E.g. `"email:msg_abc123"` |
 | `result` | str | Optional outcome. E.g. `"Delivered"` |
+| `action_token` | str | Optional. The token `issue_action_token` returned for this action. Required when `AMR_REQUIRE_ACTION_TOKEN_FOR_LOG=true` |
 
 **Returns:**
 ```json
@@ -695,9 +699,24 @@ Log an agent action under an active mandate. Cryptographically chained to previo
   "action_id": "7f3e9b2a-...",
   "mandate_id": "550e8400-...",
   "action": "Generated investment recommendation for Product X",
-  "chain_hash": "c8d7e6f5..."
+  "chain_hash": "c8d7e6f5...",
+  "token_jti": "3b1f..."
 }
 ```
+
+`token_jti` appears only when a token covers the action. A token is accepted when this
+registry signed and issued it, it is still within its validity window, it was issued
+under this mandate to its agent, and it has not covered another logged action (one
+token, one logged action). Its `jti` and action hash are sealed into the entry's
+`chain_hash`; `get_proof` shows them on covered actions and counts them in
+`chain_integrity.actions_with_token`. A refused token logs nothing:
+`{"error": "...", "reason": "token_already_used"}` (also `action_token_required`,
+`token_expired`, `bad_signature`, `unknown_token`, `token_mandate_mismatch`, ...; see
+`docs/token-issuance-spec.md`, "Logging under a token"). AMR does not see the action
+itself: the receiver's check of `amr_action_hash` is what ties the token to what was
+done. Without a token, nothing changes: same fields, same `chain_hash` as before.
+Once an action has been logged under a token, do not roll back to an AMR version
+before this one: its `get_proof` would report `actions_chain_valid: false`.
 
 The mandate must be active, not revoked and not expired. For a sub-mandate, so must
 every mandate above it: revoke or let expire a parent and its whole branch stops
@@ -889,6 +908,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
     "revocation_signature_valid": null,
     "contests_intact": true,
     "total_actions": 5,
+    "actions_with_token": 2,
     "total_events": 0
   },
   "compliance_notes": {
@@ -1138,6 +1158,7 @@ tests/
 | `AMR_TOKEN_ISSUER` | `amr://localhost` | `iss` of tokens and attestations; set it to an identifier of your registry (e.g. `https://registry.example.org`) so receivers can tell registries apart |
 | `AMR_REQUIRE_PRINCIPAL_SIGNATURE` | `false` | Refuse every mandate not signed by its principal |
 | `AMR_PRINCIPAL_SIGNATURE_MAX_AGE_SECONDS` | `900` | Allowed gap between `signed_at` and the registry clock |
+| `AMR_REQUIRE_ACTION_TOKEN_FOR_LOG` | `false` | Refuse every `log_action` call without a valid action token for that mandate |
 | `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
 | `AMR_DID_WEB_RESOLVE` | unset | `1` lets `register_principal_key` read the DID document of a `did:web` principal (one HTTPS GET to that domain). Read from the process environment only, never from `.env`. Unset: `did:web` keys are refused |
 | `AMR_PDF_TRUST_ROOTS_PATH` | unset | PEM file of the certificate authorities whose PDF signatures `attach_signed_mandate_pdf` accepts. Unset: no signed PDF is accepted |

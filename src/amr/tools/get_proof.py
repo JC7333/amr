@@ -415,7 +415,10 @@ async def get_proof(
             PDF was recorded; false when a record does not recompute from its row and
             the previous record, its stored file does not hash to signed_pdf_sha256,
             it names another mandate hash or payload, or records and their
-            "pdf_signature_attached" events do not match), total_actions, total_events
+            "pdf_signature_attached" events do not match), total_actions,
+            actions_with_token (actions logged under an action token: they carry
+            action_token_jti and action_token_action_hash, sealed into their
+            chain_hash; other actions do not have these keys), total_events
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -544,6 +547,22 @@ async def get_proof(
         action_rows = await actions_cursor.fetchall()
         actions = [dict(row) for row in action_rows]
 
+        # The action token that covers an action (log_action with action_token), sealed
+        # into its chain_hash: the two keys appear only on covered actions, so an action
+        # logged without a token keeps exactly the fields (and hash) it always had.
+        links_cursor = await db.execute(
+            "SELECT action_id, jti, action_hash FROM action_log_tokens WHERE mandate_id = ?",
+            (mandate_id,),
+        )
+        token_links = {row["action_id"]: row for row in await links_cursor.fetchall()}
+        actions_with_token = 0
+        for action in actions:
+            link = token_links.get(action["id"])
+            if link is not None:
+                action["action_token_jti"] = link["jti"]
+                action["action_token_action_hash"] = link["action_hash"]
+                actions_with_token += 1
+
         # Fetch all mandate events
         events_cursor = await db.execute(
             """
@@ -628,6 +647,7 @@ async def get_proof(
                 "contests_intact": contests_intact,
                 "pdf_signatures_intact": pdf_signatures_intact,
                 "total_actions": len(actions),
+                "actions_with_token": actions_with_token,
                 "total_events": len(events),
             },
             "compliance_notes": {
