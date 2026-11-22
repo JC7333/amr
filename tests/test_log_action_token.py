@@ -1,5 +1,6 @@
 """log_action under an action token: the logged action is tied to a token the registry issued."""
 
+import asyncio
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -134,7 +135,7 @@ async def test_setting_reads_the_environment(monkeypatch: pytest.MonkeyPatch) ->
     assert Settings().require_action_token_for_log is True
 
 
-async def test_action_without_token_keeps_its_fields_and_hash() -> None:
+async def test_action_without_token_keeps_its_fields_and_hash(temp_db: Path) -> None:
     mandate_id = await _mandate()
     logged = await _log(mandate_id)
     assert logged["status"] == "logged"
@@ -144,8 +145,22 @@ async def test_action_without_token_keeps_its_fields_and_hash() -> None:
     entry = proof["actions"][0]
     # Exactly the fields an action had before tokens could cover it.
     assert set(entry) == OLD_ACTION_FIELDS
-    data = {key: value for key, value in entry.items() if key != "chain_hash"}
-    assert compute_hash(data, proof["mandate"]["chain_hash"]) == entry["chain_hash"]
+    # The hash is the one the previous log_action wrote: its seven fields, read from
+    # the stored row (not from get_proof), chained to the mandate hash.
+    row = _sql(
+        temp_db,
+        "SELECT id, mandate_id, agent_id, action, evidence, result, timestamp, chain_hash "
+        "FROM action_logs",
+    )[0]
+    old_data = dict(
+        zip(
+            ("id", "mandate_id", "agent_id", "action", "evidence", "result", "timestamp"),
+            row[:7],
+            strict=True,
+        )
+    )
+    assert compute_hash(old_data, proof["mandate"]["chain_hash"]) == row[7]
+    assert row[7] == logged["chain_hash"]
     assert proof["chain_integrity"]["actions_chain_valid"] is True
     assert proof["chain_integrity"]["actions_with_token"] == 0
 
@@ -272,6 +287,42 @@ async def test_expired_token_is_refused(temp_db: Path) -> None:
     refused = await _log(mandate_id, _resign(issued["token"], exp=past))
     assert refused["reason"] == "token_expired"
     assert _sql(temp_db, "SELECT COUNT(*) FROM action_logs") == [(0,)]
+
+
+async def test_token_not_yet_valid_is_refused() -> None:
+    mandate_id = await _mandate()
+    issued = await _token(mandate_id)
+    future = int(datetime.now(UTC).timestamp()) + 120
+    refused = await _log(mandate_id, _resign(issued["token"], nbf=future))
+    assert refused["reason"] == "token_not_yet_valid"
+
+
+async def test_concurrent_calls_with_one_token_log_one_action(temp_db: Path) -> None:
+    mandate_id = await _mandate()
+    issued = await _token(mandate_id)
+    results = await asyncio.gather(
+        *(_log(mandate_id, issued["token"], action=f"Paid {i}") for i in range(6))
+    )
+    assert [r.get("status") for r in results].count("logged") == 1
+    refused = [r for r in results if r.get("status") != "logged"]
+    assert {r.get("reason") for r in refused} == {"token_already_used"}
+    assert _sql(temp_db, "SELECT COUNT(*) FROM action_logs") == [(1,)]
+    assert (await _proof(mandate_id))["chain_integrity"]["actions_chain_valid"] is True
+
+
+async def test_database_from_before_v11_is_upgraded(temp_db: Path) -> None:
+    mandate_id = await _mandate()
+    old = await _log(mandate_id)
+    # A registry as the previous version left it: no action_log_tokens, no version 11.
+    _sql(temp_db, "DROP TABLE action_log_tokens")
+    _sql(temp_db, "DELETE FROM schema_version WHERE version = 11")
+    issued = await _token(mandate_id)
+    assert (await _log(mandate_id, issued["token"]))["status"] == "logged"
+    assert (11,) in _sql(temp_db, "SELECT version FROM schema_version")
+    proof = await _proof(mandate_id)
+    assert proof["actions"][0]["chain_hash"] == old["chain_hash"]
+    assert proof["chain_integrity"]["actions_chain_valid"] is True
+    assert proof["chain_integrity"]["actions_with_token"] == 1
 
 
 async def test_token_signed_with_another_key_is_refused() -> None:

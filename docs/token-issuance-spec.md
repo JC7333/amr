@@ -202,6 +202,16 @@ Refusals: `{"error": "...", "reason": ...}` with `action_token_required`, `malfo
 without a token. Off, an action without a token is logged as before: same fields, same
 `chain_hash`, and nothing in the journal says it was authorized.
 
+Downgrade: an AMR version before v1.4 does not read `action_log_tokens`. Once an action
+has been logged with a token, that version's `get_proof` rebuilds the action's hash
+without the two sealed keys and reports `actions_chain_valid: false` for the mandate.
+Do not roll back a registry that has logged an action under a token.
+
+Strict mode and short tokens: the token must still be within its window when the
+action is logged. With `AMR_REQUIRE_ACTION_TOKEN_FOR_LOG=true`, log right after acting:
+an action logged after its token's `exp` (a risk class may cut it to seconds) is
+refused and cannot be logged later.
+
 What it does not prove: that the action described in `action` is the one the token
 was issued for. The registry never sees the action itself; the receiver's
 `amr_action_hash` check (consumer contract, check 5) is what binds them.

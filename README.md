@@ -715,6 +715,8 @@ token, one logged action). Its `jti` and action hash are sealed into the entry's
 `docs/token-issuance-spec.md`, "Logging under a token"). AMR does not see the action
 itself: the receiver's check of `amr_action_hash` is what ties the token to what was
 done. Without a token, nothing changes: same fields, same `chain_hash` as before.
+Once an action has been logged under a token, do not roll back to an AMR version
+before this one: its `get_proof` would report `actions_chain_valid: false`.
 
 The mandate must be active, not revoked and not expired. For a sub-mandate, so must
 every mandate above it: revoke or let expire a parent and its whole branch stops
@@ -906,6 +908,7 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
     "revocation_signature_valid": null,
     "contests_intact": true,
     "total_actions": 5,
+    "actions_with_token": 2,
     "total_events": 0
   },
   "compliance_notes": {

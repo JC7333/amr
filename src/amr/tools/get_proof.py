@@ -415,7 +415,10 @@ async def get_proof(
             PDF was recorded; false when a record does not recompute from its row and
             the previous record, its stored file does not hash to signed_pdf_sha256,
             it names another mandate hash or payload, or records and their
-            "pdf_signature_attached" events do not match), total_actions, total_events
+            "pdf_signature_attached" events do not match), total_actions,
+            actions_with_token (actions logged under an action token: they carry
+            action_token_jti and action_token_action_hash, sealed into their
+            chain_hash; other actions do not have these keys), total_events
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -552,11 +555,13 @@ async def get_proof(
             (mandate_id,),
         )
         token_links = {row["action_id"]: row for row in await links_cursor.fetchall()}
+        actions_with_token = 0
         for action in actions:
             link = token_links.get(action["id"])
             if link is not None:
                 action["action_token_jti"] = link["jti"]
                 action["action_token_action_hash"] = link["action_hash"]
+                actions_with_token += 1
 
         # Fetch all mandate events
         events_cursor = await db.execute(
@@ -642,7 +647,7 @@ async def get_proof(
                 "contests_intact": contests_intact,
                 "pdf_signatures_intact": pdf_signatures_intact,
                 "total_actions": len(actions),
-                "actions_with_token": len(token_links),
+                "actions_with_token": actions_with_token,
                 "total_events": len(events),
             },
             "compliance_notes": {

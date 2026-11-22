@@ -235,13 +235,20 @@ async def log_action(
         if link is not None:
             # Same transaction as the action; the UNIQUE jti refuses a second use even
             # when two calls race past the check above.
-            await db.execute(
-                """
-                INSERT INTO action_log_tokens (action_id, jti, mandate_id, action_hash)
-                VALUES (?, ?, ?, ?)
-                """,
-                (action_id, link["jti"], mandate_id, link["action_hash"]),
-            )
+            try:
+                await db.execute(
+                    """
+                    INSERT INTO action_log_tokens (action_id, jti, mandate_id, action_hash)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (action_id, link["jti"], mandate_id, link["action_hash"]),
+                )
+            except aiosqlite.IntegrityError:
+                # Another call used this token first: nothing of this one is committed.
+                await db.rollback()
+                return _token_refusal(
+                    "token_already_used", "this token already covers a logged action"
+                )
         await db.commit()
 
         body: dict[str, Any] = {
