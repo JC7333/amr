@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # How old (or how far in the future) a principal's signed_at may be.
     principal_signature_max_age_seconds: int = 900
 
+    # log_action (see docs/token-issuance-spec.md, "Logging under a token"). When True,
+    # every logged action must carry a valid action token issued for its mandate.
+    require_action_token_for_log: bool = False
+
     # Mandate attestations shown by an agent to a third party (see
     # docs/mandate-attestation-spec.md). Longest lifetime an attestation may have:
     # a revocation reaches a receiver that checks offline only when it expires.

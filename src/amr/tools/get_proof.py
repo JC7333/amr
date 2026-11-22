@@ -544,6 +544,20 @@ async def get_proof(
         action_rows = await actions_cursor.fetchall()
         actions = [dict(row) for row in action_rows]
 
+        # The action token that covers an action (log_action with action_token), sealed
+        # into its chain_hash: the two keys appear only on covered actions, so an action
+        # logged without a token keeps exactly the fields (and hash) it always had.
+        links_cursor = await db.execute(
+            "SELECT action_id, jti, action_hash FROM action_log_tokens WHERE mandate_id = ?",
+            (mandate_id,),
+        )
+        token_links = {row["action_id"]: row for row in await links_cursor.fetchall()}
+        for action in actions:
+            link = token_links.get(action["id"])
+            if link is not None:
+                action["action_token_jti"] = link["jti"]
+                action["action_token_action_hash"] = link["action_hash"]
+
         # Fetch all mandate events
         events_cursor = await db.execute(
             """
@@ -628,6 +642,7 @@ async def get_proof(
                 "contests_intact": contests_intact,
                 "pdf_signatures_intact": pdf_signatures_intact,
                 "total_actions": len(actions),
+                "actions_with_token": len(token_links),
                 "total_events": len(events),
             },
             "compliance_notes": {

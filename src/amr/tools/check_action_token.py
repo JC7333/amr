@@ -33,8 +33,14 @@ def _result(valid: bool, reason: str, checked_at: datetime, **fields: Any) -> st
     return json.dumps(body)
 
 
-def _decode(token: str, audience: str) -> tuple[dict[str, Any] | None, str, str | None]:
-    """Verify header, signature, iss, aud, exp and nbf. Returns (claims, reason, detail)."""
+def _decode(
+    token: str, audience: str | None
+) -> tuple[dict[str, Any] | None, str, str | None]:
+    """Verify header, signature, iss, aud, exp and nbf. Returns (claims, reason, detail).
+
+    audience None (log_action only): aud must be present but is not compared here; the
+    caller compares it with the issued_tokens record instead.
+    """
     try:
         header = jwt.get_unverified_header(token)
     except jwt.InvalidTokenError:
@@ -53,7 +59,7 @@ def _decode(token: str, audience: str) -> tuple[dict[str, Any] | None, str, str 
             algorithms=[ALGORITHM],
             audience=audience,
             issuer=settings.token_issuer,
-            options={"require": REQUIRED_CLAIMS},
+            options={"require": REQUIRED_CLAIMS, "verify_aud": audience is not None},
         )
     except jwt.InvalidSignatureError:
         return None, "bad_signature", "signature does not verify"
