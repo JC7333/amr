@@ -31,9 +31,10 @@ EXPECTED_STEPS = (
     "ok: a note changed after validation is refused (action_mismatch)",
     "ok: the scribe's declaration is logged",
     "ok: the signed withdrawal is registered",
-    "ok: no new authorization after the withdrawal",
+    "ok: no new authorization after the withdrawal (mandate_status_revoked)",
     "ok: an authorization issued before the withdrawal is refused",
-    "ok: the chains and both signatures verify",
+    "ok: the proof holds the committee decision, the declaration and the withdrawal",
+    "ok: the action chain and both signatures verify",
     "OK: every step behaved as documented.",
 )
 
@@ -77,17 +78,20 @@ def test_scribe_example_uses_three_profiles() -> None:
         assert f"server(stack, env, {profile})" in source, profile
 
 
-@pytest.mark.parametrize("doc", [DOC_EN, DOC_FR])
-def test_scribe_docs_link_the_example_and_state_the_limits(doc: Path) -> None:
+@pytest.mark.parametrize(
+    ("doc", "limit"),
+    [(DOC_EN, "It does not authenticate"), (DOC_FR, "Il n'authentifie pas")],
+)
+def test_scribe_docs_link_the_example_and_state_the_limits(doc: Path, limit: str) -> None:
     text = doc.read_text(encoding="utf-8")
     assert "examples/scribe_consultation.py" in text
     assert "tests/test_scribe_example.py" in text
-    assert ("does not authenticate" in text) or ("n'authentifie pas" in text)
+    assert limit in text
     for word in (
         "opposable",
         "legal mandate",
         "mandat légal",
-    ):  # the article number: test_mandate_vocabulary
+    ):  # article number: see test_mandate_vocabulary
         assert word not in text, word
 
 

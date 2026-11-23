@@ -16,12 +16,13 @@ The run plays, and checks, in this order:
   3. authorizations granted for consultation.transcribe and note.draft, refused for
      prescription.create, coding.propose, patient_record.export and patient_record.read;
   4. an authorization to file a note whose metadata carry who validated it and the
-     SHA-256 of the validated text: the record system recomputes the action hash from
-     the text it receives and accepts it; the same check with one word changed is
-     refused (action_mismatch);
+     SHA-256 of the validated text: the record system rebuilds the action hash from what
+     it knows itself (the doctor logged in, the text it received) and accepts it; the
+     same check on a text with one word changed is refused (action_mismatch);
   5. the principal withdraws the mandate with its signature: no new authorization, and
      the record system refuses an authorization issued before the withdrawal;
-  6. get_proof: the chains verify.
+  6. get_proof holds the committee decision, the declaration and the withdrawal; the
+     action chain and both signatures verify.
 
     uv run python examples/scribe_consultation.py
 
@@ -48,7 +49,7 @@ from mcp.client.stdio import stdio_client
 TIMEOUT = 60  # seconds, per step
 SERVER_CODE = "from amr.server import main; main()"
 
-PRINCIPAL = "org:example-hospital/committee-delegate"
+PRINCIPAL = "org:example-hospital/head-of-digital"
 SCRIBE = "agent:example-scribe-1"
 RECORD_SYSTEM = "receiver:example-patient-record"
 
@@ -248,10 +249,11 @@ async def run(workdir: Path) -> None:
             )
 
         print("\n### 4. Filing the note a doctor validated")
-        note = "Consultation of the day. Example text, no real patient."
+        # The scribe's side: the text the doctor validated, and who validated it.
+        validated_note = "Consultation of the day. Example text, no real patient."
         metadata = {
             "validated_by": "doctor:example-1",
-            "note_sha256": hashlib.sha256(note.encode("utf-8")).hexdigest(),
+            "note_sha256": hashlib.sha256(validated_note.encode("utf-8")).hexdigest(),
         }
         filing = await ask("note.file", metadata)
         check("token" in filing, "authorization granted: note.file, validator and text hash sealed")
@@ -261,30 +263,41 @@ async def run(workdir: Path) -> None:
             "note.file is in its risk class: 30-second token, registry re-check required",
         )
 
-        # The record system computes the hash itself, from the note it actually receives.
-        received = {**metadata, "note_sha256": hashlib.sha256(note.encode()).hexdigest()}
+        # The record system's side: it never takes the scribe's metadata. It rebuilds them
+        # from what it knows itself: the doctor logged in to its session and the text it
+        # received. Here both are written in the script; in real life they come from the
+        # record system's own session and from the note delivered to it.
+        logged_in_doctor = "doctor:example-1"
+
+        def expected(received_note: str) -> str:
+            rebuilt = {
+                "validated_by": logged_in_doctor,
+                "note_sha256": hashlib.sha256(received_note.encode("utf-8")).hexdigest(),
+            }
+            return action_hash("note.file", RECORD_SYSTEM, rebuilt, "note.file")
+
+        received_note = "Consultation of the day. Example text, no real patient."
         accepted = await call(
             record,
             "record system",
             "check_action_token",
             token=filing["token"],
             audience=RECORD_SYSTEM,
-            expected_action_hash=action_hash("note.file", RECORD_SYSTEM, received, "note.file"),
+            expected_action_hash=expected(received_note),
         )
         check(
             accepted.get("valid") is True and accepted.get("registry_check_required") is True,
             "the record system re-checks the registry and accepts the validated note",
         )
 
-        altered = note.replace("Example", "Changed")
-        changed = {**metadata, "note_sha256": hashlib.sha256(altered.encode()).hexdigest()}
+        altered_note = received_note.replace("Example", "Changed")
         mismatch = await call(
             record,
             "record system",
             "check_action_token",
             token=filing["token"],
             audience=RECORD_SYSTEM,
-            expected_action_hash=action_hash("note.file", RECORD_SYSTEM, changed, "note.file"),
+            expected_action_hash=expected(altered_note),
         )
         check(
             mismatch.get("valid") is False and mismatch.get("reason") == "action_mismatch",
@@ -323,8 +336,12 @@ async def run(workdir: Path) -> None:
         )
         check(revoked.get("status") == "revoked", "the signed withdrawal is registered")
 
-        after = await ask("note.draft")
-        check("token" not in after, "no new authorization after the withdrawal")
+        # letter.draft was never asked before: a refusal here can only come from the mandate.
+        after = await ask("letter.draft")
+        check(
+            "token" not in after and refusal_code(after) == "mandate_status_revoked",
+            "no new authorization after the withdrawal (mandate_status_revoked)",
+        )
         old = await call(
             record,
             "record system",
@@ -340,11 +357,19 @@ async def run(workdir: Path) -> None:
         print("\n### 6. The proof")
         proof_pack = await call(principal, "principal", "get_proof", mandate_id=mandate_id)
         integrity = proof_pack.get("chain_integrity", {})
+        recorded = proof_pack.get("mandate", {})
+        check(
+            (recorded.get("organ_decision") or {}).get("reference") == "EXAMPLE-2026-01"
+            and recorded.get("revocation") is not None
+            and integrity.get("total_actions") == 1
+            and integrity.get("actions_with_token") == 1,
+            "the proof holds the committee decision, the declaration and the withdrawal",
+        )
         check(
             integrity.get("actions_chain_valid") is True
             and integrity.get("principal_signature_valid") is True
             and integrity.get("revocation_signature_valid") is True,
-            "the chains and both signatures verify",
+            "the action chain and both signatures verify",
         )
     print("\nOK: every step behaved as documented.")
 

@@ -34,15 +34,18 @@ Trois serveurs AMR partagent un registre jetable. Chacun ne voit que les outils 
    (interdits), et pour lire le dossier (absent du mandat).
 4. **Classer la note validée par un médecin.** Le scribe demande une autorisation dont
    le détail porte qui a validé la note et l'empreinte SHA-256 du texte validé. Le
-   dossier patient calcule la même empreinte à partir du texte qu'il reçoit vraiment et
-   interroge le registre : accepté. Un mot changé après la validation, et l'empreinte ne
-   correspond plus : refusé (`action_mismatch`). Le scribe déclare ensuite le classement
+   dossier patient ne reprend pas ce détail au scribe : il le refait avec ce qu'il sait
+   lui-même, le médecin connecté à sa session et le texte qu'il a reçu, puis interroge le
+   registre : accepté. Si le texte reçu a un mot changé, l'empreinte ne correspond plus :
+   refusé (`action_mismatch`). Dans le script, le médecin connecté et le texte reçu sont
+   écrits à la main ; en vrai, ils viennent du dossier patient lui-même. Le scribe déclare ensuite le classement
    dans le journal, avec l'autorisation utilisée.
 5. **Le mandant retire le mandat**, avec sa signature. Le scribe n'obtient plus aucune
    autorisation, et le dossier patient refuse une autorisation délivrée avant le retrait
    (`mandate_status_revoked`).
 6. **La preuve.** `get_proof` rend le mandat, la décision de la commission, la
-   déclaration, le retrait, et vérifie les chaînes et les deux signatures.
+   déclaration du scribe et le retrait, et vérifie la chaîne des inscriptions, la
+   signature du mandat et celle du retrait par le mandant.
 
 La suite de tests exécute l'exemple (`tests/test_scribe_example.py`).
 

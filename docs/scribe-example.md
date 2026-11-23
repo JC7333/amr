@@ -32,15 +32,19 @@ Three AMR servers share one throw-away registry. Each sees only the tools of its
    and for reading the record (not in the mandate).
 4. **Filing the note a doctor validated.** The scribe asks for an authorization whose
    details carry who validated the note and the SHA-256 of the validated text. The
-   record system computes the same fingerprint from the text it actually receives and
-   asks the registry: accepted. With one word changed after validation, the fingerprint
-   no longer matches: refused (`action_mismatch`). The scribe then declares the filing in
+   record system does not take these details from the scribe: it rebuilds them from what
+   it knows itself, the doctor logged in to its session and the text it received, and
+   asks the registry: accepted. If the text it received has one word changed, the
+   fingerprint no longer matches: refused (`action_mismatch`). In the script, the logged-in
+   doctor and the received text are written by hand; in real life they come from the
+   record system itself. The scribe then declares the filing in
    the log, with the authorization it used.
 5. **The principal withdraws the mandate**, with its signature. The scribe gets no new
    authorization, and the record system refuses an authorization issued before the
    withdrawal (`mandate_status_revoked`).
 6. **The proof.** `get_proof` returns the mandate, the committee decision, the
-   declaration, the withdrawal, and checks that the chains and both signatures verify.
+   scribe's declaration and the withdrawal, and checks that the action chain, the
+   principal's signature of the mandate and its signature of the withdrawal verify.
 
 The test suite runs the example (`tests/test_scribe_example.py`).
 
