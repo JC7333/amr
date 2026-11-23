@@ -21,6 +21,7 @@ from amr.pades import (
     check_signed_mandate_pdf,
     load_trust_roots,
 )
+from amr.tool_errors import validation_field
 from amr.tools.get_proof import (
     PDF_SIGNATURE_EVENT,
     payload_matches_mandate,
@@ -40,8 +41,11 @@ class AttachSignedPdfRequest(BaseModel):
     signed_pdf_base64: str = Field(min_length=4, max_length=_MAX_BASE64_CHARS)
 
 
-def _error(code: str, message: str) -> str:
-    return json.dumps({"error": f"{code}: {message}", "code": code})
+def _error(code: str, message: str, field: str | None = None) -> str:
+    body = {"error": f"{code}: {message}", "code": code}
+    if field is not None:
+        body["field"] = field
+    return json.dumps(body)
 
 
 async def _parent_perimeter(db: aiosqlite.Connection, parent_id: str | None) -> str | None:
@@ -133,7 +137,7 @@ async def attach_signed_mandate_pdf(mandate_id: str, signed_pdf_base64: str) -> 
             )
             signed_pdf = base64.b64decode(req.signed_pdf_base64, validate=True)
         except ValidationError as exc:
-            return _error("invalid_input", exc.errors()[0]["msg"])
+            return _error("invalid_input", exc.errors()[0]["msg"], validation_field(exc))
         except (binascii.Error, ValueError):
             return _error("invalid_input", "signed_pdf_base64 is not standard base64")
         canonical_id = str(req.mandate_id)
