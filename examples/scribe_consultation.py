@@ -119,7 +119,9 @@ async def call(session: ClientSession, who: str, tool: str, **arguments) -> dict
     """
     result = await asyncio.wait_for(session.call_tool(tool, arguments), TIMEOUT)
     text = result.content[0].text
-    flag = " (refusal)" if result.isError else ""
+    # mcp 1.x names the flag isError, mcp 2.x is_error.
+    is_error = getattr(result, "isError", getattr(result, "is_error", False))
+    flag = " (refusal)" if is_error else ""
     print(f"\n== {who}: {tool}{flag}\n{text[:500]}{'...' if len(text) > 500 else ''}")
     try:
         return json.loads(text)
