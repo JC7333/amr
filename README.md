@@ -475,6 +475,46 @@ calls need the user's approval (with mcp SDK 1.7 or later; an older SDK cannot s
 They are hints for the client, not a protection: AMR applies its own rules whatever the
 client does with them. `python -m amr.tools_list` prints them with each tool.
 
+### Refusals are MCP errors, in one shape
+
+**Behaviour change.** A refusal (unknown, revoked or expired mandate, action outside the
+perimeter, invalid input, ...) now reaches the MCP client as a tool error (`isError: true`),
+where it used to come back as an ordinary result that a client could take for a success.
+An agent framework that treated those answers as successes now sees them as errors.
+
+Every refusal also carries three keys, the same for every tool, on top of the keys the tool
+already returned (none of them is removed or renamed, and a key the tool set is never
+overwritten):
+
+| Key | Content |
+|---|---|
+| `code` | A stable word: the tool's own `code`, else its `reason` (`action_out_of_scope`, `mandate_not_found`, `mandate_status_revoked`, `mandate_expired`, `invalid_input`, ...), else `internal_error` |
+| `message` | One readable sentence. A raw Pydantic validation text becomes `<field>: <what is wrong>`, without the input value or the Pydantic link |
+| `field` | The input field at fault when AMR knows it (`mandate_id`, `duration_hours`, ...), else `null` |
+
+```json
+{"error": "Mandate '550e8400-...' not found", "code": "mandate_not_found",
+ "field": "mandate_id", "message": "Mandate '550e8400-...' not found"}
+```
+
+A refusal is an answer with an `error` key, or `"denied": true`, or, from
+`check_action_token`, `"valid": false` with reason `invalid_input`, `internal_error` or
+`registry_unavailable` (the check could not be made). `verify_mandate` given a malformed
+`mandate_id` is a refusal too (`invalid_input`; it keeps `"authorized": false`). The negative answers of the checking tools stay ordinary results:
+`verify_mandate` answering `"authorized": false` and `check_action_token` answering
+`"valid": false` for a bad, expired or revoked token answer the question asked. Successful
+answers are unchanged, byte for byte. No mandate, action log or hash changes.
+
+This is done by the server when it registers the tools (`src/amr/tool_errors.py`): Python
+code that calls a tool function directly gets the same string as before, and only gains
+`code` and `field` on the refusals that had none. With mcp 1.19 or later (and 2.x) the
+error carries the JSON as its text and as `structuredContent.result`; an older SDK reports
+it as a tool error whose text contains the JSON. Arguments that do not match a tool's input
+schema at all (a missing required argument, a wrong type) are refused by the MCP SDK itself
+before AMR runs, as before.
+
+To go back: revert this change (no data migration is involved).
+
 ### `create_mandate`
 
 Register a new mandate: the written authorization a principal (a person or a body) gives for an AI agent to act on its behalf.
@@ -1118,6 +1158,7 @@ uv run amr
 src/amr/
 ├── config.py          # Settings via pydantic-settings (env prefix: AMR_)
 ├── server.py          # MCP server entrypoint (stdio transport; mcp 1.x or 2.x)
+├── tool_errors.py     # refusals sent to the client as MCP errors (code, message, field)
 ├── models/mandate.py  # Pydantic models: MandateCreate, Mandate, ActionLog
 ├── crypto/chain.py    # compute_hash() and verify_chain() — stdlib only
 ├── db/engine.py       # init_db(), get_db(), get_last_mandate_hash()

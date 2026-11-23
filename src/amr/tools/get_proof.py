@@ -428,7 +428,13 @@ async def get_proof(
         try:
             UUID(mandate_id)
         except ValueError:
-            return json.dumps({"error": f"Invalid mandate_id format: '{mandate_id}'"})
+            return json.dumps(
+                {
+                    "error": f"Invalid mandate_id format: '{mandate_id}'",
+                    "code": "invalid_input",
+                    "field": "mandate_id",
+                }
+            )
 
         await init_db(settings.db_path)
         db = await get_db(settings.db_path)
@@ -449,7 +455,13 @@ async def get_proof(
         mandate_row = await cursor.fetchone()
 
         if mandate_row is None:
-            return json.dumps({"error": f"Mandate '{mandate_id}' not found"})
+            return json.dumps(
+                {
+                    "error": f"Mandate '{mandate_id}' not found",
+                    "code": "mandate_not_found",
+                    "field": "mandate_id",
+                }
+            )
 
         mandate_dict = {
             "id": mandate_row["id"],

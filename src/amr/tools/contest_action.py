@@ -34,6 +34,7 @@ from amr.crypto.principal import (
 )
 from amr.db.engine import get_db, get_principal_key, init_db
 from amr.delegation import MAX_DELEGATION_DEPTH
+from amr.tool_errors import validation_field
 
 CONTEST_CONTEXT = "amr.action_contest.v1"
 CONTEST_EVENT = "action_contested"
@@ -41,8 +42,11 @@ MAX_RESPONSE_DAYS = 365
 MAX_LISTED_CONTESTS = 500
 
 
-def _error(code: str, message: str) -> str:
-    return json.dumps({"error": f"{code}: {message}", "code": code})
+def _error(code: str, message: str, field: str | None = None) -> str:
+    body = {"error": f"{code}: {message}", "code": code}
+    if field is not None:
+        body["field"] = field
+    return json.dumps(body)
 
 
 def _aware(moment: str) -> datetime:
@@ -407,7 +411,7 @@ async def prepare_contest_signature(
                 contested_by=contested_by,
             )
         except ValidationError as exc:
-            return _error("invalid_input", exc.errors()[0]["msg"])
+            return _error("invalid_input", exc.errors()[0]["msg"], validation_field(exc))
         moment = signed_at if signed_at is not None else datetime.now(UTC).isoformat()
         parse_signed_at(moment)
         await init_db(settings.db_path)
@@ -508,7 +512,7 @@ async def contest_action(
                 contested_by=contested_by,
             )
         except ValidationError as exc:
-            return _error("invalid_input", exc.errors()[0]["msg"])
+            return _error("invalid_input", exc.errors()[0]["msg"], validation_field(exc))
         now = datetime.now(UTC)
 
         await init_db(settings.db_path)
@@ -655,7 +659,7 @@ async def list_action_contests(
                 due_within_days=due_within_days,
             )
         except ValidationError as exc:
-            return _error("invalid_input", exc.errors()[0]["msg"])
+            return _error("invalid_input", exc.errors()[0]["msg"], validation_field(exc))
         if req.mandate_id is None and req.contested_by is None:
             return _error("invalid_input", "give mandate_id, contested_by, or both")
         now = datetime.now(UTC)

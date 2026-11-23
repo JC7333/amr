@@ -62,7 +62,9 @@ def _own_refusal(status: str, expires_at: str, now: datetime) -> str | None:
 async def _proof(mandate_id: str) -> dict[str, Any]:
     proof = json.loads(await get_proof(mandate_id))
     if "error" in proof:
-        raise LookupError(proof["error"])
+        refused = LookupError(proof["error"])
+        refused.code = proof.get("code", "internal_error")  # type: ignore[attr-defined]
+        raise refused
     return proof
 
 
@@ -213,19 +215,34 @@ async def export_insurer_dossier(
                 format=format,
             )
         except ValidationError as exc:
-            return json.dumps({"error": f"Invalid input: {exc.errors()[0]['msg']}"})
+            first = exc.errors()[0]
+            return json.dumps(
+                {
+                    "error": f"Invalid input: {first['msg']}",
+                    "code": "invalid_input",
+                    "field": ".".join(str(part) for part in first["loc"]) or None,
+                }
+            )
 
         try:
             root = await _proof(str(req.mandate_id))
         except LookupError as exc:
-            return json.dumps({"error": str(exc)})
+            message, code = str(exc), getattr(exc, "code", "internal_error")
+            field = "mandate_id" if code in ("invalid_input", "mandate_not_found") else None
+            return json.dumps({"error": message, "code": code, "field": field})
 
         now = datetime.now(UTC)
         mandate = root["mandate"]
         start = req.period_start or _aware(mandate["created_at"])
         end = req.period_end or now
         if start > end:
-            return json.dumps({"error": "Invalid input: period_start is after period_end"})
+            return json.dumps(
+                {
+                    "error": "Invalid input: period_start is after period_end",
+                    "code": "invalid_input",
+                    "field": "period_end" if req.period_start is None else "period_start",
+                }
+            )
 
         await init_db(settings.db_path)
         db = await get_db(settings.db_path)
@@ -286,7 +303,10 @@ async def export_insurer_dossier(
         if not settings.signing_key_path.exists():
             # Never mint a key here: a dossier signed by a key no verifier holds is useless.
             return json.dumps(
-                {"error": "No registry signing key: create and publish one before exporting"}
+                {
+                    "error": "No registry signing key: create and publish one before exporting",
+                    "code": "registry_key_missing",
+                }
             )
         key_id = get_key_id()
         digest = dossier_digest(dossier)

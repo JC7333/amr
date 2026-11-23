@@ -35,12 +35,16 @@ from amr.db.engine import (
     init_db,
 )
 from amr.delegation import MAX_DELEGATION_DEPTH
+from amr.tool_errors import validation_field
 
 REVOCATION_CONTEXT = "amr.revocation.v1"
 
 
-def _error(code: str, message: str) -> str:
-    return json.dumps({"error": f"{code}: {message}", "code": code})
+def _error(code: str, message: str, field: str | None = None) -> str:
+    body = {"error": f"{code}: {message}", "code": code}
+    if field is not None:
+        body["field"] = field
+    return json.dumps(body)
 
 
 class RevocationRequest(BaseModel):
@@ -232,7 +236,7 @@ async def prepare_revocation_signature(
         try:
             req = RevocationRequest(mandate_id=mandate_id, reason=reason)  # type: ignore[arg-type]
         except ValidationError as exc:
-            return _error("invalid_input", exc.errors()[0]["msg"])
+            return _error("invalid_input", exc.errors()[0]["msg"], validation_field(exc))
         moment = signed_at if signed_at is not None else datetime.now(UTC).isoformat()
         parse_signed_at(moment)
         await init_db(settings.db_path)
@@ -310,7 +314,7 @@ async def revoke_mandate(
         try:
             req = RevocationRequest(mandate_id=mandate_id, reason=reason)  # type: ignore[arg-type]
         except ValidationError as exc:
-            return _error("invalid_input", exc.errors()[0]["msg"])
+            return _error("invalid_input", exc.errors()[0]["msg"], validation_field(exc))
         canonical_id = str(req.mandate_id)
         now = datetime.now(UTC)
 

@@ -119,7 +119,13 @@ async def log_action(
         try:
             UUID(mandate_id)
         except ValueError:
-            return json.dumps({"error": f"Invalid mandate_id format: '{mandate_id}'"})
+            return json.dumps(
+                {
+                    "error": f"Invalid mandate_id format: '{mandate_id}'",
+                    "code": "invalid_input",
+                    "field": "mandate_id",
+                }
+            )
 
         if action_token is None and settings.require_action_token_for_log:
             return _token_refusal(
@@ -144,7 +150,13 @@ async def log_action(
         mandate_row = await cursor.fetchone()
 
         if mandate_row is None:
-            return json.dumps({"error": f"Mandate '{mandate_id}' not found"})
+            return json.dumps(
+                {
+                    "error": f"Mandate '{mandate_id}' not found",
+                    "code": "mandate_not_found",
+                    "field": "mandate_id",
+                }
+            )
 
         if mandate_row["status"] != "active":
             return json.dumps(
@@ -152,13 +164,17 @@ async def log_action(
                     "error": (
                         f"Mandate '{mandate_id}' is not active "
                         f"(status: {mandate_row['status']})"
-                    )
+                    ),
+                    "code": f"mandate_status_{mandate_row['status']}",
                 }
             )
 
         if await is_revoked(db, mandate_row["id"]):
             return json.dumps(
-                {"error": f"Mandate '{mandate_id}' is not active (status: revoked)"}
+                {
+                    "error": f"Mandate '{mandate_id}' is not active (status: revoked)",
+                    "code": "mandate_status_revoked",
+                }
             )
 
         expires_at_str = mandate_row["expires_at"]
@@ -170,7 +186,10 @@ async def log_action(
 
         if now > expires_at:
             return json.dumps(
-                {"error": f"Mandate '{mandate_id}' has expired at {expires_at_str}"}
+                {
+                    "error": f"Mandate '{mandate_id}' has expired at {expires_at_str}",
+                    "code": "mandate_expired",
+                }
             )
 
         # A sub-mandate is only in force while every mandate above it is.

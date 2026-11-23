@@ -24,6 +24,7 @@ except ImportError:  # older SDK: it cannot send annotations, so tools register 
     ToolAnnotations = None
 
 from amr.config import settings
+from amr.tool_errors import report_refusals
 from amr.tools.attach_signed_mandate_pdf import attach_signed_mandate_pdf
 from amr.tools.check_action_token import check_action_token
 from amr.tools.contest_action import (
@@ -165,12 +166,17 @@ def tools_for(profile: str) -> tuple:
 
 
 def register_tools(server, profile: str) -> None:
-    """Register the tools of this profile on a server, each with its MCP annotations."""
+    """Register the tools of this profile on a server, each with its MCP annotations.
+
+    Each tool is wrapped so that a refusal reaches the client flagged isError, with the
+    common keys code, message and field (see amr.tool_errors).
+    """
     for tool in tools_for(profile):
+        wrapped = report_refusals(tool)
         if ToolAnnotations is None:
-            server.tool()(tool)
+            server.tool()(wrapped)
         else:
-            server.tool(annotations=TOOL_ANNOTATIONS[tool.__name__])(tool)
+            server.tool(annotations=TOOL_ANNOTATIONS[tool.__name__])(wrapped)
 
 
 def make_server():
