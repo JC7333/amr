@@ -21,7 +21,8 @@ overwritten. A successful answer is passed through untouched.
 
 What counts as a refusal: a top-level "error" key, "denied": true, or, for
 check_action_token only, "valid": false with reason invalid_input or internal_error (the
-call itself could not be answered). The other negative answers of the checking tools,
+call itself could not be answered), or verify_mandate "authorized": false for a
+malformed mandate_id (bad input). The other negative answers of the checking tools,
 verify_mandate "authorized": false and check_action_token "valid": false with any other
 reason, are answers to the question asked, not errors: they stay ordinary results.
 
@@ -35,12 +36,16 @@ import json
 import re
 from typing import Any
 
-# check_action_token answers "valid": false for a bad token (an answer); these two reasons
+# check_action_token answers "valid": false for a bad token (an answer); these reasons
 # mean the check could not be made at all.
-CHECK_FAILED_REASONS = frozenset({"invalid_input", "internal_error"})
+CHECK_FAILED_REASONS = frozenset({"invalid_input", "internal_error", "registry_unavailable"})
+
+# verify_mandate answers a malformed mandate_id with "authorized": false and this reason:
+# bad input, not an answer to the question asked.
+VERIFY_BAD_ID_PREFIX = "Invalid mandate_id format"
 
 _PYDANTIC_HEADER = re.compile(r"(\d+) validation errors? for \S+")
-_TYPE_SUFFIX = re.compile(r"\s*\[type=[^\]]*\]\s*$")
+_TYPE_SUFFIX = re.compile(r"\s*\[type=.*\]\s*$")
 _CODE_PREFIX = re.compile(r"^([a-z][a-z0-9_]*):\s*")
 
 
@@ -59,10 +64,15 @@ def is_refusal(body: Any) -> bool:
         return True
     if body.get("denied") is True:
         return True
+    reason = body.get("reason")
+    if body.get("authorized") is False and isinstance(reason, str):
+        return reason.startswith(VERIFY_BAD_ID_PREFIX)
     return body.get("valid") is False and body.get("reason") in CHECK_FAILED_REASONS
 
 
 def _code_of(body: dict[str, Any]) -> str:
+    if body.get("authorized") is False:  # verify_mandate's malformed mandate_id
+        return "invalid_input"
     for key in ("code", "reason"):
         value = body.get(key)
         if isinstance(value, str) and value:
@@ -112,12 +122,20 @@ def common_shape(body: dict[str, Any]) -> dict[str, Any]:
             code = "invalid_input"
     else:
         message = raw
-        prefix = _CODE_PREFIX.match(message) if from_error else None
+        # "reason: detail" built above keeps its reason; a reason that is itself
+        # "code: text" loses the code, which is already in code.
+        prefix = _CODE_PREFIX.match(message) if from_error or not body.get("detail") else None
         if prefix and prefix.group(1) == code and message[prefix.end() :]:
             message = message[prefix.end() :]
+        elif message == code:  # a bare reason word: say it as words
+            message = code.replace("_", " ").capitalize()
         message = message.removeprefix("Invalid input: ").removeprefix("Value error, ")
         if code == "invalid_input" and field and not message.startswith(field):
             message = f"{field}: {message}"
+    if field is None and (
+        code == "mandate_not_found" or str(body.get("reason", "")).startswith(VERIFY_BAD_ID_PREFIX)
+    ):
+        field = "mandate_id"
     return {"code": code, "message": message, "field": field}
 
 

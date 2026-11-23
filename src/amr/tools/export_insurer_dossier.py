@@ -62,7 +62,9 @@ def _own_refusal(status: str, expires_at: str, now: datetime) -> str | None:
 async def _proof(mandate_id: str) -> dict[str, Any]:
     proof = json.loads(await get_proof(mandate_id))
     if "error" in proof:
-        raise LookupError(proof["error"], proof.get("code", "internal_error"))
+        refused = LookupError(proof["error"])
+        refused.code = proof.get("code", "internal_error")  # type: ignore[attr-defined]
+        raise refused
     return proof
 
 
@@ -225,7 +227,7 @@ async def export_insurer_dossier(
         try:
             root = await _proof(str(req.mandate_id))
         except LookupError as exc:
-            message, code = exc.args
+            message, code = str(exc), getattr(exc, "code", "internal_error")
             field = "mandate_id" if code in ("invalid_input", "mandate_not_found") else None
             return json.dumps({"error": message, "code": code, "field": field})
 

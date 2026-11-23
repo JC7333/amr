@@ -498,8 +498,9 @@ overwritten):
 ```
 
 A refusal is an answer with an `error` key, or `"denied": true`, or, from
-`check_action_token`, `"valid": false` with reason `invalid_input` or `internal_error` (the
-check could not be made). The negative answers of the checking tools stay ordinary results:
+`check_action_token`, `"valid": false` with reason `invalid_input`, `internal_error` or
+`registry_unavailable` (the check could not be made). `verify_mandate` given a malformed
+`mandate_id` is a refusal too (`invalid_input`; it keeps `"authorized": false`). The negative answers of the checking tools stay ordinary results:
 `verify_mandate` answering `"authorized": false` and `check_action_token` answering
 `"valid": false` for a bad, expired or revoked token answer the question asked. Successful
 answers are unchanged, byte for byte. No mandate, action log or hash changes.

@@ -427,10 +427,62 @@ async def test_export_insurer_dossier_without_key(
 
 
 async def test_direct_python_calls_are_unchanged() -> None:
-    """Only the MCP layer adds message: a direct call still returns the tool's own JSON."""
+    """Only the MCP layer adds message; a direct call keeps the tool's own keys
+    (refusals that had no code gained code and field, nothing else)."""
     body = json.loads(await get_proof(str(uuid4())))
     assert "message" not in body
     assert body["error"].endswith("not found")
+
+
+async def test_verify_mandate_malformed_id_is_an_error() -> None:
+    result = await report_refusals(verify_mandate)(
+        agent_id="agent:b", action="x", mandate_id="nope"
+    )
+    assert _is_error(result) is True
+    body = json.loads(_text(result))
+    assert body["authorized"] is False
+    assert (body["code"], body["field"]) == ("invalid_input", "mandate_id")
+    assert body["message"] == "Invalid mandate_id format: 'nope'"
+
+
+def test_an_input_value_with_a_bracket_does_not_leak() -> None:
+    class _Title(BaseModel):
+        title: str = Field(min_length=5)
+
+    try:
+        _Title(title="[a]")
+    except ValidationError as exc:
+        raw = str(exc)
+    shape = common_shape({"error": f"issue_report_invalid: {raw}", "code": "issue_report_invalid"})
+    assert shape["message"] == "title: String should have at least 5 characters"
+    assert "[a]" not in shape["message"]
+
+
+def test_denied_reasons_read_as_sentences() -> None:
+    bare = common_shape({"denied": True, "reason": "mandate_not_found", "mandate_id": None})
+    assert bare == {
+        "code": "mandate_not_found",
+        "message": "Mandate not found",
+        "field": "mandate_id",
+    }
+    coded = common_shape({"denied": True, "reason": "invalid_input: Expecting value"})
+    assert coded["message"] == "Expecting value"
+
+
+def test_registry_unavailable_is_an_error() -> None:
+    assert is_refusal({"valid": False, "reason": "registry_unavailable"})
+
+
+async def test_export_keeps_the_message_of_a_failed_proof(monkeypatch: pytest.MonkeyPatch) -> None:
+    from amr.tools import export_insurer_dossier as module
+
+    async def broken(_mandate_id: str) -> str:
+        return json.dumps({"error": "disk failure"})
+
+    monkeypatch.setattr(module, "get_proof", broken)
+    body = json.loads(await module.export_insurer_dossier(mandate_id=str(uuid4())))
+    assert body["error"] == "disk failure"
+    assert (body["code"], body["field"]) == ("internal_error", None)
 
 
 # --- end to end, over stdio, with the installed SDK ----------------------------------------
