@@ -128,6 +128,11 @@ git clone https://github.com/JC7333/amr.git && cd amr && uv sync
 uv run python examples/quickstart_agent.py   # prints every step, ends with "OK"
 ```
 
+A worked case with three roles (principal, agent, receiver), a committee decision, a
+validated note and a signed withdrawal:
+[`docs/scribe-example.md`](https://github.com/JC7333/amr/blob/main/docs/scribe-example.md)
+(in French: [`docs/scribe-example.fr.md`](https://github.com/JC7333/amr/blob/main/docs/scribe-example.fr.md)).
+
 Machine-readable summaries for agents: [`AGENTS.md`](https://github.com/JC7333/amr/blob/main/AGENTS.md) and [`llms.txt`](https://github.com/JC7333/amr/blob/main/llms.txt).
 To report a problem, call `report_issue` or open an issue at
 https://github.com/JC7333/amr/issues (never paste real mandate contents or personal data
