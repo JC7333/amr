@@ -34,12 +34,15 @@ def _result(valid: bool, reason: str, checked_at: datetime, **fields: Any) -> st
 
 
 def _decode(
-    token: str, audience: str | None
+    token: str, audience: str | None, verify_exp: bool = True
 ) -> tuple[dict[str, Any] | None, str, str | None]:
     """Verify header, signature, iss, aud, exp and nbf. Returns (claims, reason, detail).
 
     audience None (log_action only): aud must be present but is not compared here; the
     caller compares it with the issued_tokens record instead.
+    verify_exp False (record_action_receipt only): a token past its exp is still decoded,
+    so a receiver can record what it did after the token expired; the caller bounds how
+    late. exp must still be present.
     """
     try:
         header = jwt.get_unverified_header(token)
@@ -59,7 +62,11 @@ def _decode(
             algorithms=[ALGORITHM],
             audience=audience,
             issuer=settings.token_issuer,
-            options={"require": REQUIRED_CLAIMS, "verify_aud": audience is not None},
+            options={
+                "require": REQUIRED_CLAIMS,
+                "verify_aud": audience is not None,
+                "verify_exp": verify_exp,
+            },
         )
     except jwt.InvalidSignatureError:
         return None, "bad_signature", "signature does not verify"

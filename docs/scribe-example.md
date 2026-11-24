@@ -38,13 +38,18 @@ Three AMR servers share one throw-away registry. Each sees only the tools of its
    fingerprint no longer matches: refused (`action_mismatch`). In the script, the logged-in
    doctor and the received text are written by hand; in real life they come from the
    record system itself. The scribe then declares the filing in
-   the log, with the authorization it used.
+   the log, with the authorization it used, and the record system leaves its own receipt
+   (`record_action_receipt`): it filed the note, with the SHA-256 of the text it received.
 5. **The principal withdraws the mandate**, with its signature. The scribe gets no new
    authorization, and the record system refuses an authorization issued before the
-   withdrawal (`mandate_status_revoked`).
+   withdrawal (`mandate_status_revoked`). It records that refusal, and why, in a receipt.
 6. **The proof.** `get_proof` returns the mandate, the committee decision, the
    scribe's declaration and the withdrawal, and checks that the action chain, the
-   principal's signature of the mandate and its signature of the withdrawal verify.
+   principal's signature of the mandate and its signature of the withdrawal verify. For
+   each action it shows three separate lines: the authorization the registry gave, the
+   scribe's declaration and the record system's receipt, and which one is missing. For
+   the filed note, none is missing; for the transcription refused after the withdrawal,
+   the scribe's declaration is missing.
 
 The test suite runs the example (`tests/test_scribe_example.py`).
 
@@ -57,4 +62,6 @@ The test suite runs the example (`tests/test_scribe_example.py`).
   with what it knows (who is logged in, which text it receives).
 - The log holds what the scribe declares it did. It is a declaration, not a proof that
   the act took place.
+- The receipt holds what the record system declares it did. It is not signed, and it
+  does not prove the content: it is a second voice next to the scribe's, nothing more.
 - AMR does not make a hospital compliant with any text, and this is not legal advice.

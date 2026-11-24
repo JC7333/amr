@@ -38,6 +38,7 @@ from amr.tools.contest_action import (
     contest_signature_valid,
     mandate_contests,
 )
+from amr.tools.record_action_receipt import mandate_receipts, receipt_hash_valid
 from amr.tools.revoke_mandate import revocation_signature_valid
 
 
@@ -354,6 +355,78 @@ async def principal_signature_status(
     return None, None
 
 
+def _action_trail(
+    actions: list[dict[str, Any]],
+    token_links: dict[str, Any],
+    issued: dict[str, dict[str, Any]],
+    receipts: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """For each action, its three lines and which ones are missing, oldest first.
+
+    One entry per token issued under the mandate, plus one per action logged without a
+    token. authorization: the token the registry issued; agent_declaration: the action
+    the agent logged with it; receiver_receipt: what the receiver declared it did.
+    """
+    action_by_jti = {link["jti"]: action_id for action_id, link in token_links.items()}
+    actions_by_id = {action["id"]: action for action in actions}
+    entries: list[tuple[datetime, dict[str, Any]]] = []
+    for jti, token_row in issued.items():
+        action = actions_by_id.get(action_by_jti.get(jti, ""))
+        receipt = receipts.get(jti)
+        entry = {
+            "jti": jti,
+            "authorization": {
+                "issued_at": token_row["issued_at"],
+                "expires_at": token_row["expires_at"],
+                "audience": token_row["audience"],
+                "action_hash": token_row["action_hash"],
+            },
+            "agent_declaration": _declaration(action),
+            "receiver_receipt": (
+                {
+                    "outcome": receipt["outcome"],
+                    "refusal_reason": receipt["refusal_reason"] or None,
+                    "received_content_sha256": receipt["received_content_sha256"],
+                    "recorded_at": receipt["recorded_at"],
+                    "audience": receipt["audience"],
+                    "chain_hash": receipt["chain_hash"],
+                }
+                if receipt is not None
+                else None
+            ),
+        }
+        entries.append((_aware(token_row["issued_at"]), entry))
+    for action in actions:
+        if action["id"] not in token_links:
+            entry = {
+                "jti": None,
+                "authorization": None,
+                "agent_declaration": _declaration(action),
+                "receiver_receipt": None,
+            }
+            entries.append((_aware(action["timestamp"]), entry))
+    entries.sort(key=lambda pair: pair[0])
+    trail = []
+    for _, entry in entries:
+        entry["missing"] = [
+            line
+            for line in ("authorization", "agent_declaration", "receiver_receipt")
+            if entry[line] is None
+        ]
+        trail.append(entry)
+    return trail
+
+
+def _declaration(action: dict[str, Any] | None) -> dict[str, Any] | None:
+    if action is None:
+        return None
+    return {
+        "action_id": action["id"],
+        "timestamp": action["timestamp"],
+        "chain_hash": action["chain_hash"],
+    }
+
+
 async def get_proof(
     mandate_id: str,
     format: str = "json",  # noqa: A002
@@ -427,6 +500,20 @@ async def get_proof(
             null. validated_by is the validator the agent declared: the registry does
             not authenticate it. These rows are not hash-chained; the same values are
             sealed in each signed token
+          - action_trail: for each action, oldest first, its three separate lines:
+            one entry per action token issued under this mandate, plus one per
+            action logged without a token, each {jti, authorization {issued_at,
+            expires_at, audience, action_hash} (the token the registry issued, or
+            null), agent_declaration {action_id, timestamp, chain_hash} (the action
+            the agent logged with that token, or null), receiver_receipt {outcome,
+            refusal_reason, received_content_sha256, recorded_at, audience,
+            chain_hash} (what the receiver declared it did, record_action_receipt,
+            or null), missing (the names of the null lines)}. A receipt is the
+            receiver's declaration, not signed: it does not prove the content.
+            chain_integrity also gains receipts_intact (null when no receipt; false
+            when a receipt's chain_hash does not recompute from its row and the
+            previous receipt, or it names a token, action hash, agent or audience
+            the registry did not issue under this mandate) and actions_with_receipt
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -596,6 +683,30 @@ async def get_proof(
             for row in await validations_cursor.fetchall()
         ]
 
+        # The receivers' receipts (record_action_receipt), each re-checked against its
+        # chain and the token the registry issued; then, for each action, the three
+        # lines: authorization (token), agent's declaration (log_action), receipt.
+        tokens_cursor = await db.execute(
+            "SELECT jti, agent_id, action_hash, audience, issued_at, expires_at "
+            "FROM issued_tokens WHERE mandate_id = ? ORDER BY issued_at ASC, jti ASC",
+            (mandate_id,),
+        )
+        issued = {row["jti"]: dict(row) for row in await tokens_cursor.fetchall()}
+        receipts: dict[str, dict[str, Any]] = {}
+        receipts_intact: bool | None = None
+        for receipt, previous_hash in await mandate_receipts(db, mandate_id):
+            token_row = issued.get(receipt["jti"])
+            intact = (
+                receipt_hash_valid(receipt, mandate_row["chain_hash"], previous_hash)
+                and token_row is not None
+                and token_row["action_hash"] == receipt["action_hash"]
+                and token_row["agent_id"] == receipt["agent_id"]
+                and token_row["audience"] == receipt["audience"]
+            )
+            receipts_intact = intact and receipts_intact is not False
+            receipts[receipt["jti"]] = receipt
+        action_trail = _action_trail(actions, token_links, issued, receipts)
+
         # Fetch all mandate events
         events_cursor = await db.execute(
             """
@@ -674,6 +785,7 @@ async def get_proof(
             "action_contests": action_contests,
             "pdf_signatures": pdf_signatures,
             **({"validated_actions": validated_actions} if validated_actions else {}),
+            "action_trail": action_trail,
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,
@@ -682,6 +794,8 @@ async def get_proof(
                 "pdf_signatures_intact": pdf_signatures_intact,
                 "total_actions": len(actions),
                 "actions_with_token": actions_with_token,
+                "receipts_intact": receipts_intact,
+                "actions_with_receipt": len(receipts),
                 "total_events": len(events),
             },
             "compliance_notes": {

@@ -1,9 +1,10 @@
 """Pydantic models for action tokens issued by AMR."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class IssueTokenRequest(BaseModel):
@@ -33,6 +34,28 @@ class CheckTokenRequest(BaseModel):
     audience: str = Field(..., min_length=1, max_length=500)
     expected_action_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     max_token_age_seconds: int | None = Field(default=None, ge=1, le=86400, strict=True)
+
+
+class RecordReceiptRequest(BaseModel):
+    """Input of record_action_receipt (the receiver's receipt). Strictly validated."""
+
+    model_config = {"extra": "forbid"}
+
+    token: str = Field(..., min_length=1, max_length=8000)
+    audience: str = Field(..., min_length=1, max_length=500)
+    outcome: Literal["executed", "refused"]
+    refusal_reason: str | None = Field(default=None, min_length=1, max_length=500)
+    received_content_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _reason_only_for_a_refusal(self) -> "RecordReceiptRequest":
+        if self.outcome == "refused" and (
+            self.refusal_reason is None or not self.refusal_reason.strip()
+        ):
+            raise ValueError("refusal_reason is required when outcome is refused")
+        if self.outcome == "executed" and self.refusal_reason is not None:
+            raise ValueError("refusal_reason is only for outcome refused")
+        return self
 
 
 class TokenIssueResult(BaseModel):

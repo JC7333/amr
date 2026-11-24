@@ -29,7 +29,7 @@ uvx mandatia
 under a mandate, run `agent`: you can check your mandate, ask for tokens, log your acts,
 show attestations, and create sub-mandates under your own mandate, but you cannot create,
 sign or revoke a root mandate. That is the principal's server, profile `principal`. A third
-party that receives your tokens runs `receiver`. `full` (default) exposes every tool, for
+party that receives your tokens runs `receiver`: it checks them and leaves its receipt. `full` (default) exposes every tool, for
 tests and single-user setups. Never give yourself the principal's tools: a mandate you
 granted to yourself proves nothing.
 
@@ -43,6 +43,7 @@ granted to yourself proves nothing.
 | `get_proof` | Export the full audit bundle of a mandate |
 | `issue_action_token` | Get a signed token only if the mandate and its perimeter allow the action (this is where the perimeter is enforced) |
 | `check_action_token` | For the receiver: re-check a token with the registry at the moment of acting (mandate and whole chain still active, not revoked, not expired) |
+| `record_action_receipt` | For the receiver: leave its receipt for a token (executed, or refused and why); the proof then shows authorization, agent's declaration and receipt for each action |
 | `register_principal_key` | Register the principal's Ed25519 public key |
 | `prepare_mandate_signature` | Build the exact bytes a principal signs for a mandate |
 | `prepare_mandate_pdf` | Get the mandate as a PDF the principal signs with its own tool (exact bytes attached, SHA-256 printed) |

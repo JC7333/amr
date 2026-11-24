@@ -46,6 +46,7 @@ EXPECTED: dict[str, tuple] = {
     "get_proof": READ,
     "issue_action_token": APPEND,
     "check_action_token": READ,
+    "record_action_receipt": APPEND,
     "register_principal_key": (False, False, False, True),
     "prepare_mandate_signature": READ,
     "prepare_mandate_pdf": READ,

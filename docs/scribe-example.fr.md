@@ -39,13 +39,19 @@ Trois serveurs AMR partagent un registre jetable. Chacun ne voit que les outils 
    registre : accepté. Si le texte reçu a un mot changé, l'empreinte ne correspond plus :
    refusé (`action_mismatch`). Dans le script, le médecin connecté et le texte reçu sont
    écrits à la main ; en vrai, ils viennent du dossier patient lui-même. Le scribe déclare ensuite le classement
-   dans le journal, avec l'autorisation utilisée.
+   dans le journal, avec l'autorisation utilisée, et le dossier patient laisse son propre
+   reçu (`record_action_receipt`) : il a classé la note, avec l'empreinte SHA-256 du texte
+   qu'il a reçu.
 5. **Le mandant retire le mandat**, avec sa signature. Le scribe n'obtient plus aucune
    autorisation, et le dossier patient refuse une autorisation délivrée avant le retrait
-   (`mandate_status_revoked`).
+   (`mandate_status_revoked`). Il inscrit ce refus, et sa raison, dans un reçu.
 6. **La preuve.** `get_proof` rend le mandat, la décision de la commission, la
    déclaration du scribe et le retrait, et vérifie la chaîne des inscriptions, la
-   signature du mandat et celle du retrait par le mandant.
+   signature du mandat et celle du retrait par le mandant. Pour chaque action, elle
+   montre trois lignes distinctes : l'autorisation donnée par le registre, la déclaration
+   du scribe et le reçu du dossier patient, et dit laquelle manque. Pour la note classée,
+   aucune ne manque ; pour la transcription refusée après le retrait, la déclaration du
+   scribe manque.
 
 La suite de tests exécute l'exemple (`tests/test_scribe_example.py`).
 
@@ -58,4 +64,6 @@ La suite de tests exécute l'exemple (`tests/test_scribe_example.py`).
   connecté, quel texte il reçoit).
 - Le journal garde ce que le scribe déclare avoir fait. C'est une déclaration, pas la
   preuve que l'acte a eu lieu.
+- Le reçu garde ce que le dossier patient déclare avoir fait. Il n'est pas signé, il
+  ne prouve pas le contenu : c'est une seconde voix à côté de celle du scribe, rien de plus.
 - AMR ne rend un hôpital conforme à aucun texte, et rien ici n'est un conseil juridique.

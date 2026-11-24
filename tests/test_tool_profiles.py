@@ -56,7 +56,7 @@ def test_every_profile_names_only_real_tools() -> None:
 
 def test_full_profile_is_every_tool() -> None:
     assert _names("full") == ALL
-    assert len(ALL) == 19
+    assert len(ALL) == 20
 
 
 def test_agent_profile_cannot_grant_sign_or_revoke() -> None:
@@ -73,8 +73,18 @@ def test_principal_profile_does_not_act_for_the_agent() -> None:
     assert "create_mandate" in principal
 
 
-def test_receiver_profile_only_checks() -> None:
-    assert _names("receiver") == {"check_action_token", "get_registry_public_key", "report_issue"}
+def test_receiver_profile_only_checks_and_leaves_its_receipt() -> None:
+    assert _names("receiver") == {
+        "check_action_token",
+        "record_action_receipt",
+        "get_registry_public_key",
+        "report_issue",
+    }
+
+
+def test_agent_cannot_write_the_receivers_receipt() -> None:
+    assert "record_action_receipt" not in _names("agent")
+    assert "record_action_receipt" not in _names("principal")
 
 
 def test_every_tool_belongs_to_a_restricted_profile() -> None:
