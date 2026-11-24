@@ -38,11 +38,7 @@ from amr.tools.contest_action import (
     contest_signature_valid,
     mandate_contests,
 )
-from amr.tools.record_action_receipt import (
-    mandate_receipts,
-    receipt_hash_valid,
-    registry_receipts_chain_valid,
-)
+from amr.tools.record_action_receipt import mandate_receipts, registry_receipts_chain_valid
 from amr.tools.revoke_mandate import revocation_signature_valid
 
 
@@ -702,19 +698,18 @@ async def get_proof(
         issued = {row["jti"]: dict(row) for row in await tokens_cursor.fetchall()}
         receipts: dict[str, dict[str, Any]] = {}
         receipts_intact: bool | None = None
-        for receipt, previous_hash in await mandate_receipts(db, mandate_id):
+        for receipt in await mandate_receipts(db, mandate_id):
             token_row = issued.get(receipt["jti"])
             intact = (
-                receipt_hash_valid(receipt, mandate_row["chain_hash"], previous_hash)
-                and token_row is not None
+                token_row is not None
                 and token_row["action_hash"] == receipt["action_hash"]
                 and token_row["agent_id"] == receipt["agent_id"]
                 and token_row["audience"] == receipt["audience"]
             )
             receipts_intact = intact and receipts_intact is not False
             receipts[receipt["jti"]] = receipt
-        # A receipt deleted or edited anywhere in the registry's receipt chain (it may
-        # have been this mandate's) breaks the chain: this proof then says so.
+        # Each receipt's hash is checked with the whole receipt chain of the registry: a
+        # receipt deleted or edited anywhere (it may have been this mandate's) breaks it.
         if not await registry_receipts_chain_valid(db):
             receipts_intact = False
         action_trail = _action_trail(actions, token_links, issued, receipts)

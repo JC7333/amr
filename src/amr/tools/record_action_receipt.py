@@ -116,29 +116,16 @@ async def registry_receipts_chain_valid(db: aiosqlite.Connection) -> bool:
     return True
 
 
-async def mandate_receipts(
-    db: aiosqlite.Connection, mandate_id: str
-) -> list[tuple[dict[str, Any], str]]:
-    """Every receipt recorded under one mandate, oldest first, each with the chain_hash
-    of the receipt recorded just before it in the whole registry ("" for the first)."""
+async def mandate_receipts(db: aiosqlite.Connection, mandate_id: str) -> list[dict[str, Any]]:
+    """Every receipt recorded under one mandate, oldest first. Their hashes are checked
+    with the whole chain (registry_receipts_chain_valid), not here."""
     cursor = await db.execute(
-        "SELECT rowid AS position, jti, mandate_id, agent_id, action_hash, audience, "
-        "outcome, refusal_reason, received_content_sha256, recorded_at, chain_hash "
+        "SELECT jti, mandate_id, agent_id, action_hash, audience, outcome, refusal_reason, "
+        "received_content_sha256, recorded_at, chain_hash "
         "FROM action_receipts WHERE mandate_id = ? ORDER BY rowid ASC",
         (mandate_id,),
     )
-    found: list[tuple[dict[str, Any], str]] = []
-    for row in await cursor.fetchall():
-        previous = await db.execute(
-            "SELECT chain_hash FROM action_receipts WHERE rowid < ? "
-            "ORDER BY rowid DESC LIMIT 1",
-            (row["position"],),
-        )
-        before = await previous.fetchone()
-        receipt = dict(row)
-        receipt.pop("position")
-        found.append((receipt, before["chain_hash"] if before is not None else ""))
-    return found
+    return [dict(row) for row in await cursor.fetchall()]
 
 
 async def record_action_receipt(
@@ -256,14 +243,6 @@ async def record_action_receipt(
                 "token",
                 jti=jti,
             )
-        cursor = await db.execute("SELECT 1 FROM action_receipts WHERE jti = ?", (jti,))
-        if await cursor.fetchone() is not None:
-            return _error(
-                "receipt_already_recorded",
-                "a receipt is already recorded for this token",
-                "token",
-                jti=jti,
-            )
         cursor = await db.execute("SELECT chain_hash FROM mandates WHERE id = ?", (mandate_id,))
         mandate = await cursor.fetchone()
         if mandate is None:
@@ -300,6 +279,7 @@ async def record_action_receipt(
                 ),
             )
         except aiosqlite.IntegrityError:
+            # PRIMARY KEY jti: one receipt per token, even for two concurrent calls.
             await db.rollback()
             return _error(
                 "receipt_already_recorded",
