@@ -121,7 +121,12 @@ async def check_action_token(
 
     Returns:
         JSON string. Valid: {valid: true, reason: "ok", jti, mandate_id, agent_id,
-        action_type (if sealed), registry_check_required, expires_at, checked_at}.
+        action_type (if sealed), registry_check_required, expires_at, checked_at}; when
+        the mandate required a human validation for the action, also
+        validation_required (true), validated_by and validated_content_sha256, sealed
+        in the signed token: compare them with who is signed in on your side and with
+        the SHA-256 of the content you receive. The registry does not authenticate the
+        validator; it only records the one the agent declared.
         Refused: {valid: false, reason, detail?, jti?, mandate_id?, refused_by?,
         checked_at}. Reasons: invalid_input, malformed, wrong_algorithm,
         key_mismatch, bad_signature, wrong_issuer, wrong_audience, token_expired,
@@ -215,6 +220,13 @@ async def check_action_token(
                 refused_by=refusal.refused_by,
             )
 
+        validation: dict[str, Any] = {}
+        if claims.get("amr_validation_required") is True:
+            validation = {
+                "validation_required": True,
+                "validated_by": claims.get("amr_validated_by"),
+                "validated_content_sha256": claims.get("amr_validated_content_sha256"),
+            }
         return _result(
             True,
             "ok",
@@ -225,6 +237,7 @@ async def check_action_token(
             action_type=claims.get("amr_action_type"),
             registry_check_required=claims.get("amr_registry_check") is True,
             expires_at=datetime.fromtimestamp(int(claims["exp"]), UTC).isoformat(),
+            **validation,
         )
 
     except Exception as exc:

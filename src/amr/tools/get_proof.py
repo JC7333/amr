@@ -419,6 +419,14 @@ async def get_proof(
             actions_with_token (actions logged under an action token: they carry
             action_token_jti and action_token_action_hash, sealed into their
             chain_hash; other actions do not have these keys), total_events
+          - validated_actions (only when there is at least one): the action tokens
+            issued under this mandate for an action its perimeter (or a perimeter
+            above it) lists in validation_actions, each {jti, action_type,
+            validated_by, validated_content_sha256, issued_at, action_id}; action_id
+            is the logged action the token covered (log_action with action_token), or
+            null. validated_by is the validator the agent declared: the registry does
+            not authenticate it. These rows are not hash-chained; the same values are
+            sealed in each signed token
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -575,6 +583,19 @@ async def get_proof(
                 action["action_token_action_hash"] = link["action_hash"]
                 actions_with_token += 1
 
+        # Human validations the action tokens of this mandate were issued with
+        # (validation_actions): one per token, with the logged action it covered if any.
+        validations_cursor = await db.execute(
+            "SELECT jti, action_type, validated_by, validated_content_sha256, issued_at "
+            "FROM token_validations WHERE mandate_id = ? ORDER BY issued_at ASC, jti ASC",
+            (mandate_id,),
+        )
+        action_by_jti = {link["jti"]: action_id for action_id, link in token_links.items()}
+        validated_actions = [
+            {**dict(row), "action_id": action_by_jti.get(row["jti"])}
+            for row in await validations_cursor.fetchall()
+        ]
+
         # Fetch all mandate events
         events_cursor = await db.execute(
             """
@@ -652,6 +673,7 @@ async def get_proof(
             "events": events,
             "action_contests": action_contests,
             "pdf_signatures": pdf_signatures,
+            **({"validated_actions": validated_actions} if validated_actions else {}),
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,

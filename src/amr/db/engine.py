@@ -176,6 +176,21 @@ CREATE TABLE IF NOT EXISTS action_log_tokens (
     action_hash      TEXT NOT NULL
 );
 
+-- Schema v12: the human validation an action token was issued with, when a mandate of
+-- its chain lists the action type in validation_actions. One row per such token, written
+-- in the same transaction as issued_tokens; the same two values are sealed into the
+-- signed token. The validator is the one the agent declared (not authenticated).
+-- Tokens without a required validation have no row. Append-only.
+CREATE TABLE IF NOT EXISTS token_validations (
+    jti                       TEXT PRIMARY KEY REFERENCES issued_tokens(jti),
+    mandate_id                TEXT NOT NULL REFERENCES mandates(id),
+    action_type               TEXT NOT NULL,
+    validated_by              TEXT NOT NULL,
+    validated_content_sha256  TEXT NOT NULL,
+    issued_at                 TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_validations_mandate ON token_validations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_log_tokens_mandate ON action_log_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_mandate ON action_contests(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_contester ON action_contests(contested_by);
@@ -247,7 +262,8 @@ async def init_db(db_path: Path | str | None = None) -> None:
     Records the schema versions applied (2: issued tokens, 3: mandate perimeter,
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
     7: token amounts for cumulative ceilings, 8: action contests,
-    9: did:web key domain proofs, 10: signed mandate PDFs, 11: action log tokens).
+    9: did:web key domain proofs, 10: signed mandate PDFs, 11: action log tokens,
+    12: token validations).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -339,6 +355,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (11,),
+        )
+        # Schema v12: token_validations, created by the script above (human validation
+        # required by a mandate). Existing tokens, mandates and hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (12,),
         )
         await db.commit()
 
@@ -549,6 +571,23 @@ async def record_token_amount(
             "VALUES (?, ?, ?, ?, ?)",
             (jti, mandate_id, amount, currency, issued_at),
         )
+
+
+async def record_token_validation(
+    db: aiosqlite.Connection,
+    jti: str,
+    mandate_id: str,
+    action_type: str,
+    validated_by: str,
+    validated_content_sha256: str,
+    issued_at: str,
+) -> None:
+    """Record the human validation an issued token carries. Does NOT commit."""
+    await db.execute(
+        "INSERT INTO token_validations (jti, mandate_id, action_type, validated_by, "
+        "validated_content_sha256, issued_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (jti, mandate_id, action_type, validated_by, validated_content_sha256, issued_at),
+    )
 
 
 async def get_period_spend(

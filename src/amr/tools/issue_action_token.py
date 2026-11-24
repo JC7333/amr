@@ -22,9 +22,15 @@ from amr.db.engine import (
     is_token_replay,
     record_issued_token,
     record_token_amount,
+    record_token_validation,
 )
 from amr.delegation import is_revoked, load_ancestors
-from amr.models.perimeter import Perimeter, parse_amount
+from amr.models.perimeter import (
+    VALIDATED_BY_KEY,
+    VALIDATED_CONTENT_KEY,
+    Perimeter,
+    parse_amount,
+)
 from amr.models.token import IssueTokenRequest
 
 
@@ -90,6 +96,12 @@ async def issue_action_token(
     are sealed into the token as amr_risk_classes. When one of them sets
     registry_check, the token carries amr_registry_check: true, and the receiver
     must re-check it with check_action_token at the moment of acting.
+    When a perimeter of the chain lists action_type in validation_actions, the action
+    metadata must carry validated_by and validated_content_sha256 (else action_out_of_scope
+    with detail validation_required or validation_invalid); the token then carries
+    amr_validation_required: true, amr_validated_by and amr_validated_content_sha256, and
+    the registry keeps them for get_proof. The validator is the one the agent declares:
+    the registry does not authenticate that person; the receiver compares the values.
     Returns a JSON string with either {token, jti, expires_at, key_id}
     on success, or {denied: true, reason: "...", mandate_id: "..."} on denial.
     Perimeter denials use reason "action_out_of_scope", with "detail" and
@@ -287,6 +299,7 @@ async def issue_action_token(
             lifetime = min(lifetime, lifetime_override_seconds)
         risk_classes: set[str] = set()
         registry_check = False
+        validation_required = False
         if req.action_type is not None:
             for link in chain:
                 if not link["perimeter_json"]:
@@ -298,6 +311,8 @@ async def issue_action_token(
                     risk_classes.update(names)
                 if link_perimeter.requires_registry_check(req.action_type):
                     registry_check = True
+                if link_perimeter.requires_validation(req.action_type):
+                    validation_required = True
         expires_at = now + timedelta(seconds=lifetime)
         for link in chain:
             link_expires = datetime.fromisoformat(link["expires_at"])
@@ -334,6 +349,13 @@ async def issue_action_token(
             claims["amr_risk_classes"] = sorted(risk_classes)
         if registry_check:
             claims["amr_registry_check"] = True
+        if validation_required:
+            # Checked above by Perimeter.check_action for the link that requires it.
+            claims["amr_validation_required"] = True
+            claims["amr_validated_by"] = req.action_metadata[VALIDATED_BY_KEY]
+            claims["amr_validated_content_sha256"] = req.action_metadata[
+                VALIDATED_CONTENT_KEY
+            ]
 
         # Load key and serialize to PEM bytes (pyjwt expects bytes or str for EdDSA)
         private_key = load_signing_key()
@@ -364,6 +386,16 @@ async def issue_action_token(
                 "key_id": key_id,
             },
         )
+        if validation_required and req.action_type is not None:
+            await record_token_validation(
+                db,
+                str(jti),
+                str(req.mandate_id),
+                req.action_type,
+                claims["amr_validated_by"],
+                claims["amr_validated_content_sha256"],
+                now.isoformat(),
+            )
         if declared is not None:
             await record_token_amount(
                 db,
