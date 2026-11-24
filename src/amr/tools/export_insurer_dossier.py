@@ -30,6 +30,8 @@ LIMITS = (
     "Refused token requests are not recorded by this registry version: the dossier "
     "lists the tokens issued, not the actions that were blocked.",
     "Actions are logged by the agent's operator: an action that was never logged does not appear.",
+    "A receiver's receipt (action_trail) is what the receiver declares it did with the "
+    "action; it is not signed and does not prove the content.",
     "The principal is identified by the key it registered; the registry does not "
     "check who registered that key.",
     "The legal basis is the one declared when the mandate was created; the registry "
@@ -49,6 +51,13 @@ def _aware(moment: str) -> datetime:
 
 def _in_period(moment: str, start: datetime, end: datetime) -> bool:
     return start <= _aware(moment) <= end
+
+
+def _trail_moment(entry: dict[str, Any]) -> str:
+    """When an action_trail entry starts: its token's issuance, else its logged action."""
+    if entry["authorization"] is not None:
+        return entry["authorization"]["issued_at"]
+    return entry["agent_declaration"]["timestamp"]
 
 
 def _own_refusal(status: str, expires_at: str, now: datetime) -> str | None:
@@ -92,6 +101,7 @@ def _integrity(proof: dict[str, Any]) -> dict[str, Any]:
         "principal_did_web_unverified": bool(signature and signature.get("did_web_unverified")),
         "chain_head": actions[-1]["chain_hash"] if actions else proof["mandate"]["chain_hash"],
         "total_actions": chain["total_actions"],
+        "receipts_intact": chain.get("receipts_intact"),
     }
 
 
@@ -199,7 +209,9 @@ async def export_insurer_dossier(
         JSON string with keys:
           - dossier: dict (dossier_version, generated_at, period, mandate, status,
             integrity, sub_mandates, sub_mandates_truncated, events, actions,
-            tokens, limits)
+            tokens, action_trail (the mandate's own actions of the period, each with
+            its authorization, agent's declaration and receiver's receipt, and which
+            is missing; see get_proof), limits)
           - dossier_sha256: hex SHA-256 of the canonical dossier
           - signature: {jws, algorithm "EdDSA", key_id, public_key_pem}
           - html: printable page (only when format is "html")
@@ -297,6 +309,11 @@ async def export_insurer_dossier(
             "events": events,
             "actions": [a for a in root["actions"] if _in_period(a["timestamp"], start, end)],
             "tokens": tokens,
+            "action_trail": [
+                entry
+                for entry in root["action_trail"]
+                if _in_period(_trail_moment(entry), start, end)
+            ],
             "limits": list(LIMITS),
         }
 

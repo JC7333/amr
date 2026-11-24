@@ -4,7 +4,8 @@ Run with: uv run amr
 
 AMR_TOOL_PROFILE chooses which tools this server exposes (default "full", every tool):
 "principal" for the person or body that grants and revokes mandates, "agent" for the
-agent that acts under one, "receiver" for a third party that checks the agent's tokens.
+agent that acts under one, "receiver" for a third party that checks the agent's tokens
+and leaves its receipt.
 An agent should never be given the principal's tools: an agent that can create, sign or
 revoke its own root mandate authorizes itself, and the mandate proves nothing.
 """
@@ -43,6 +44,7 @@ from amr.tools.issue_mandate_attestation import (
 from amr.tools.log_action import log_action
 from amr.tools.prepare_mandate_pdf import prepare_mandate_pdf
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
+from amr.tools.record_action_receipt import record_action_receipt
 from amr.tools.report_issue import report_issue
 from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
 from amr.tools.verify_mandate import verify_mandate
@@ -55,6 +57,7 @@ TOOLS = (
     get_proof,
     issue_action_token,
     check_action_token,
+    record_action_receipt,
     register_principal_key,
     prepare_mandate_signature,
     prepare_mandate_pdf,
@@ -105,7 +108,16 @@ TOOL_PROFILES: dict[str, frozenset[str]] = {
             "report_issue",
         }
     ),
-    "receiver": frozenset({"check_action_token", "get_registry_public_key", "report_issue"}),
+    # The receiver checks tokens and leaves its receipt; never the agent (a receipt the
+    # agent writes about itself would prove nothing).
+    "receiver": frozenset(
+        {
+            "check_action_token",
+            "record_action_receipt",
+            "get_registry_public_key",
+            "report_issue",
+        }
+    ),
 }
 
 
@@ -134,6 +146,7 @@ _TOOL_HINTS: dict[str, dict[str, bool]] = {
     "get_proof": _READ_ONLY,
     "issue_action_token": _APPENDS,
     "check_action_token": _READ_ONLY,
+    "record_action_receipt": _APPENDS,
     # did:web principals: the domain is fetched when AMR_DID_WEB_RESOLVE=1.
     "register_principal_key": {**_APPENDS, "openWorldHint": True},
     "prepare_mandate_signature": _READ_ONLY,

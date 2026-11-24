@@ -74,7 +74,7 @@ in the `env` block of each client, all pointing at the same `AMR_DB_PATH`:
 |---|---|---|
 | `principal` | the person or body that grants mandates | create, sign, revoke, contest, prove (`create_mandate`, `register_principal_key`, `revoke_mandate`, `contest_action`, `get_proof`, `export_insurer_dossier`, ...) |
 | `agent` | the agent that acts under a mandate | `verify_mandate`, `issue_action_token`, `log_action`, `issue_mandate_attestation`, `get_registry_public_key`; `create_mandate` for sub-mandates under its own mandate only |
-| `receiver` | a third party the agent acts upon | `check_action_token`, `get_registry_public_key` |
+| `receiver` | a third party the agent acts upon | `check_action_token`, `record_action_receipt`, `get_registry_public_key` |
 | `full` (default) | tests and single-user setups | every tool |
 
 With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
@@ -96,7 +96,8 @@ With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
    Outside the perimeter or above a ceiling the answer is `denied: true` with
    `reason: "action_out_of_scope"` and a `detail` (`forbidden:agent.create`,
    `amount_above_limit:500 EUR`, ...). No token, no action. The receiver checks the token
-   with `check_action_token` (profile `receiver`).
+   with `check_action_token` (profile `receiver`), and once it has dealt with the action
+   leaves its receipt with `record_action_receipt` (executed, or refused and why).
 4. `log_action(mandate_id, action, action_token=...)`: append an entry to the
    hash-chained journal. With the token of step 3, the action is logged only if that
    token is valid, was issued under this mandate and has not covered another action;
@@ -510,7 +511,7 @@ calls need the user's approval (with mcp SDK 1.7 or later; an older SDK cannot s
 | Class | Tools |
 |---|---|
 | read-only (records no mandate, action, token, contest or key and sends nothing; like every tool, may create the empty database on first use) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests` |
-| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action` |
+| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `record_action_receipt`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action` |
 | writes, may reach the network (opt-in) | `register_principal_key` (appends the key; reads the `did:web` domain with `AMR_DID_WEB_RESOLVE=1`), `report_issue` (files a GitHub issue with `AMR_ISSUE_TOKEN`, otherwise writes nothing) |
 | destructive (final) | `revoke_mandate` |
 | idempotent write | `get_registry_public_key` (creates the registry signing key on its first call, then only reads it) |
@@ -971,6 +972,43 @@ Execution.
 
 ---
 
+### `record_action_receipt`
+
+For the receiver of an agent's action, once it has dealt with it: leave its own line in
+the registry. The registry already knows that it authorized the action (the token) and
+what the agent declared (`log_action`); the receipt says what the receiver declares it
+did. `get_proof` then shows, for each action, the three lines and which one is missing.
+Profile `receiver` only: never give this tool to the agent.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `token` | str | The JWS the agent presented (from `issue_action_token`) |
+| `audience` | str | Who you are; must equal the token's `aud` |
+| `outcome` | str | `"executed"` or `"refused"` |
+| `refusal_reason` | str \| null | Why you refused (1 to 500 characters). Required with `"refused"`, refused with `"executed"` |
+| `received_content_sha256` | str \| null | SHA-256 (64 lowercase hex) of what you received, if you want it on record |
+
+The token must be one this registry signed and issued, addressed to you. One receipt per
+token; a second one is refused (`receipt_already_recorded`). A token past its `exp` is
+accepted for 7 days after it (`receipt_too_late` beyond). A token whose mandate was
+withdrawn or has expired since is accepted: a refusal because of the withdrawal is what
+to record, and the proof shows the withdrawal next to it. Receipts are chained with
+SHA-256 and seal the mandate hash and the token's action hash.
+
+```json
+{"status": "recorded", "jti": "...", "mandate_id": "...", "agent_id": "agent:scribe",
+ "outcome": "executed", "received_content_sha256": "9f2c...", "recorded_at": "...",
+ "chain_hash": "...", "agent_declaration_action_id": "..."}
+```
+
+What a receipt is not: it is what the receiver declares it did. It does not prove the
+content, and it is not signed: anyone who holds the token and can call this tool on the
+same registry could write it, and the first receipt wins (the real receiver would then
+get `receipt_already_recorded`), which is why it belongs to the receiver's profile only.
+See [`docs/action-receipt-spec.md`](https://github.com/JC7333/amr/blob/main/docs/action-receipt-spec.md).
+
+---
+
 ### `get_proof`
 
 Generate a complete **Proof Pack** — a full audit bundle for a mandate including all actions and cryptographic chain verification.
@@ -999,6 +1037,8 @@ Generate a complete **Proof Pack** — a full audit bundle for a mandate includi
     "contests_intact": true,
     "total_actions": 5,
     "actions_with_token": 2,
+    "receipts_intact": true,
+    "actions_with_receipt": 1,
     "total_events": 0
   },
   "compliance_notes": {
@@ -1025,6 +1065,17 @@ validated_content_sha256, issued_at, action_id}`, where `action_id` is the logge
 the token covered (`log_action` with `action_token`), or `null`. `validated_by` is the
 validator the agent declared; these rows are not hash-chained (the signed token carries
 the same values).
+
+`action_trail` lists each action with its three separate lines, oldest first: one entry
+per action token issued under the mandate, plus one per action logged without a token,
+each `{jti, authorization, agent_declaration, receiver_receipt, missing}`. `authorization`
+is the token the registry issued, `agent_declaration` the action the agent logged with it,
+`receiver_receipt` what the receiver declared it did (`record_action_receipt`); `missing`
+names the lines that are `null`. `receipts_intact` re-checks the receipts (`null` when
+there is none and the registry's receipt chain is whole; `false` when a receipt does not
+recompute from its row and the previous receipt, names a token the registry did not issue
+under this mandate, or when the receipt chain of the whole registry is broken, which
+shows a receipt deleted anywhere but the very last one).
 
 `delegation_chain` says whether the chain above a sub-mandate still holds:
 `{"broken": true, "reason": "parent_mandate_revoked", "refused_by": "<parent id>"}`
@@ -1227,6 +1278,7 @@ src/amr/
 │   ├── log_action.py
 │   ├── get_proof.py
 │   ├── check_action_token.py          # receiver re-checks a token when it acts
+│   ├── record_action_receipt.py       # receiver's receipt: executed or refused
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
 │   ├── contest_action.py   # contested acts and their response deadline (reminder)

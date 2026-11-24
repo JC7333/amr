@@ -18,11 +18,15 @@ The run plays, and checks, in this order:
   4. an authorization to file a note whose metadata carry who validated it and the
      SHA-256 of the validated text: the record system rebuilds the action hash from what
      it knows itself (the doctor logged in, the text it received) and accepts it; the
-     same check on a text with one word changed is refused (action_mismatch);
+     same check on a text with one word changed is refused (action_mismatch); the scribe
+     logs its declaration and the record system leaves its receipt (record_action_receipt);
   5. the principal withdraws the mandate with its signature: no new authorization, and
-     the record system refuses an authorization issued before the withdrawal;
+     the record system refuses an authorization issued before the withdrawal and records
+     that refusal in a receipt;
   6. get_proof holds the committee decision, the declaration and the withdrawal; the
-     action chain and both signatures verify.
+     action chain, both signatures and the receipts verify; for each action, the proof
+     shows the authorization, the scribe's declaration and the record's receipt, and
+     which one is missing.
 
     uv run python examples/scribe_consultation.py
 
@@ -318,6 +322,22 @@ async def run(workdir: Path) -> None:
         )
         check(logged.get("status") == "logged", "the scribe's declaration is logged")
 
+        # The record system's own line: it filed the note, and says what it received.
+        receipt = await call(
+            record,
+            "record system",
+            "record_action_receipt",
+            token=filing["token"],
+            audience=RECORD_SYSTEM,
+            outcome="executed",
+            received_content_sha256=hashlib.sha256(received_note.encode("utf-8")).hexdigest(),
+        )
+        check(
+            receipt.get("status") == "recorded"
+            and receipt.get("agent_declaration_action_id") == logged.get("action_id"),
+            "the record system leaves its receipt, next to the scribe's declaration",
+        )
+
         print("\n### 5. The principal withdraws the mandate")
         reason = "End of the trial"
         to_sign = await call(
@@ -355,6 +375,19 @@ async def run(workdir: Path) -> None:
             old.get("valid") is False and old.get("reason") == "mandate_status_revoked",
             "an authorization issued before the withdrawal is refused",
         )
+        refused = await call(
+            record,
+            "record system",
+            "record_action_receipt",
+            token=transcribe["token"],
+            audience=RECORD_SYSTEM,
+            outcome="refused",
+            refusal_reason="mandate withdrawn",
+        )
+        check(
+            refused.get("status") == "recorded" and refused.get("outcome") == "refused",
+            "the record system records its refusal and why",
+        )
 
         print("\n### 6. The proof")
         proof_pack = await call(principal, "principal", "get_proof", mandate_id=mandate_id)
@@ -370,8 +403,22 @@ async def run(workdir: Path) -> None:
         check(
             integrity.get("actions_chain_valid") is True
             and integrity.get("principal_signature_valid") is True
-            and integrity.get("revocation_signature_valid") is True,
-            "the action chain and both signatures verify",
+            and integrity.get("revocation_signature_valid") is True
+            and integrity.get("receipts_intact") is True,
+            "the action chain, both signatures and the receipts verify",
+        )
+        trail = {entry["jti"]: entry for entry in proof_pack.get("action_trail", [])}
+        filed = trail.get(receipt.get("jti"), {})
+        withdrawn = trail.get(refused.get("jti"), {})
+        check(
+            filed.get("missing") == []
+            and (filed.get("receiver_receipt") or {}).get("outcome") == "executed",
+            "filed note: authorization, scribe's declaration and record's receipt, none missing",
+        )
+        check(
+            withdrawn.get("missing") == ["agent_declaration"]
+            and (withdrawn.get("receiver_receipt") or {}).get("outcome") == "refused",
+            "transcription refused after the withdrawal: the proof says the declaration is missing",
         )
     print("\nOK: every step behaved as documented.")
 

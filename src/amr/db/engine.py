@@ -190,6 +190,26 @@ CREATE TABLE IF NOT EXISTS token_validations (
     issued_at                 TEXT NOT NULL
 );
 
+-- Schema v13: the receipt a receiver leaves for an action token it received
+-- (record_action_receipt): what it declares it did with the action (executed, or refused
+-- with its reason) and, if it wants, the SHA-256 of what it received. One receipt per
+-- token (PRIMARY KEY jti). Chained with SHA-256 across the table, like contests; each
+-- receipt also seals its mandate's chain_hash and the token's action hash. Declared by
+-- the receiver, not signed. Append-only.
+CREATE TABLE IF NOT EXISTS action_receipts (
+    jti                      TEXT PRIMARY KEY REFERENCES issued_tokens(jti),
+    mandate_id               TEXT NOT NULL REFERENCES mandates(id),
+    agent_id                 TEXT NOT NULL,
+    action_hash              TEXT NOT NULL,
+    audience                 TEXT NOT NULL,
+    outcome                  TEXT NOT NULL,
+    refusal_reason           TEXT NOT NULL DEFAULT '',
+    received_content_sha256  TEXT,
+    recorded_at              TEXT NOT NULL,
+    chain_hash               TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_receipts_mandate ON action_receipts(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_token_validations_mandate ON token_validations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_log_tokens_mandate ON action_log_tokens(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_contests_mandate ON action_contests(mandate_id);
@@ -263,7 +283,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
     7: token amounts for cumulative ceilings, 8: action contests,
     9: did:web key domain proofs, 10: signed mandate PDFs, 11: action log tokens,
-    12: token validations).
+    12: token validations, 13: action receipts).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -361,6 +381,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (12,),
+        )
+        # Schema v13: action_receipts, created by the script above (record_action_receipt).
+        # Existing tokens, actions, mandates and hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (13,),
         )
         await db.commit()
 

@@ -19,12 +19,13 @@ chain hashes are unchanged.
 | `period` | `{start, end}`, both inclusive; defaults to the mandate's creation and `generated_at`. Only ISO 8601 date-times are accepted (a bare date or a number is refused); naive date-times read as UTC |
 | `mandate` | The mandate as stored (same object as in the Proof Pack), including its perimeter and, if any, the principal's signature |
 | `status` | `stored_status`, `in_force` at `generated_at`, `not_in_force_reason` |
-| `integrity` | `actions_chain_valid` and `total_actions` (whole mandate, not only the period), `principal_signature_valid` (`null` when the mandate is not signed by its principal), `principal_key_id`, `principal_key_domain` (`did:web` principals: `did_document_url`, `did_document_sha256`, `verified_at`, `rechecked` as in the Proof Pack; else `null`), `principal_did_web_unverified` (true for a `did:web` principal whose key has no valid domain proof), `chain_head` (last action chain hash, or the mandate's chain hash when no action), `contested_actions` (number of actions of the mandate contested with `contest_action`) and `contests_intact` (as in the Proof Pack) |
+| `integrity` | `actions_chain_valid` and `total_actions` (whole mandate, not only the period), `principal_signature_valid` (`null` when the mandate is not signed by its principal), `principal_key_id`, `principal_key_domain` (`did:web` principals: `did_document_url`, `did_document_sha256`, `verified_at`, `rechecked` as in the Proof Pack; else `null`), `principal_did_web_unverified` (true for a `did:web` principal whose key has no valid domain proof), `chain_head` (last action chain hash, or the mandate's chain hash when no action), `contested_actions` (number of actions of the mandate contested with `contest_action`), `contests_intact` and `receipts_intact` (as in the Proof Pack) |
 | `sub_mandates` | The delegation tree below the mandate, breadth first: `id`, `parent_mandate_id`, `depth`, `principal_id`, `agent_id`, `scope`, dates, `perimeter`, `status`, `integrity`, `actions_in_period` |
 | `sub_mandates_truncated` | `true` when the tree was cut at 500 sub-mandates or at the maximum delegation depth (16); the events and tokens of omitted sub-mandates are omitted too |
 | `events` | Status events (`mandate_events`) of the period, for the mandate and its sub-mandates |
 | `actions` | Actions logged under the exported mandate itself in the period (sub-mandates: count only, in `sub_mandates[].actions_in_period`) |
 | `tokens` | Action tokens issued in the period for the mandate and its sub-mandates (`jti`, `mandate_id`, `agent_id`, `action_hash`, `audience`, `issued_at`, `expires_at`, `key_id`) |
+| `action_trail` | For each action of the exported mandate whose token was issued (or, without a token, which was logged) in the period: the authorization, the agent's declaration and the receiver's receipt, and which is `missing` (same entries as `action_trail` in the Proof Pack) |
 | `limits` | Fixed list of what the dossier does not prove |
 
 ### In force
@@ -65,7 +66,8 @@ script, no external resource, every value escaped) meant to be printed or saved 
 from the browser. It renders the signed dossier and shows its SHA-256 and the key id.
 Unicode bidirectional control characters are replaced by U+FFFD on the page (not in the
 JSON), so a printed value cannot be made to read in a misleading order.
-Only the JSON signature is proof.
+Only the JSON signature is proof. The printed page does not show `action_trail` nor
+`integrity.receipts_intact` yet: read them in the signed JSON.
 
 ## Limits (also written in every dossier)
 
@@ -76,6 +78,8 @@ Only the JSON signature is proof.
 - The dossier is read in several steps, not in one database transaction: a change
   recorded while it is generated may appear only in part.
 - Actions are logged by the agent's operator: an action never logged does not appear.
+- A receiver's receipt (`action_trail`) is what the receiver declares it did with the
+  action; it is not signed and does not prove the content.
 - The principal is identified by the key it registered; the registry does not check who
   registered that key (see `docs/principal-signature-spec.md`).
 - The legal basis is the one declared at creation; the registry does not assess it.

@@ -30,11 +30,15 @@ EXPECTED_STEPS = (
     "ok: the record system re-checks the registry and accepts the validated note",
     "ok: a note changed after validation is refused (action_mismatch)",
     "ok: the scribe's declaration is logged",
+    "ok: the record system leaves its receipt, next to the scribe's declaration",
     "ok: the signed withdrawal is registered",
     "ok: no new authorization after the withdrawal (mandate_status_revoked)",
     "ok: an authorization issued before the withdrawal is refused",
+    "ok: the record system records its refusal and why",
     "ok: the proof holds the committee decision, the declaration and the withdrawal",
-    "ok: the action chain and both signatures verify",
+    "ok: the action chain, both signatures and the receipts verify",
+    "ok: filed note: authorization, scribe's declaration and record's receipt, none missing",
+    "ok: transcription refused after the withdrawal: the proof says the declaration is missing",
     "OK: every step behaved as documented.",
 )
 
@@ -66,6 +70,7 @@ def test_scribe_example_prints_the_registry_answers(run: subprocess.CompletedPro
         "register_principal_key",
         "issue_action_token",
         "check_action_token",
+        "record_action_receipt",
         "revoke_mandate",
         "get_proof",
     ):
@@ -93,6 +98,21 @@ def test_scribe_docs_link_the_example_and_state_the_limits(doc: Path, limit: str
         "mandat légal",
     ):  # article number: see test_mandate_vocabulary
         assert word not in text, word
+
+
+@pytest.mark.parametrize(
+    ("doc", "words"),
+    [
+        (DOC_EN, ("record_action_receipt", "does not prove the content")),
+        (DOC_FR, ("record_action_receipt", "ne prouve pas le contenu")),
+    ],
+)
+def test_scribe_docs_describe_the_receipt_and_its_limit(doc: Path, words: tuple) -> None:
+    text = doc.read_text(encoding="utf-8")
+    for word in words:
+        assert word in text, word
+    assert "preuve d'exécution" not in text
+    assert "proof of execution" not in text
 
 
 def test_readme_points_to_both_scribe_docs() -> None:
