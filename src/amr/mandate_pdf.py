@@ -160,6 +160,15 @@ def _summary(content: dict[str, Any]) -> list[tuple[str, str]]:
     rows.append(("Delegation allowed", delegation))
     if perimeter.get("risk_classes"):
         rows.append(("Risk classes", "see the exact content below"))
+    if perimeter.get("validation_actions"):
+        rows.append(
+            (
+                "Human validation required for",
+                ", ".join(map(str, perimeter["validation_actions"]))
+                + " (the validator the agent declares, not authenticated by the registry,"
+                " and the hash of the content validated)",
+            )
+        )
     return rows
 
 

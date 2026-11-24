@@ -31,6 +31,7 @@ async def prepare_mandate_pdf(
     period_days: int | None = None,
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
+    validation_actions: list[str] | None = None,
 ) -> str:
     """Return the mandate as a PDF for the principal to sign with its own signature tool.
 
@@ -85,6 +86,7 @@ async def prepare_mandate_pdf(
             period_days=period_days,
             risk_classes=risk_classes,
             max_delegation_depth=max_delegation_depth,
+            validation_actions=validation_actions,
         )
     )
     if "error" in prepared:

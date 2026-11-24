@@ -42,11 +42,22 @@ telling the receiver to ask the registry (check_action_token) at the moment of a
 whether the mandate and its whole chain still stand. A sub-mandate inherits the flag
 and cannot drop it. Perimeters without classes, and classes without the flag, keep
 their exact canonical form.
+
+Human validation (``validation_actions``) lets the principal require that some action
+types carry, in their metadata, the identifier of the person who validated them
+(``validated_by``) and the SHA-256 of the content that person validated
+(``validated_content_sha256``, 64 lowercase hex). The match is broad, like
+``forbidden_actions``. Without both, the action gets no token. The registry records the
+validator the agent declares; it does not authenticate that person: the receiver
+compares the sealed values with what it knows (who is signed in, which text it
+receives). A sub-mandate inherits the requirement and cannot lift it. Perimeters
+without it keep their exact canonical form.
 """
 
 import hashlib
 import json
 import re
+import unicodedata
 from decimal import Decimal
 from typing import Any
 
@@ -62,6 +73,12 @@ MAX_PERIOD_DAYS = 366
 MAX_RISK_CLASSES = 20
 MAX_TOKEN_SECONDS = 86400
 RISK_CLASS_NAME_RE = r"^[a-z][a-z0-9_-]{0,39}$"
+VALIDATED_BY_KEY = "validated_by"
+VALIDATED_CONTENT_KEY = "validated_content_sha256"
+MAX_VALIDATOR_LENGTH = 200
+SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}", re.ASCII)
+# Control, format (zero-width, bidi), line and paragraph separator characters.
+_UNSHOWN_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 
 class PerimeterError(ValueError):
@@ -87,6 +104,33 @@ def parse_amount(raw: object) -> Decimal | None:
     if not isinstance(raw, str) or not AMOUNT_RE.fullmatch(raw):
         return None
     return Decimal(raw)
+
+
+def validation_detail(metadata: dict[str, str]) -> str | None:
+    """Denial detail when an action needing a human validation lacks a valid one, else None.
+
+    The action must carry ``validated_by`` (1 to 200 characters, not blank, no control,
+    format or line/paragraph separator character, so that what a person reads is what
+    is stored) and ``validated_content_sha256`` (64 lowercase hex).
+    """
+    validator = metadata.get(VALIDATED_BY_KEY)
+    content = metadata.get(VALIDATED_CONTENT_KEY)
+    missing = [
+        key
+        for key, value in ((VALIDATED_BY_KEY, validator), (VALIDATED_CONTENT_KEY, content))
+        if value is None
+    ]
+    if missing or validator is None or content is None:
+        return "validation_required:" + ",".join(missing)
+    if (
+        not validator.strip()
+        or len(validator) > MAX_VALIDATOR_LENGTH
+        or any(unicodedata.category(ch) in _UNSHOWN_CATEGORIES for ch in validator)
+    ):
+        return f"validation_invalid:{VALIDATED_BY_KEY}"
+    if not SHA256_HEX_RE.fullmatch(content):
+        return f"validation_invalid:{VALIDATED_CONTENT_KEY}"
+    return None
 
 
 def _validate_pattern(pattern: str) -> str:
@@ -228,8 +272,11 @@ class Perimeter(BaseModel):
     period_max_amount: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
     period_days: int | None = Field(default=None, ge=1, le=MAX_PERIOD_DAYS, strict=True)
     risk_classes: tuple[RiskClass, ...] = Field(default=(), max_length=MAX_RISK_CLASSES)
+    validation_actions: tuple[str, ...] = Field(default=(), max_length=MAX_PATTERNS)
 
-    @field_validator("allowed_actions", "forbidden_actions", "amount_actions")
+    @field_validator(
+        "allowed_actions", "forbidden_actions", "amount_actions", "validation_actions"
+    )
     @classmethod
     def _normalize_patterns(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(sorted({_validate_pattern(p) for p in value}))
@@ -297,14 +344,18 @@ class Perimeter(BaseModel):
             rc.registry_check and rc.reaches(action_type) for rc in self.risk_classes
         )
 
+    def requires_validation(self, action_type: str) -> bool:
+        """True if ``validation_actions`` reaches ``action_type`` (type and sub-types)."""
+        return any(pattern_reaches(p, action_type) for p in self.validation_actions)
+
     # --- serialization ---------------------------------------------------------
 
     def canonical(self) -> dict[str, Any]:
         """Canonical dict, stable across runs (used in hashes, storage and proofs).
 
         ``max_delegation_depth`` and the cumulative ceiling keys appear only when set, and
-        ``risk_classes`` only when there is at least one, so a perimeter without them keeps
-        the exact form (and hashes) it had before they existed.
+        ``risk_classes`` and ``validation_actions`` only when there is at least one, so a
+        perimeter without them keeps the exact form (and hashes) it had before they existed.
         """
         canonical: dict[str, Any] = {
             "allowed_actions": list(self.allowed_actions),
@@ -321,6 +372,8 @@ class Perimeter(BaseModel):
             canonical["period_days"] = self.period_days
         if self.risk_classes:
             canonical["risk_classes"] = [rc.canonical() for rc in self.risk_classes]
+        if self.validation_actions:
+            canonical["validation_actions"] = list(self.validation_actions)
         return canonical
 
     def to_json(self) -> str:
@@ -345,6 +398,10 @@ class Perimeter(BaseModel):
                 return f"forbidden:{pattern}"
         if not any(pattern_matches(p, action_type) for p in self.allowed_actions):
             return f"not_allowed:{action_type}"
+        if self.requires_validation(action_type):
+            detail = validation_detail(metadata)
+            if detail is not None:
+                return detail
         if self.has_amount_limit:
             raw = metadata.get("amount")
             if raw is None:
@@ -379,7 +436,8 @@ class Perimeter(BaseModel):
         every lifetime bound that applies to it. A child class may reuse a parent class
         name only with a ``max_token_seconds`` no higher than the parent's; it then also
         reaches the parent class's actions. The issuer still applies every class of
-        the chain.
+        the chain. The parent's ``validation_actions`` are inherited the same way: a
+        sub-mandate can add actions that need a human validation, never lift one.
         """
         for pattern in self.allowed_actions:
             if not any(pattern_covers(outer, pattern) for outer in parent.allowed_actions):
@@ -433,6 +491,9 @@ class Perimeter(BaseModel):
                 period_max_amount=self.period_max_amount,
                 period_days=self.period_days,
                 risk_classes=risk_classes,
+                validation_actions=tuple(
+                    set(self.validation_actions) | set(parent.validation_actions)
+                ),
             )
         except ValueError as exc:
             raise PerimeterError("perimeter_invalid", str(exc)) from exc

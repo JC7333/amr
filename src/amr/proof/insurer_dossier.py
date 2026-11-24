@@ -170,6 +170,17 @@ def _perimeter_rows(perimeter: dict[str, Any] | None) -> list[tuple[str, str]]:
                 else "none"
             ),
         ),
+        *(
+            [
+                (
+                    "Human validation required for",
+                    _e(perimeter.get("validation_actions"))
+                    + " (validator declared by the agent, not authenticated by the registry)",
+                )
+            ]
+            if perimeter.get("validation_actions")
+            else []
+        ),
     ]
 
 

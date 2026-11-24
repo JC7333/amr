@@ -1,5 +1,9 @@
-# Token Issuance Specification v1.4
+# Token Issuance Specification v1.5
 
+v1.5 (24/11/2026): a perimeter may require a human validation for some action types
+(`validation_actions`); the token then carries `amr_validation_required`,
+`amr_validated_by` and `amr_validated_content_sha256`. Tokens for other actions, and
+all tokens under mandates without it, are unchanged.
 v1.4 (22/11/2026): `log_action` may log an action under its token (`action_token`),
 and an operator may require it (`AMR_REQUIRE_ACTION_TOKEN_FOR_LOG`). Tokens and
 their claims are unchanged.
@@ -46,6 +50,11 @@ Header: {"alg":"EdDSA","typ":"JWT","kid":"<key-id>"}.
   in any perimeter of the chain sets `registry_check`; absent otherwise. The consumer
   MUST then re-check the token with the registry when it acts (Registry Check at
   Execution).
+- `amr_validation_required` (v1.5): `true` when a perimeter of the chain lists
+  `amr_action_type` in `validation_actions`; absent otherwise. It comes with
+  `amr_validated_by` (the validator the agent declared) and
+  `amr_validated_content_sha256` (SHA-256 of the content validated). See Human
+  Validation.
 
 ## Perimeter Enforcement (v1.1)
 A mandate may carry a structured perimeter: `allowed_actions`, `forbidden_actions`
@@ -215,6 +224,51 @@ refused and cannot be logged later.
 What it does not prove: that the action described in `action` is the one the token
 was issued for. The registry never sees the action itself; the receiver's
 `amr_action_hash` check (consumer contract, check 5) is what binds them.
+
+## Human Validation (v1.5)
+A perimeter may carry `validation_actions`: patterns (broad match, like
+`forbidden_actions`: a pattern also reaches every sub-type) of the action types that
+need a human validation. The key appears in the canonical perimeter only when the list
+is not empty, so perimeters without it keep their digest, mandates their hash and
+principal signatures their payload.
+
+For an action type it reaches, in any perimeter of the delegation chain, the action
+metadata MUST carry:
+- `validated_by`: who validated, as the agent declares it (1 to 200 characters, not
+  blank, no control, format such as zero-width or bidi, line or paragraph separator
+  character);
+- `validated_content_sha256`: SHA-256 of the content validated, 64 lowercase hex.
+
+Otherwise the token is refused with `action_out_of_scope` and the detail
+`validation_required:<missing keys>` or `validation_invalid:<key>`, and `refused_by`
+names the first mandate of the chain, from the requested one upward, whose perimeter
+required it (for an inherited requirement, the sub-mandate itself). The check runs after `forbidden_actions`
+and `allowed_actions` and before the amount ceilings. Both values are part of the
+metadata, hence of `amr_action_hash`: a token for one validated content does not cover
+another. The token also carries them as `amr_validated_by` and
+`amr_validated_content_sha256`, with `amr_validation_required: true`, and the registry
+records them (table `token_validations`, schema v12, append-only, same transaction as
+`issued_tokens`). `check_action_token` returns them on a valid token
+(`validation_required`, `validated_by`, `validated_content_sha256`); `get_proof` lists
+them under `validated_actions`, with the logged action the token covered, if any.
+
+A sub-mandate inherits the parent's `validation_actions` into its stored perimeter and
+may add its own; it cannot lift one. The issuer checks every perimeter of the chain, so
+a sub-mandate stored without the parent's list is still bound by it.
+
+Limits. The registry records the validator the agent declares; it does not
+authenticate that person and does not see the content. The receiver MUST compare
+`validated_by` with who it knows validated (the person signed in on its side) and
+`validated_content_sha256` with the SHA-256 of the content it receives, and refuse on
+a mismatch. A validation is not single-use: the same `validated_by` and hash can back
+several tokens (another `action` text, or the same one after the previous token
+expired); a receiver that needs one action per validation MUST deduplicate on its
+side. The `token_validations` rows are not hash-chained; the signed token is the
+evidence of what was declared at issuance.
+
+Downgrade: an AMR version before v1.5 rejects a perimeter carrying
+`validation_actions` (`extra="forbid"`), so rolling back fails closed for such
+mandates (no token) rather than ignoring the requirement.
 
 ## Replay Prevention
 The `issued_tokens` table stores every issued jti with its expiration.

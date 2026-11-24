@@ -250,6 +250,44 @@ active and unexpired.
 > close the first gap once each principal has registered its key; binding keys to a
 > verified identity is on the roadmap.
 
+### Human validation required by the mandate
+
+Some actions should only go out once a person has validated them: a consultation note
+sent to the patient record, a letter, an order. The principal can say so in the mandate
+itself, with `validation_actions` (same patterns as `forbidden_actions`: a pattern also
+reaches its sub-types):
+
+```json
+create_mandate(..., allowed_actions=["note.*"], validation_actions=["note.send"])
+issue_action_token(..., action_type="note.send")
+→ {"denied": true, "reason": "action_out_of_scope",
+   "detail": "validation_required:validated_by,validated_content_sha256", "refused_by": "..."}
+issue_action_token(..., action_type="note.send", action_metadata_json=
+    '{"validated_by": "user:dr-a", "validated_content_sha256": "<sha256 of the note>"}')
+→ {"token": "...", ...}   # claims amr_validation_required, amr_validated_by,
+                          # amr_validated_content_sha256
+```
+
+For those action types, the action metadata must carry `validated_by` (who validated,
+1 to 200 characters) and `validated_content_sha256` (SHA-256 of the content validated,
+64 lowercase hex), or there is no token. Both values are sealed into the token and into
+its action hash (a token for one validated text does not cover another), returned by
+`check_action_token` and listed by `get_proof` under `validated_actions`. A sub-mandate
+inherits the requirement and cannot lift it.
+
+**Limit.** The registry records the validator the agent declares. It does not
+authenticate that person and never sees the content: the receiver checks. It compares
+`validated_by` with the person it knows validated (who is signed in on its side) and
+`validated_content_sha256` with the SHA-256 of what it receives, and refuses on a
+mismatch. A validation is not single-use: the same validator and hash can back several
+tokens, so a receiver that wants one action per validation deduplicates on its side.
+
+Mandates without `validation_actions` are unchanged: same perimeter, same hash, same
+signed payload, same tokens. Schema v12 only adds the `token_validations` table. An AMR
+version before this one refuses a perimeter that carries the key, so a rollback fails
+closed for such mandates (no token). See `docs/token-issuance-spec.md`, Human
+Validation.
+
 ### Principal signatures: the principal signs the mandate
 
 A principal can register its own Ed25519 public key once (`register_principal_key`).
@@ -547,6 +585,7 @@ Register a new mandate: the written authorization a principal (a person or a bod
 | `period_max_amount` | str \| null | Cumulative ceiling over `period_days`, for this mandate and all its sub-mandates, decimal string. E.g. `"2000"` |
 | `period_days` | int \| null | Rolling window of `period_max_amount`, 1 to 366 days (required with it). E.g. `30` |
 | `risk_classes` | list[dict] \| null | Classes `{name, actions, max_token_seconds, registry_check?}` bounding the token lifetime of the actions they reach, here and in every sub-mandate; `registry_check: true` asks the receiver to re-check with `check_action_token`. E.g. `[{"name": "irreversible", "actions": ["invoice.pay"], "max_token_seconds": 30, "registry_check": true}]` |
+| `validation_actions` | list[str] \| null | Action types that need a human validation: their metadata must carry `validated_by` and `validated_content_sha256`, else no token. Inherited by sub-mandates. Added to the sealed perimeter only when set. E.g. `["note.send"]` |
 | `principal_signature` | str \| null | Principal's base64url Ed25519 signature of the `prepare_mandate_signature` payload (required once the principal has a registered key) |
 | `signed_at` | str \| null | ISO 8601 timestamp with timezone placed in the signed payload (within 15 minutes of the registry clock) |
 
@@ -718,7 +757,8 @@ mandate still stands at the moment it acts.
 
 Other reasons: `mandate_status_revoked`, `mandate_expired`, `agent_mismatch`,
 `action_type_required`, `invalid_input`; perimeter details include `forbidden:<type>`,
-`not_allowed:<type>`, `amount_required`, `currency_mismatch:<code>`. See
+`not_allowed:<type>`, `amount_required`, `currency_mismatch:<code>`,
+`validation_required:<missing keys>`, `validation_invalid:<key>`. See
 [`docs/token-issuance-spec.md`](https://github.com/JC7333/amr/blob/main/docs/token-issuance-spec.md).
 
 ---
@@ -917,6 +957,11 @@ above it are still active, not revoked and not expired.
  "checked_at": "2026-10-29T21:30:14.100000+00:00"}
 ```
 
+When the mandate required a human validation for the action (`validation_actions`),
+a valid answer also carries `"validation_required": true`, `validated_by` and
+`validated_content_sha256`, read from the signed token: compare them with who is
+signed in on your side and with the SHA-256 of the content you receive.
+
 The registry opens its database read-only and writes nothing for a check, and the
 answer is not signed: it is not evidence that anyone checked. Call the registry over
 your own channel; never accept a check result relayed by the agent whose token it is.
@@ -973,6 +1018,13 @@ Once `revoke_mandate` has run, `mandate.status` reads `"revoked"` (the stored va
 stays in `mandate.stored_status`) and `mandate.revocation` holds `revoked_at`, `reason`, the principal's signature
 of the revocation (or `null`) and its chain hash; `revocation_signature_valid` re-checks
 that signature against the principal's key (`null` when there is nothing to check).
+
+`validated_actions` appears only when an action token of this mandate was issued with
+a required human validation: one entry per token, `{jti, action_type, validated_by,
+validated_content_sha256, issued_at, action_id}`, where `action_id` is the logged action
+the token covered (`log_action` with `action_token`), or `null`. `validated_by` is the
+validator the agent declared; these rows are not hash-chained (the signed token carries
+the same values).
 
 `delegation_chain` says whether the chain above a sub-mandate still holds:
 `{"broken": true, "reason": "parent_mandate_revoked", "refused_by": "<parent id>"}`

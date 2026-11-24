@@ -263,12 +263,18 @@ class MandateTemplate(BaseModel):
         )
         classes = self._hardened_risk_classes(risk_classes or ())
         risk = {"risk_classes": [rc.canonical() for rc in classes]} if classes else {}
+        validation = (
+            {"validation_actions": canonical["validation_actions"]}
+            if perimeter.validation_actions
+            else {}
+        )
         status = (
             {"template_status": self.stewardship.status} if self.stewardship is not None else {}
         )
         return {
             **period,
             **risk,
+            **validation,
             "allowed_actions": canonical["allowed_actions"],
             "forbidden_actions": canonical["forbidden_actions"],
             "delegation_allowed": perimeter.delegation_allowed,

@@ -41,6 +41,7 @@ def _build_perimeter(
     period_days: int | None = None,
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
+    validation_actions: list[str] | None = None,
 ) -> Perimeter | None:
     """Build the structured perimeter, or None for a legacy free-text mandate.
 
@@ -56,6 +57,7 @@ def _build_perimeter(
         and period_days is None
         and risk_classes is None
         and max_delegation_depth is None
+        and validation_actions is None
         and not delegation_allowed
     ):
         return None
@@ -75,6 +77,7 @@ def _build_perimeter(
         period_max_amount=period_max_amount,  # type: ignore[arg-type]
         period_days=period_days,
         risk_classes=tuple(risk_classes or ()),  # type: ignore[arg-type]
+        validation_actions=tuple(validation_actions or ()),
     )
 
 
@@ -263,6 +266,7 @@ async def create_mandate(
     period_days: int | None = None,
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
+    validation_actions: list[str] | None = None,
 ) -> str:
     """Create and register a new mandate: the written authorization a
     principal (a person or a body) gives for an AI agent to act on its behalf.
@@ -271,9 +275,9 @@ async def create_mandate(
     Each mandate is cryptographically linked to the previous one (SHA-256 chain).
 
     The optional structured perimeter (allowed_actions, forbidden_actions,
-    delegation_allowed, max_delegation_depth, max_amount, period_max_amount, risk_classes)
-    is enforced by issue_action_token: an action outside it gets no token. Without it,
-    the mandate is a free-text scope only.
+    delegation_allowed, max_delegation_depth, max_amount, period_max_amount, risk_classes,
+    validation_actions) is enforced by issue_action_token: an action outside it gets no
+    token. Without it, the mandate is a free-text scope only.
 
     The principal can sign the mandate with its own Ed25519 key (registered once with
     register_principal_key): build the exact bytes with prepare_mandate_signature, sign
@@ -356,6 +360,16 @@ async def create_mandate(
                       registry with check_action_token when it acts. Example:
                       [{"name": "irreversible", "actions": ["invoice.pay"],
                       "max_token_seconds": 30, "registry_check": true}]
+        validation_actions: Optional action types that need a human validation: their
+                            action metadata must carry "validated_by" (who validated)
+                            and "validated_content_sha256" (SHA-256, 64 lowercase hex,
+                            of the content validated), else issue_action_token refuses
+                            (action_out_of_scope, detail validation_required or
+                            validation_invalid). A pattern also reaches its sub-types.
+                            The registry records the validator the agent declares, it
+                            does not authenticate that person: the receiver compares the
+                            sealed values with what it knows. Sub-mandates inherit it.
+                            Example: ["note.send", "prescription.*"]
 
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
@@ -385,6 +399,7 @@ async def create_mandate(
                 period_days,
                 risk_classes,
                 max_delegation_depth,
+                validation_actions,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))
