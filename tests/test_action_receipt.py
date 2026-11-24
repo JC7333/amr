@@ -378,7 +378,13 @@ async def test_an_edited_receipt_is_detected(temp_db: Path, statement: str, para
     assert (await _proof(mandate_id))["chain_integrity"]["receipts_intact"] is False
 
 
-async def test_a_receipt_rewritten_for_another_action_is_detected(temp_db: Path) -> None:
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [("action_hash", "3" * 64), ("audience", "receiver://other"), ("agent_id", "agent:other")],
+)
+async def test_a_receipt_rewritten_for_another_action_is_detected(
+    temp_db: Path, column: str, value: str
+) -> None:
     """The row recomputes, but it no longer matches the token the registry issued."""
     mandate_id = await _mandate()
     await _receipt(await _token(mandate_id))
@@ -392,14 +398,15 @@ async def test_a_receipt_rewritten_for_another_action_is_detected(temp_db: Path)
         "refusal_reason", "received_content_sha256", "recorded_at",
     )
     receipt = dict(zip(keys, rows[0], strict=True))
-    receipt["action_hash"] = "3" * 64
+    receipt[column] = value
     mandate_hash = _sql(temp_db, "SELECT chain_hash FROM mandates")[0][0]
     rehashed = compute_hash(receipt_hash_data(receipt, mandate_hash), "")
-    _sql(
-        temp_db,
-        "UPDATE action_receipts SET action_hash = ?, chain_hash = ?",
-        ("3" * 64, rehashed),
-    )
+    statement = {
+        "action_hash": "UPDATE action_receipts SET action_hash = ?, chain_hash = ?",
+        "audience": "UPDATE action_receipts SET audience = ?, chain_hash = ?",
+        "agent_id": "UPDATE action_receipts SET agent_id = ?, chain_hash = ?",
+    }[column]
+    _sql(temp_db, statement, (value, rehashed))
     assert (await _proof(mandate_id))["chain_integrity"]["receipts_intact"] is False
 
 
