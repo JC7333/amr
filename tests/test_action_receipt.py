@@ -200,10 +200,20 @@ async def test_receipt_for_a_token_the_registry_never_issued_is_refused(temp_db:
 
 async def test_receipt_for_a_token_that_does_not_match_its_record_is_refused() -> None:
     mandate_id = await _mandate()
+    other_mandate = await _mandate(scope="Another ward")
     real = _claims(await _token(mandate_id))
-    for change in ({"amr_action_hash": "1" * 64}, {"sub": "agent:other"}):
+    for change in (
+        {"amr_action_hash": "1" * 64},
+        {"sub": "agent:other"},
+        {"amr_mandate_id": other_mandate},
+    ):
         result = await _receipt(_forge({**real, **change}))
         assert result["code"] == "token_record_mismatch", change
+    # A token re-addressed to another receiver: the receiver's audience matches the
+    # forged aud, but not the registry's record of the token.
+    readdressed = _forge({**real, "aud": "receiver://someone-else"})
+    result = await _receipt(readdressed, audience="receiver://someone-else")
+    assert result["code"] == "token_record_mismatch"
 
 
 async def test_receipt_for_a_token_signed_by_another_key_is_refused() -> None:
@@ -401,6 +411,40 @@ async def test_a_deleted_earlier_receipt_breaks_the_next_one(temp_db: Path) -> N
     assert (await _proof(mandate_id))["chain_integrity"]["receipts_intact"] is False
 
 
+async def test_deleting_a_mandates_only_receipt_shows_in_its_own_proof(temp_db: Path) -> None:
+    """The receipt after it belongs to another mandate: the whole chain still shows it."""
+    first_mandate = await _mandate()
+    second_mandate = await _mandate(scope="Another ward")
+    deleted = await _receipt(await _token(first_mandate), outcome="refused", refusal_reason="bad")
+    await _receipt(await _token(second_mandate))
+    assert (await _proof(first_mandate))["chain_integrity"]["receipts_intact"] is True
+    _sql(temp_db, "DELETE FROM action_receipts WHERE jti = ?", (deleted["jti"],))
+    assert (await _proof(first_mandate))["chain_integrity"]["receipts_intact"] is False
+    assert (await _proof(second_mandate))["chain_integrity"]["receipts_intact"] is False
+    dossier = json.loads(await export_insurer_dossier(first_mandate))["dossier"]
+    assert dossier["integrity"]["receipts_intact"] is False
+
+
+async def test_deleting_a_mandates_last_receipt_shows_in_its_own_proof(temp_db: Path) -> None:
+    first_mandate = await _mandate()
+    second_mandate = await _mandate(scope="Another ward")
+    await _receipt(await _token(first_mandate))
+    last_of_first = await _receipt(await _token(first_mandate, "note.read"))
+    await _receipt(await _token(second_mandate))
+    _sql(temp_db, "DELETE FROM action_receipts WHERE jti = ?", (last_of_first["jti"],))
+    assert (await _proof(first_mandate))["chain_integrity"]["receipts_intact"] is False
+
+
+async def test_a_mandate_without_receipts_sees_a_broken_registry_chain(temp_db: Path) -> None:
+    quiet = await _mandate(scope="No receipts here")
+    busy = await _mandate(scope="Another ward")
+    first = await _receipt(await _token(busy))
+    await _receipt(await _token(busy, "note.read"))
+    assert (await _proof(quiet))["chain_integrity"]["receipts_intact"] is None
+    _sql(temp_db, "DELETE FROM action_receipts WHERE jti = ?", (first["jti"],))
+    assert (await _proof(quiet))["chain_integrity"]["receipts_intact"] is False
+
+
 # --- insurer dossier, schema, profiles ---------------------------------------------------
 
 
@@ -415,21 +459,32 @@ async def test_insurer_dossier_carries_the_three_lines() -> None:
     assert any("receipt" in limit for limit in dossier["limits"])
 
 
-async def test_insurer_dossier_keeps_only_the_period() -> None:
+async def test_insurer_dossier_keeps_only_the_period(temp_db: Path) -> None:
     mandate_id = await _mandate()
-    await _receipt(await _token(mandate_id))
-    later = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-    dossier = json.loads(
-        await export_insurer_dossier(mandate_id, period_start=later)
+    old_token = await _token(mandate_id)
+    await _receipt(old_token)
+    new_token = await _token(mandate_id, "note.read")
+    await _receipt(new_token)
+    # Move the first token's issuance two days back (test setup only).
+    two_days_ago = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    _sql(
+        temp_db,
+        "UPDATE issued_tokens SET issued_at = ? WHERE jti = ?",
+        (two_days_ago, _claims(old_token)["jti"]),
     )
-    # The period starts after now, so period_end defaults to now: refused as invalid.
-    assert dossier.get("code") == "invalid_input"
-    earlier = (datetime.now(UTC) - timedelta(days=2)).isoformat()
-    before = (datetime.now(UTC) - timedelta(days=1)).isoformat()
-    dossier = json.loads(
-        await export_insurer_dossier(mandate_id, period_start=earlier, period_end=before)
+    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    dossier = json.loads(await export_insurer_dossier(mandate_id, period_start=since))[
+        "dossier"
+    ]
+    assert [entry["jti"] for entry in dossier["action_trail"]] == [_claims(new_token)["jti"]]
+    whole = json.loads(await export_insurer_dossier(mandate_id))["dossier"]
+    assert len(whole["action_trail"]) == 1  # period starts at the mandate's creation
+    everything = json.loads(
+        await export_insurer_dossier(
+            mandate_id, period_start=(datetime.now(UTC) - timedelta(days=3)).isoformat()
+        )
     )["dossier"]
-    assert dossier["action_trail"] == []
+    assert len(everything["action_trail"]) == 2
 
 
 async def test_schema_version_13_is_recorded(temp_db: Path) -> None:

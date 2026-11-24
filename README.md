@@ -1003,7 +1003,8 @@ SHA-256 and seal the mandate hash and the token's action hash.
 
 What a receipt is not: it is what the receiver declares it did. It does not prove the
 content, and it is not signed: anyone who holds the token and can call this tool on the
-same registry could write it, which is why it belongs to the receiver's profile only.
+same registry could write it, and the first receipt wins (the real receiver would then
+get `receipt_already_recorded`), which is why it belongs to the receiver's profile only.
 See [`docs/action-receipt-spec.md`](https://github.com/JC7333/amr/blob/main/docs/action-receipt-spec.md).
 
 ---
@@ -1071,8 +1072,10 @@ each `{jti, authorization, agent_declaration, receiver_receipt, missing}`. `auth
 is the token the registry issued, `agent_declaration` the action the agent logged with it,
 `receiver_receipt` what the receiver declared it did (`record_action_receipt`); `missing`
 names the lines that are `null`. `receipts_intact` re-checks the receipts (`null` when
-there is none; `false` when a receipt does not recompute from its row and the previous
-receipt, or names a token the registry did not issue under this mandate).
+there is none and the registry's receipt chain is whole; `false` when a receipt does not
+recompute from its row and the previous receipt, names a token the registry did not issue
+under this mandate, or when the receipt chain of the whole registry is broken, which
+shows a receipt deleted anywhere but the very last one).
 
 `delegation_chain` says whether the chain above a sub-mandate still holds:
 `{"broken": true, "reason": "parent_mandate_revoked", "refused_by": "<parent id>"}`

@@ -91,6 +91,31 @@ async def get_last_receipt_hash(db: aiosqlite.Connection) -> str:
     return row["chain_hash"] if row is not None else ""
 
 
+async def registry_receipts_chain_valid(db: aiosqlite.Connection) -> bool:
+    """Recompute the whole receipt chain of the registry, oldest first.
+
+    Each receipt is chained to the one recorded before it in the whole registry, whatever
+    its mandate. Checking only a mandate's own receipts would miss a deleted receipt whose
+    successor belongs to another mandate; the whole chain shows any receipt deleted or
+    edited anywhere but the very last one.
+    """
+    cursor = await db.execute(
+        "SELECT r.jti, r.mandate_id, r.agent_id, r.action_hash, r.audience, r.outcome, "
+        "r.refusal_reason, r.received_content_sha256, r.recorded_at, r.chain_hash, "
+        "m.chain_hash AS mandate_chain_hash FROM action_receipts r "
+        "LEFT JOIN mandates m ON m.id = r.mandate_id ORDER BY r.rowid ASC"
+    )
+    previous = ""
+    for row in await cursor.fetchall():
+        receipt = dict(row)
+        if receipt["mandate_chain_hash"] is None or not receipt_hash_valid(
+            receipt, receipt["mandate_chain_hash"], previous
+        ):
+            return False
+        previous = receipt["chain_hash"]
+    return True
+
+
 async def mandate_receipts(
     db: aiosqlite.Connection, mandate_id: str
 ) -> list[tuple[dict[str, Any], str]]:
@@ -142,8 +167,9 @@ async def record_action_receipt(
 
     What a receipt is not: it is what the receiver declares it did, not proof that the
     content was right or that the action took place. It is not signed: anyone who holds
-    the token and can call this tool on the same registry can record it, so expose this
-    tool to the receiver only (profile receiver), never to the agent.
+    the token and can call this tool on the same registry can record it, and the first
+    receipt recorded wins (the real receiver then gets receipt_already_recorded), so
+    expose this tool to the receiver only (profile receiver), never to the agent.
 
     Args:
         token: The compact JWS the agent presented (from issue_action_token).
@@ -163,7 +189,7 @@ async def record_action_receipt(
         wrong_algorithm, key_mismatch, bad_signature, wrong_issuer, wrong_audience,
         token_not_yet_valid, missing_claim, receipt_too_late, registry_unavailable,
         unknown_token, token_record_mismatch, receipt_already_recorded or
-        internal_error.
+        mandate_not_found or internal_error.
     """
     db = None
     try:

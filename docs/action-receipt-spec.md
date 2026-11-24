@@ -49,7 +49,8 @@ Decisions:
 Refusal codes: `invalid_input`, `malformed`, `wrong_algorithm`, `key_mismatch`,
 `bad_signature`, `wrong_issuer`, `wrong_audience`, `token_not_yet_valid`,
 `missing_claim`, `receipt_too_late`, `registry_unavailable`, `unknown_token`,
-`token_record_mismatch`, `receipt_already_recorded`, `internal_error`. They reach an MCP
+`token_record_mismatch`, `receipt_already_recorded`, `mandate_not_found` (the token's
+mandate is gone from the registry), `internal_error`. They reach an MCP
 client as errors, in the common shape (`code`, `message`, `field`).
 
 ## Storage and chaining
@@ -79,9 +80,12 @@ per action logged without a token, oldest first:
 ```
 
 `missing` names the lines that are `null`. `chain_integrity.receipts_intact` is `null`
-when the mandate has no receipt, and `false` when a receipt does not recompute from its
-row and the previous receipt, or names a token, action hash, agent or audience the
-registry did not issue under this mandate. `chain_integrity.actions_with_receipt` counts
+when the mandate has no receipt and the registry's receipt chain is whole, and `false`
+when a receipt does not recompute from its row and the previous receipt, when it names a
+token, action hash, agent or audience the registry did not issue under this mandate, or
+when the receipt chain of the whole registry is broken. The whole chain is checked
+because a receipt of this mandate may have been deleted: its successor, often a receipt
+of another mandate, no longer recomputes, and every proof then says so. `chain_integrity.actions_with_receipt` counts
 the receipts. `export_insurer_dossier` carries the entries of the period in
 `action_trail` and `receipts_intact` in its integrity block.
 
@@ -90,8 +94,11 @@ the receipts. `export_insurer_dossier` carries the entries of the period in
 - It is what the receiver declares it did. It does not prove the content, and it does not
   prove that the action took place.
 - It is not signed. Anyone who holds the token and can call this tool on the same
-  registry could write it; that is why it belongs to the receiver's profile only.
+  registry could write it, and the first receipt recorded wins: if the agent reached a
+  server with this tool first, the real receiver would get `receipt_already_recorded`.
+  That is why it belongs to the receiver's profile only.
   A receipt signed with a key the receiver registered, verifiable without trusting the
   registry, is a separate step, not in this version.
-- Deleting the last receipt of the registry is not detected by the chain alone (the same
-  holds for the other chained tables).
+- Deleting the very last receipt recorded in the whole registry is not detected by the
+  chain alone (the same holds for the other chained tables). Any other deletion breaks
+  the chain and shows as `receipts_intact: false` in every proof.

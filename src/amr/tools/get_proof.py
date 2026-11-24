@@ -38,7 +38,11 @@ from amr.tools.contest_action import (
     contest_signature_valid,
     mandate_contests,
 )
-from amr.tools.record_action_receipt import mandate_receipts, receipt_hash_valid
+from amr.tools.record_action_receipt import (
+    mandate_receipts,
+    receipt_hash_valid,
+    registry_receipts_chain_valid,
+)
 from amr.tools.revoke_mandate import revocation_signature_valid
 
 
@@ -510,10 +514,14 @@ async def get_proof(
             chain_hash} (what the receiver declared it did, record_action_receipt,
             or null), missing (the names of the null lines)}. A receipt is the
             receiver's declaration, not signed: it does not prove the content.
-            chain_integrity also gains receipts_intact (null when no receipt; false
-            when a receipt's chain_hash does not recompute from its row and the
-            previous receipt, or it names a token, action hash, agent or audience
-            the registry did not issue under this mandate) and actions_with_receipt
+            chain_integrity also gains receipts_intact (null when the mandate has
+            no receipt and the registry's receipt chain is whole; false when a
+            receipt's chain_hash does not recompute from its row and the previous
+            receipt, when it names a token, action hash, agent or audience the
+            registry did not issue under this mandate, or when the receipt chain of
+            the whole registry is broken, which shows a receipt deleted or edited
+            anywhere but the very last one, possibly one of this mandate) and
+            actions_with_receipt
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -705,6 +713,10 @@ async def get_proof(
             )
             receipts_intact = intact and receipts_intact is not False
             receipts[receipt["jti"]] = receipt
+        # A receipt deleted or edited anywhere in the registry's receipt chain (it may
+        # have been this mandate's) breaks the chain: this proof then says so.
+        if not await registry_receipts_chain_valid(db):
+            receipts_intact = False
         action_trail = _action_trail(actions, token_links, issued, receipts)
 
         # Fetch all mandate events
