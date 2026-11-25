@@ -31,6 +31,7 @@ from amr.tools.issue_mandate_attestation import get_registry_public_key
 from amr.tools.log_action import log_action
 from amr.tools.prepare_mandate_pdf import prepare_mandate_pdf
 from amr.tools.principal_keys import prepare_mandate_signature
+from amr.tools.registry_timestamp import prepare_registry_timestamp
 from amr.tools.revoke_mandate import prepare_revocation_signature
 from amr.tools.verify_mandate import verify_mandate
 from amr.tools_list import tools_list
@@ -59,6 +60,8 @@ EXPECTED: dict[str, tuple] = {
     "contest_action": APPEND,
     "prepare_contest_signature": READ,
     "list_action_contests": READ,
+    "prepare_registry_timestamp": READ,
+    "record_registry_timestamp": APPEND,
     "report_issue": (False, False, False, True),
 }
 WIRE_KEYS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
@@ -191,6 +194,7 @@ async def test_read_only_tools_change_nothing(temp_db: Path, isolated_signing_ke
         "prepare_revocation_signature": prepare_revocation_signature(mandate_id, "test"),
         "prepare_contest_signature": prepare_contest_signature(mandate_id, action_id, "test", 7),
         "list_action_contests": list_action_contests(mandate_id=mandate_id),
+        "prepare_registry_timestamp": prepare_registry_timestamp(),
     }
     assert set(calls) == {name for name, hints in EXPECTED.items() if hints == READ}
     for name, call in calls.items():

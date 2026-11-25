@@ -72,7 +72,7 @@ in the `env` block of each client, all pointing at the same `AMR_DB_PATH`:
 
 | `AMR_TOOL_PROFILE` | Who runs it | Tools |
 |---|---|---|
-| `principal` | the person or body that grants mandates | create, sign, revoke, contest, prove (`create_mandate`, `register_principal_key`, `revoke_mandate`, `contest_action`, `get_proof`, `export_insurer_dossier`, ...) |
+| `principal` | the person or body that grants mandates | create, sign, revoke, contest, prove, have the registry dated (`create_mandate`, `register_principal_key`, `revoke_mandate`, `contest_action`, `get_proof`, `export_insurer_dossier`, `record_registry_timestamp`, ...) |
 | `agent` | the agent that acts under a mandate | `verify_mandate`, `issue_action_token`, `log_action`, `issue_mandate_attestation`, `get_registry_public_key`; `create_mandate` for sub-mandates under its own mandate only |
 | `receiver` | a third party the agent acts upon | `check_action_token`, `record_action_receipt`, `get_registry_public_key` |
 | `full` (default) | tests and single-user setups | every tool |
@@ -510,8 +510,8 @@ calls need the user's approval (with mcp SDK 1.7 or later; an older SDK cannot s
 
 | Class | Tools |
 |---|---|
-| read-only (records no mandate, action, token, contest or key and sends nothing; like every tool, may create the empty database on first use) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests` |
-| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `record_action_receipt`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action` |
+| read-only (records no mandate, action, token, contest or key and sends nothing; like every tool, may create the empty database on first use) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests`, `prepare_registry_timestamp` |
+| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `record_action_receipt`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action`, `record_registry_timestamp` |
 | writes, may reach the network (opt-in) | `register_principal_key` (appends the key; reads the `did:web` domain with `AMR_DID_WEB_RESOLVE=1`), `report_issue` (files a GitHub issue with `AMR_ISSUE_TOKEN`, otherwise writes nothing) |
 | destructive (final) | `revoke_mandate` |
 | idempotent write | `get_registry_public_key` (creates the registry signing key on its first call, then only reads it) |
@@ -1084,6 +1084,86 @@ own `mandate.status` does not change: the cut is above it);
 `{"broken": false, "reason": null, "refused_by": null}` otherwise, and always for a root
 mandate.
 
+`registry_timestamps` lists the outside timestamps whose anchor covers this mandate
+(`record_registry_timestamp`, below), each with `gen_time` (the service's date), `tsa` and
+`serial_number`, all read from the signed response, `actions_covered` (this mandate's
+actions logged up to the anchor), `anchor_intact` (the registry still holds the anchored
+rows unchanged), `response_matches` (the stored response dates the stored anchor, with
+its nonce, and agrees with the stored columns; checked even without trust roots),
+`signature_valid` (re-checked against `AMR_TIMESTAMP_TRUST_ROOTS_PATH`, `null` when it is
+not set, `false` when the file cannot be read), the response itself (base64) and the
+anchor. With the Proof Pack alone, a third party can check that the service signed and
+dated this anchor; checking that this mandate's rows are inside the anchor needs a copy
+of the registry database (the anchor's digests cover whole tables).
+`chain_integrity.timestamps_intact` is `null` when no timestamp covers the mandate and the
+registry's timestamp chain is whole; `false` when a covering anchor no longer matches the
+registry, a response does not match, a signature no longer verifies, a stored anchor is
+malformed or the timestamp chain is broken; `true` otherwise.
+
+---
+
+### `prepare_registry_timestamp` and `record_registry_timestamp`
+
+A registry its operator keeps is evidence the operator could rewrite. These two tools
+let an outside time-stamping service (RFC 3161), chosen by the operator, date the state
+of the registry. Anyone with a copy of the registry database can then check that it held
+these rows, unchanged, at that date: a row changed, deleted or inserted afterwards below
+the anchored rows is detected. Profile `principal` (the operator), never the agent.
+
+**AMR makes no network call for this.** There is no service address setting and none
+built in. `prepare_registry_timestamp` returns the request; you send it yourself:
+
+```bash
+# req.tsq: the base64 timestamp_request, decoded
+curl -s -H "Content-Type: application/timestamp-query" --data-binary @req.tsq \
+     "$YOUR_TSA_URL" -o resp.tsr
+```
+
+then give `base64(resp.tsr)` and the anchor, unchanged, to `record_registry_timestamp`.
+
+`prepare_registry_timestamp()` takes no parameter and records nothing. It computes an
+anchor: for each append-only table (mandates, action log, tokens, revocations,
+contests, receipts, keys, attestations and the others), the number of rows, the last
+rowid and a SHA-256 over every column of those rows; plus the date and a random nonce.
+The request's message imprint is the SHA-256 of that anchor (canonical JSON). Only that
+digest leaves the registry, never its content.
+
+```json
+{"anchor": {"anchor_version": 1, "computed_at": "...", "nonce": 6151893374225806343,
+            "tables": {"mandates": {"last_rowid": 3, "rows": 3, "sha256": "..."}, "...": {}}},
+ "anchor_sha256": "...", "timestamp_request": "MDkCAQEw...",
+ "content_type": "application/timestamp-query", "rows_anchored": {"mandates": 3, "...": 0}}
+```
+
+| Parameter of `record_registry_timestamp` | Type | Description |
+|---|---|---|
+| `anchor_json` | str | The `anchor` returned by `prepare_registry_timestamp`, as JSON |
+| `timestamp_response` | str | The service's response (DER `TimeStampResp`), base64 |
+
+The response is recorded only if it is granted, dates this anchor's SHA-256 with this
+anchor's nonce, is signed by a service whose certificate chains to a root of
+`AMR_TIMESTAMP_TRUST_ROOTS_PATH` (a PEM file you choose) at the date it gives, is not
+dated before the anchor was computed (5 minutes of clock skew allowed), and the registry
+still holds exactly the anchored rows. Without `AMR_TIMESTAMP_TRUST_ROOTS_PATH`, nothing
+is accepted (`timestamp_trust_roots_missing`). Recorded timestamps are append-only and
+chained (SHA-256); one per anchor (`timestamp_already_recorded`).
+
+```json
+{"status": "recorded", "anchor_sha256": "...", "gen_time": "2026-11-25T11:40:02+00:00",
+ "tsa": "Common Name: ...", "serial_number": "...", "rows_anchored": {"...": 0},
+ "recorded_at": "...", "chain_hash": "..."}
+```
+
+What a timestamp shows: the registry held these rows, in this state, at the service's
+date. What it does not show: that what the rows say is true, or who wrote them. AMR does
+not check the revocation of the service's certificate (no OCSP, no CRL download) and
+does not say whether a service is qualified: that is your choice of trust roots. Rows
+written after the last timestamp are not covered until the next one, and deleting the
+latest timestamp record itself is not detected (as for the end of any chain). The anchor
+follows SQLite rowids: do not run `VACUUM` on a registry that has timestamps (SQLite may
+renumber rowids, and the anchors would then show as broken, a false alarm). See
+[`docs/registry-timestamp-spec.md`](https://github.com/JC7333/amr/blob/main/docs/registry-timestamp-spec.md).
+
 ---
 
 ### `issue_mandate_attestation`
@@ -1233,7 +1313,7 @@ signature is proof. See `docs/insurer-dossier-spec.md`.
 
 | Status | Features |
 |---|---|
-| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · sector templates (health, recruitment, credit, life and health insurance, customer support) · MCP SDK v1 and v2 · PyPI package `mandatia` |
+| **Shipped** | Mandate registry · SHA-256 chain · Proof Pack JSON · structured perimeters · sub-mandates and delegation chains · revocation · contested actions · signed action tokens (enforcement) and check at execution · offline mandate attestations · signed insurer dossier (JSON and printable HTML) · principal signatures and did:web keys · read-only public registry · outside RFC 3161 timestamps of the registry · sector templates (health, recruitment, credit, life and health insurance, customer support) · MCP SDK v1 and v2 · PyPI package `mandatia` |
 | **Planned** | PDF Proof Pack export · remote transport for MCP clients · PostgreSQL backend · multi-tenant support · REST API alongside MCP · eIDAS 2.0 qualified electronic signatures · cross-border mandate recognition · webhook notifications · dashboard and alerting |
 
 ---
@@ -1279,6 +1359,7 @@ src/amr/
 │   ├── get_proof.py
 │   ├── check_action_token.py          # receiver re-checks a token when it acts
 │   ├── record_action_receipt.py       # receiver's receipt: executed or refused
+│   ├── registry_timestamp.py   # outside RFC 3161 timestamps of the registry (no network)
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
 │   ├── contest_action.py   # contested acts and their response deadline (reminder)
@@ -1288,6 +1369,7 @@ src/amr/
 ├── did_web.py         # did:web key check, network opt-in (AMR_DID_WEB_RESOLVE)
 ├── mandate_pdf.py     # deterministic mandate PDF, payload attached (stdlib only)
 ├── pades.py           # offline check of a PAdES signature on that PDF (pyHanko)
+├── registry_timestamp.py  # anchor of the registry, RFC 3161 request and offline check
 ├── verify_attestation.py  # python -m amr.verify_attestation
 ├── proof/insurer_dossier.py  # Signed insurer dossier: canonical form, JWS, print view
 └── templates/         # Sector mandate templates (agent-sante-rgpd, agent-rh-recrutement, agent-credit, agent-assurance-sante-vie, agent-support-client)
@@ -1312,6 +1394,7 @@ tests/
 | `AMR_ISSUE_TOKEN` | unset | GitHub token that lets `report_issue` file issues itself (fine-grained, Issues: write, one repository). Read from the process environment only, never from `.env`. Unset: no network call |
 | `AMR_DID_WEB_RESOLVE` | unset | `1` lets `register_principal_key` read the DID document of a `did:web` principal (one HTTPS GET to that domain). Read from the process environment only, never from `.env`. Unset: `did:web` keys are refused |
 | `AMR_PDF_TRUST_ROOTS_PATH` | unset | PEM file of the certificate authorities whose PDF signatures `attach_signed_mandate_pdf` accepts. Unset: no signed PDF is accepted |
+| `AMR_TIMESTAMP_TRUST_ROOTS_PATH` | unset | PEM file of the certificate authorities of the time-stamping services whose responses `record_registry_timestamp` accepts. Unset: no timestamp is accepted. AMR never contacts a time-stamping service itself |
 | `AMR_ISSUE_REPOSITORY` | `JC7333/amr` | Repository `report_issue` files issues on (`owner/name`) |
 | `AMR_ATTESTATION_LIFETIME_SECONDS` | `900` | Longest lifetime of a mandate attestation |
 | `AMR_PUBLIC_EXPORT_PATH` | `amr_public_registry.jws` | Signed snapshot written by `python -m amr.public_registry export` and served by its app |

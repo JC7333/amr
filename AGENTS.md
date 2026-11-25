@@ -56,6 +56,8 @@ granted to yourself proves nothing.
 | `contest_action` | Record that a principal disputes an act already logged, with a response deadline the operator chooses |
 | `prepare_contest_signature` | Build the exact bytes a principal signs to contest an act |
 | `list_action_contests` | The reminder: contested acts with the days left before their response deadline |
+| `prepare_registry_timestamp` | For the operator: build an RFC 3161 request that has an outside time-stamping service date the registry's current state (AMR sends nothing; you send it) |
+| `record_registry_timestamp` | For the operator: record the service's response once checked against your trust roots; the proof then shows which timestamps cover a mandate |
 | `report_issue` | Report a problem with AMR itself (pre-filled link, or the issue filed when the operator set `AMR_ISSUE_TOKEN`) |
 
 ## What it does not do
