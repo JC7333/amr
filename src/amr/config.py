@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # no signed PDF is accepted. AMR does not read the EU trusted lists itself.
     pdf_trust_roots_path: Path | None = None
 
+    # Registry timestamps (see docs/registry-timestamp-spec.md): a PEM file of the
+    # certificate authorities of the time-stamping services whose responses
+    # record_registry_timestamp accepts. None: no response is accepted. There is no
+    # service address setting: AMR never contacts a time-stamping service itself.
+    timestamp_trust_roots_path: Path | None = None
+
     # report_issue (see docs/report-issue-spec.md) files issues on this repository.
     # Its token, AMR_ISSUE_TOKEN, is deliberately not a setting: report_issue reads it
     # from the process environment only, never from a .env file.

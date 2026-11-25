@@ -39,6 +39,7 @@ from amr.tools.contest_action import (
     mandate_contests,
 )
 from amr.tools.record_action_receipt import mandate_receipts, registry_receipts_chain_valid
+from amr.tools.registry_timestamp import mandate_timestamps
 from amr.tools.revoke_mandate import revocation_signature_valid
 
 
@@ -518,6 +519,18 @@ async def get_proof(
             the whole registry is broken, which shows a receipt deleted or edited
             anywhere but the very last one, possibly one of this mandate) and
             actions_with_receipt
+          - registry_timestamps: the outside time-stamping services' responses
+            (record_registry_timestamp) whose anchor covers this mandate, oldest
+            first, each {anchor_sha256, gen_time (the service's date), tsa,
+            serial_number, recorded_at, actions_covered (this mandate's actions
+            logged up to the anchor), anchor_intact (the registry still holds the
+            anchored rows unchanged), signature_valid (re-checked against
+            AMR_TIMESTAMP_TRUST_ROOTS_PATH; null when it is not set),
+            timestamp_response (base64 DER, to check without AMR), anchor}.
+            chain_integrity also gains timestamps_intact (null when no timestamp
+            covers the mandate and the timestamp chain is whole; false when an
+            anchor no longer matches, a signature no longer verifies or the
+            timestamp chain of the registry is broken)
           - compliance_notes: dict with ai_act_art26 and retention notes
         On error: {"error": "..."}.
     """
@@ -774,6 +787,9 @@ async def get_proof(
             db, mandate_row, events
         )
 
+        # Outside timestamps (record_registry_timestamp) whose anchor covers this mandate.
+        timestamps, timestamps_intact = await mandate_timestamps(db, mandate_id)
+
         # Verify the action chain integrity
         # Action chains are anchored to the mandate's chain_hash (not "")
         actions_chain_valid = verify_chain(
@@ -793,6 +809,7 @@ async def get_proof(
             "pdf_signatures": pdf_signatures,
             **({"validated_actions": validated_actions} if validated_actions else {}),
             "action_trail": action_trail,
+            "registry_timestamps": timestamps,
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,
@@ -803,6 +820,7 @@ async def get_proof(
                 "actions_with_token": actions_with_token,
                 "receipts_intact": receipts_intact,
                 "actions_with_receipt": len(receipts),
+                "timestamps_intact": timestamps_intact,
                 "total_events": len(events),
             },
             "compliance_notes": {

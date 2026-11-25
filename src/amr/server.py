@@ -45,6 +45,10 @@ from amr.tools.log_action import log_action
 from amr.tools.prepare_mandate_pdf import prepare_mandate_pdf
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
 from amr.tools.record_action_receipt import record_action_receipt
+from amr.tools.registry_timestamp import (
+    prepare_registry_timestamp,
+    record_registry_timestamp,
+)
 from amr.tools.report_issue import report_issue
 from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
 from amr.tools.verify_mandate import verify_mandate
@@ -70,6 +74,8 @@ TOOLS = (
     contest_action,
     prepare_contest_signature,
     list_action_contests,
+    prepare_registry_timestamp,
+    record_registry_timestamp,
     report_issue,
 )
 
@@ -94,6 +100,8 @@ TOOL_PROFILES: dict[str, frozenset[str]] = {
             "contest_action",
             "prepare_contest_signature",
             "list_action_contests",
+            "prepare_registry_timestamp",
+            "record_registry_timestamp",
             "report_issue",
         }
     ),
@@ -161,6 +169,9 @@ _TOOL_HINTS: dict[str, dict[str, bool]] = {
     "contest_action": _APPENDS,
     "prepare_contest_signature": _READ_ONLY,
     "list_action_contests": _READ_ONLY,
+    # AMR prepares the request and checks the response; it never calls the service.
+    "prepare_registry_timestamp": _READ_ONLY,
+    "record_registry_timestamp": _APPENDS,
     # Files a GitHub issue when the operator sets AMR_ISSUE_TOKEN.
     "report_issue": {**_APPENDS, "openWorldHint": True},
 }

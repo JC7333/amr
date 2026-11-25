@@ -34,6 +34,8 @@ PRINCIPAL_ONLY = {
     "prepare_revocation_signature",
     "contest_action",
     "prepare_contest_signature",
+    "prepare_registry_timestamp",
+    "record_registry_timestamp",
 }
 # What only the acting agent does: ask for a token, log its act.
 AGENT_ONLY = {"issue_action_token", "log_action"}
@@ -56,7 +58,7 @@ def test_every_profile_names_only_real_tools() -> None:
 
 def test_full_profile_is_every_tool() -> None:
     assert _names("full") == ALL
-    assert len(ALL) == 20
+    assert len(ALL) == 22
 
 
 def test_agent_profile_cannot_grant_sign_or_revoke() -> None:

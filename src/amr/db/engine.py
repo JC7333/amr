@@ -209,6 +209,22 @@ CREATE TABLE IF NOT EXISTS action_receipts (
     chain_hash               TEXT NOT NULL
 );
 
+-- Registry timestamps (record_registry_timestamp): an outside time-stamping service's
+-- RFC 3161 response dating an anchor of the append-only tables above. Append-only and
+-- chained; the anchor itself is kept, so anyone can recompute it.
+CREATE TABLE IF NOT EXISTS registry_timestamps (
+    anchor_sha256       TEXT PRIMARY KEY,
+    anchor_json         TEXT NOT NULL,
+    response_der        BLOB NOT NULL,
+    gen_time            TEXT NOT NULL,
+    tsa                 TEXT NOT NULL,
+    serial_number       TEXT NOT NULL,
+    policy              TEXT NOT NULL,
+    trust_roots_sha256  TEXT NOT NULL,
+    recorded_at         TEXT NOT NULL,
+    chain_hash          TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_action_receipts_mandate ON action_receipts(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_token_validations_mandate ON token_validations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_log_tokens_mandate ON action_log_tokens(mandate_id);
@@ -283,7 +299,7 @@ async def init_db(db_path: Path | str | None = None) -> None:
     4: principal signatures, 5: issued attestations, 6: mandate revocations,
     7: token amounts for cumulative ceilings, 8: action contests,
     9: did:web key domain proofs, 10: signed mandate PDFs, 11: action log tokens,
-    12: token validations, 13: action receipts).
+    12: token validations, 13: action receipts, 14: registry timestamps).
 
     Args:
         db_path: Path to the SQLite database file. Defaults to settings.db_path.
@@ -387,6 +403,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
         await db.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (13,),
+        )
+        # Schema v14: registry_timestamps, created by the script above
+        # (record_registry_timestamp). Existing rows and hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (14,),
         )
         await db.commit()
 
