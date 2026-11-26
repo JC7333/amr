@@ -54,7 +54,7 @@ granted to yourself proves nothing.
 | `revoke_mandate` | Cut a mandate and every sub-mandate below it, immediately |
 | `prepare_revocation_signature` | Build the exact bytes a principal signs to revoke |
 | `suspend_mandate` | Pause a mandate and its whole branch at once, signed with a key the principal designated in the mandate (`suspension_keys`); reversible |
-| `resume_mandate` | Lift a suspension: the principal only, signed when it has a key |
+| `resume_mandate` | Lift a suspension: the principal only, always signed with its registered key |
 | `prepare_suspension_signature` | Build the exact bytes to sign to suspend or resume |
 | `contest_action` | Record that a principal disputes an act already logged, with a response deadline the operator chooses |
 | `prepare_contest_signature` | Build the exact bytes a principal signs to contest an act |

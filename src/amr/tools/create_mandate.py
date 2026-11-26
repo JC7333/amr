@@ -378,7 +378,8 @@ async def create_mandate(
                          people the principal designates to suspend this mandate at
                          once with suspend_mandate (a security officer, an on-call
                          person). Each key can only suspend; only the principal lifts
-                         a suspension (resume_mandate). Needs allowed_actions. Not
+                         a suspension (resume_mandate, signed with its registered
+                         key). Needs allowed_actions. Not
                          inherited by sub-mandates (suspending this mandate cuts them).
 
     Returns:

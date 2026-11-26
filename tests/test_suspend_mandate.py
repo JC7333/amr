@@ -6,6 +6,7 @@ that may suspend it at once; only the principal lifts the suspension; revocation
 final.
 """
 
+import hashlib
 import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -29,7 +30,7 @@ from amr.tools.issue_action_token import issue_action_token
 from amr.tools.issue_mandate_attestation import issue_mandate_attestation
 from amr.tools.log_action import log_action
 from amr.tools.principal_keys import prepare_mandate_signature, register_principal_key
-from amr.tools.revoke_mandate import revoke_mandate
+from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
 from amr.tools.suspend_mandate import (
     prepare_suspension_signature,
     resume_mandate,
@@ -140,6 +141,18 @@ async def _resume_signed(mandate_id: str, key: ed25519.Ed25519PrivateKey,
     return json.loads(
         await resume_mandate(mandate_id, reason, signature, prepared["signed_at"])
     )
+
+
+PRINCIPAL_KEY = _new_key()
+
+
+async def _resume(mandate_id: str, reason: str = "review done") -> dict:
+    """The principal lifts the suspension: registers its key once, then signs."""
+    proof = b64url_encode(
+        PRINCIPAL_KEY.sign(key_registration_payload(PRINCIPAL, _pub(PRINCIPAL_KEY)))
+    )
+    await register_principal_key(PRINCIPAL, _pub(PRINCIPAL_KEY), proof)
+    return await _resume_signed(mandate_id, PRINCIPAL_KEY, reason)
 
 
 async def _register(key: ed25519.Ed25519PrivateKey, principal_id: str = PRINCIPAL) -> None:
@@ -352,7 +365,7 @@ async def test_a_signature_cannot_be_replayed() -> None:
         await suspend_mandate(mid, reason, _pub(OFFICER), signature, prepared["signed_at"])
     )
     assert first["status"] == "suspended"
-    assert (json.loads(await resume_mandate(mid, "done")))["status"] == "resumed"
+    assert (await _resume(mid, "done"))["status"] == "resumed"
     replay = json.loads(
         await suspend_mandate(mid, reason, _pub(OFFICER), signature, prepared["signed_at"])
     )
@@ -363,10 +376,15 @@ async def test_a_revoked_mandate_cannot_be_suspended_or_resumed() -> None:
     root = await _create()
     mid = root["mandate_id"]
     await _suspend(mid)
-    assert json.loads(await revoke_mandate(mid, "ended"))["status"] == "revoked"
-    assert json.loads(await resume_mandate(mid, "back"))["code"] == "mandate_already_revoked"
     other = await _create()
-    assert json.loads(await revoke_mandate(other["mandate_id"], "ended"))["status"] == "revoked"
+    assert json.loads(await revoke_mandate(mid, "ended"))["status"] == "revoked"
+    assert (await _resume(mid, "back"))["code"] == "mandate_already_revoked"
+    prepared = json.loads(await prepare_revocation_signature(other["mandate_id"], "ended"))
+    signature = b64url_encode(PRINCIPAL_KEY.sign(prepared["payload"].encode("utf-8")))
+    revoked = json.loads(
+        await revoke_mandate(other["mandate_id"], "ended", signature, prepared["signed_at"])
+    )
+    assert revoked["status"] == "revoked", revoked
     assert (await _suspend(other["mandate_id"]))["code"] == "mandate_already_revoked"
     proof = await _proof(mid)
     assert proof["mandate"]["status"] == "revoked"
@@ -388,16 +406,16 @@ async def test_the_principal_resumes_and_the_mandate_works_again() -> None:
     root = await _create()
     mid = root["mandate_id"]
     await _suspend(mid)
-    resumed = json.loads(await resume_mandate(mid, "review done"))
+    resumed = await _resume(mid)
     assert resumed["status"] == "resumed", resumed
-    assert resumed["principal_signature"] is None
+    assert resumed["principal_signature"]["key_id"]
     assert "token" in await _token(mid)
     assert json.loads(await verify_mandate(AGENT, "read", mandate_id=mid))["authorized"]
 
 
 async def test_resume_needs_a_suspension() -> None:
     root = await _create()
-    result = json.loads(await resume_mandate(root["mandate_id"], "nothing to lift"))
+    result = await _resume(root["mandate_id"], "nothing to lift")
     assert result["code"] == "mandate_not_suspended"
 
 
@@ -428,14 +446,19 @@ async def test_a_principal_with_a_key_must_sign_the_resumption() -> None:
     assert proof["chain_integrity"]["suspensions_valid"] is True
 
 
-async def test_require_principal_signature_applies_to_resumption(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_a_resumption_is_always_signed_even_without_a_principal_key() -> None:
     root = await _create()
     await _suspend(root["mandate_id"])
-    monkeypatch.setattr("amr.config.settings.require_principal_signature", True)
     result = json.loads(await resume_mandate(root["mandate_id"], "back"))
     assert result["code"] == "principal_signature_required"
+    # The key holder, which runs the same tools, cannot lift it with its own key.
+    prepared = await _payload(root["mandate_id"], "suspend", "back", _pub(OFFICER))
+    signature = b64url_encode(OFFICER.sign(prepared["payload"].encode("utf-8")))
+    by_holder = json.loads(
+        await resume_mandate(root["mandate_id"], "back", signature, prepared["signed_at"])
+    )
+    assert by_holder["code"] == "principal_key_not_registered"
+    assert (await _token(root["mandate_id"]))["reason"] == "mandate_status_suspended"
 
 
 async def test_half_a_signature_is_refused() -> None:
@@ -449,7 +472,7 @@ async def test_suspend_resume_suspend_again() -> None:
     root = await _create()
     mid = root["mandate_id"]
     await _suspend(mid)
-    await resume_mandate(mid, "done")
+    assert (await _resume(mid, "done"))["status"] == "resumed"
     assert (await _suspend(mid, ONCALL, reason="second look"))["status"] == "suspended"
     proof = await _proof(mid)
     assert [s["action"] for s in proof["suspensions"]] == ["suspend", "resume", "suspend"]
@@ -499,7 +522,7 @@ async def test_an_altered_suspension_record_shows_in_the_proof(temp_db: Path) ->
     assert (await _proof(mid))["chain_integrity"]["suspensions_valid"] is False
 
 
-async def test_a_forged_suspension_by_an_undesignated_key_shows_in_the_proof(
+async def test_a_swapped_public_key_on_a_record_shows_in_the_proof(
     temp_db: Path,
 ) -> None:
     root = await _create(suspension_keys=[_pub(OFFICER)])
@@ -544,25 +567,32 @@ async def test_a_deleted_resumption_shows_in_the_proof(temp_db: Path) -> None:
     root = await _create()
     mid = root["mandate_id"]
     await _suspend(mid)
-    await resume_mandate(mid, "done")
+    assert (await _resume(mid, "done"))["status"] == "resumed"
     _sql(temp_db, "DELETE FROM mandate_suspensions WHERE action = 'resume'")
     proof = await _proof(mid)
     assert proof["mandate"]["status"] == "suspended"
     assert proof["chain_integrity"]["suspensions_valid"] is False
 
 
-async def test_an_unsigned_resumption_after_the_principal_had_a_key_is_invalid(
-    temp_db: Path,
-) -> None:
+async def test_a_resumption_stripped_of_its_signature_is_invalid(temp_db: Path) -> None:
     root = await _create()
     mid = root["mandate_id"]
     await _suspend(mid)
-    await resume_mandate(mid, "done")
-    principal_key = _new_key()
-    await _register(principal_key)
-    # Pretend the key existed before the resumption: an unsigned one is then a forgery.
-    _sql(temp_db, "UPDATE principal_keys SET registered_at = ? WHERE principal_id = ?",
-         ((datetime.now(UTC) - timedelta(days=1)).isoformat(), PRINCIPAL))
+    assert (await _resume(mid, "done"))["status"] == "resumed"
+    assert (await _proof(mid))["chain_integrity"]["suspensions_valid"] is True
+    _sql(temp_db, "UPDATE mandate_suspensions SET signature = NULL, signed_at = NULL, "
+         "key_id = NULL, public_key = NULL, signed_payload = NULL WHERE action = 'resume'")
+    # Recompute its chain hash too, so only the missing signature can give it away.
+    (suspend_hash,) = _sql(temp_db, "SELECT chain_hash FROM mandate_suspensions "
+                           "WHERE action = 'suspend'")[0]
+    (rid, rmid, raction, rreason, rat) = _sql(
+        temp_db, "SELECT id, mandate_id, action, reason, recorded_at "
+        "FROM mandate_suspensions WHERE action = 'resume'")[0]
+    forged = suspension_record_hash(
+        {"mandate_id": rmid, "action": raction, "reason": rreason, "recorded_at": rat,
+         "signature": None, "signed_at": None, "key_id": None},
+        root["chain_hash"], suspend_hash)
+    _sql(temp_db, "UPDATE mandate_suspensions SET chain_hash = ? WHERE id = ?", (forged, rid))
     assert (await _proof(mid))["chain_integrity"]["suspensions_valid"] is False
 
 
@@ -593,7 +623,7 @@ async def test_the_public_registry_export_shows_it(
     assert (
         pr.evaluate(index, child["mandate_id"], now)["reason"] == "parent_mandate_suspended"
     )
-    await resume_mandate(root["mandate_id"], "done")
+    assert (await _resume(root["mandate_id"], "done"))["status"] == "resumed"
     snapshot = jwt.decode(await pr.build_export(), options={"verify_signature": False})
     mandates = {m["id"]: m for m in snapshot["amr_public_registry"]["mandates"]}
     assert mandates[root["mandate_id"]]["recorded_status"] == "active"
@@ -615,3 +645,30 @@ async def test_prepare_writes_nothing_and_names_the_signer() -> None:
         await prepare_suspension_signature(root["mandate_id"], "resume", "why")
     )
     assert no_key["code"] == "principal_key_not_registered"
+
+
+async def test_a_small_order_key_is_refused() -> None:
+    zero = b64url_encode(bytes(32))
+    identity = b64url_encode(bytes([1]) + bytes(31))
+    for key in (zero, identity):
+        result = json.loads(await create_mandate(**ROOT, suspension_keys=[key]))
+        assert result["code"] == "perimeter_invalid", key
+
+
+async def test_the_insurer_dossier_shows_a_deleted_suspension(temp_db: Path) -> None:
+    root = await _create()
+    await _suspend(root["mandate_id"])
+    _sql(temp_db, "DELETE FROM mandate_suspensions")
+    dossier = json.loads(await export_insurer_dossier(root["mandate_id"]))["dossier"]
+    assert dossier["integrity"]["suspensions_valid"] is False
+
+
+async def test_the_pdf_carries_the_suspension_keys() -> None:
+    from amr.tools.prepare_mandate_pdf import prepare_mandate_pdf
+
+    params = {**ROOT, "suspension_keys": [_pub(OFFICER)]}
+    pdf = json.loads(await prepare_mandate_pdf(**params))
+    assert "error" not in pdf, pdf
+    signed = json.loads(await prepare_mandate_signature(**params, signed_at=pdf["signed_at"]))
+    assert _pub(OFFICER) in pdf["payload"]
+    assert pdf["payload_sha256"] == hashlib.sha256(signed["payload"].encode()).hexdigest()

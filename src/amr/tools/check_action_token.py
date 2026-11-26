@@ -140,8 +140,9 @@ async def check_action_token(
         token_not_yet_valid, missing_claim, registry_unavailable, unknown_token,
         token_record_mismatch,
         action_mismatch, token_too_old, mandate_not_found, agent_mismatch,
-        mandate_status_<status>, mandate_status_revoked, mandate_expired,
-        parent_mandate_<status>, parent_mandate_revoked, parent_mandate_expired,
+        mandate_status_<status>, mandate_status_revoked, mandate_status_suspended,
+        mandate_expired, parent_mandate_<status>, parent_mandate_revoked,
+        parent_mandate_suspended, parent_mandate_expired,
         parent_mandate_not_found, delegation_chain_too_deep, internal_error.
     """
     now = datetime.now(UTC)

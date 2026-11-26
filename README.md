@@ -878,8 +878,11 @@ A pause, not an end. When it grants the mandate, the principal can list in
 `create_mandate` up to five Ed25519 public keys allowed to suspend it
 (`suspension_keys`, base64url): a security officer, an on-call person. Any one of them
 suspends the mandate alone, at once, with its signature; it cannot lift the suspension.
-Only the principal lifts it, with `resume_mandate` (signed when it has a registered key,
-the same policy as `revoke_mandate`). The keys are part of the perimeter, so they are
+Only the principal lifts it, with `resume_mandate`, always signed with the principal's
+registered key (`register_principal_key`), whatever `AMR_REQUIRE_PRINCIPAL_SIGNATURE`
+says: a key holder runs the same `principal` profile, so the signature is what keeps it
+from lifting its own suspension. A principal without a registered key cannot resume
+(`principal_key_not_registered`); it can revoke and grant a new mandate. The keys are part of the perimeter, so they are
 sealed in the mandate's hash and covered by the principal's signature; a mandate
 without them keeps its exact form and hash, and cannot be suspended (its principal can
 still revoke it). They need a structured perimeter (`allowed_actions`) and are not
@@ -888,7 +891,7 @@ inherited by sub-mandates: suspending a mandate already cuts every sub-mandate b
 `suspend_mandate(mandate_id, reason, public_key, signature, signed_at)`: the holder
 builds the bytes with `prepare_suspension_signature(mandate_id, "suspend", reason,
 public_key)`, signs them with its key, and passes the signature.
-`resume_mandate(mandate_id, reason, principal_signature=None, signed_at=None)`: the
+`resume_mandate(mandate_id, reason, principal_signature, signed_at)`: the
 principal builds its bytes with `prepare_suspension_signature(mandate_id, "resume",
 reason)`.
 
@@ -907,7 +910,10 @@ A revoked mandate cannot be suspended or resumed: revocation stays final.
 Errors: `suspension_not_designated`, `suspension_key_not_designated`,
 `suspension_signature_invalid`, `suspension_signature_replayed`,
 `mandate_already_suspended`, `mandate_not_suspended`, `mandate_already_revoked`, and
-the principal signature codes of `revoke_mandate`. See `docs/suspension-spec.md`.
+the principal signature codes of `revoke_mandate`. A suspension key must be a real
+Ed25519 key: the small-order points, whose signatures anyone can forge, are refused
+(`perimeter_invalid`). The designated public keys are published with the perimeter
+(Proof Pack, public registry export). See `docs/suspension-spec.md`.
 
 ---
 

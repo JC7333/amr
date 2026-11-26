@@ -72,6 +72,35 @@ def parse_public_key(public_key: str) -> bytes:
     return raw
 
 
+# Encodings of the Ed25519 points of small order (and their non-canonical forms), as
+# libsodium lists them. A signature by such a "key" can be forged without any private
+# key, so a key that must be held by one person (a suspension key) can never be one.
+_SMALL_ORDER_KEYS = frozenset(
+    bytes.fromhex(h)
+    for h in (
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000080",
+        "0100000000000000000000000000000000000000000000000000000000000000",
+        "0100000000000000000000000000000000000000000000000000000000000080",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    )
+)
+
+
+def is_small_order(public_key_raw: bytes) -> bool:
+    """True for an Ed25519 point of small order: anyone can forge its signatures."""
+    return public_key_raw in _SMALL_ORDER_KEYS
+
+
 def parse_signature(signature: str) -> bytes:
     """Return the 64 raw bytes of a base64url Ed25519 signature, or raise."""
     return b64url_decode(signature, _SIGNATURE_BYTES, "principal_signature")

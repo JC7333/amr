@@ -11,11 +11,15 @@ be easier than granting, with a key designated in advance.
   security officer, an on-call person. Any one of them suspends alone. The list is part
   of the structured perimeter, so it is sealed in the mandate's `chain_hash` and covered
   by the principal's signature when the mandate is signed. It needs `allowed_actions`.
-- **Resume**: only the mandate's own principal, with `resume_mandate`. Same signature
-  policy as `revoke_mandate`: signed when the principal has a registered key; with
-  `AMR_REQUIRE_PRINCIPAL_SIGNATURE=true`, always signed; otherwise an unsigned
-  resumption is accepted, so expose `resume_mandate` to principals only. A key holder
-  cannot lift the suspension it made.
+- **Resume**: only the mandate's own principal, with `resume_mandate`, always signed
+  with its registered key (`register_principal_key`), whatever
+  `AMR_REQUIRE_PRINCIPAL_SIGNATURE` says. A key holder runs the same `principal`
+  profile as the principal, so this signature is what keeps it from lifting the
+  suspension it made. A principal without a registered key cannot resume
+  (`principal_key_not_registered`); it can revoke and grant a new mandate.
+- A suspension key must be a real Ed25519 key: the small-order points, whose
+  signatures anyone can forge, are refused (`perimeter_invalid`). The registry asks
+  for no proof that someone holds the key.
 - A mandate without `suspension_keys` keeps its exact perimeter, hash and behaviour,
   and cannot be suspended (`suspension_not_designated`); its principal can still revoke
   it.
@@ -70,7 +74,7 @@ status stays `revoked`.
 `suspensions_valid` is `null` when the mandate was never suspended, and `true` only if
 the records alternate (suspend, resume, ...), each `chain_hash` recomputes, each
 suspension is signed by a key the mandate designates, each resumption is signed by the
-principal's registered key (or unsigned while it had none), and every `suspended` and
+principal's registered key, and every `suspended` and
 `resumed` event still has its record.
 
 ## Errors
@@ -97,5 +101,10 @@ of `revoke_mandate` (`principal_signature_required`, `principal_signature_incomp
 - A row deleted from `mandate_suspensions` lifts the suspension for every reader;
   `get_proof` then shows `suspensions_valid: false` (the event remains), and deleting a
   row of another mandate breaks the recomputed chain of the next one.
+- A token, attestation or log entry whose check passed just before a suspension was
+  committed by another process can still be written after `suspend_mandate` returns
+  (no exclusive transaction around those checks), as for a revocation.
+- The designated public keys are published with the perimeter (Proof Pack, public
+  registry export): the same key used on several mandates links them.
 - A public registry snapshot is a photograph: a suspension made after `generated_at` is
   not shown until the next export.

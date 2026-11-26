@@ -181,6 +181,16 @@ def _perimeter_rows(perimeter: dict[str, Any] | None) -> list[tuple[str, str]]:
             if perimeter.get("validation_actions")
             else []
         ),
+        *(
+            [
+                (
+                    "May suspend this mandate",
+                    f"{len(perimeter['suspension_keys'])} designated key(s)",
+                )
+            ]
+            if perimeter.get("suspension_keys")
+            else []
+        ),
     ]
 
 
@@ -231,6 +241,10 @@ def render_html(dossier: dict[str, Any], digest: str, key_id: str) -> str:
         (
             "Contest records intact",
             _check(integrity.get("contests_intact", True), ""),
+        ),
+        (
+            "Suspension records (suspend_mandate)",
+            _check(integrity.get("suspensions_valid"), "never suspended"),
         ),
     ]
     sub_rows = [

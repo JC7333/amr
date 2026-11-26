@@ -3,7 +3,8 @@
 A suspension pauses a mandate at once and can be lifted; a revocation (revoke_mandate)
 is final. The principal designates, when it grants the mandate, the keys that may
 suspend it (perimeter suspension_keys): a security officer, an on-call person. Any one
-of them suspends alone, with its signature; only the principal lifts the suspension.
+of them suspends alone, with its signature; only the principal lifts the suspension,
+always with the signature of its registered key.
 
 Append-only: each suspension or resumption is a row in mandate_suspensions (chained,
 SHA-256, anchored to the mandate's own chain_hash) plus a "suspended" or "resumed"
@@ -442,21 +443,22 @@ async def resume_mandate(
 ) -> str:
     """Lift the suspension of a mandate. Only the mandate's own principal can.
 
-    Same signature policy as revoke_mandate: if the principal has a registered key, the
-    resumption must carry its signature (prepare_suspension_signature with action
-    "resume", then principal_signature and signed_at); with
-    AMR_REQUIRE_PRINCIPAL_SIGNATURE, every resumption must be signed. Without a key,
-    anyone who can call this tool can resume: expose it to principals only.
+    Always signed by the principal's registered key (register_principal_key), whatever
+    AMR_REQUIRE_PRINCIPAL_SIGNATURE says: build the bytes with
+    prepare_suspension_signature (action "resume"), sign them, and pass
+    principal_signature and signed_at. A key holder runs the same principal profile,
+    so the signature is what keeps it from lifting its own suspension. A principal
+    without a registered key cannot resume; it can revoke and grant a new mandate.
 
     Args:
         mandate_id: UUID of the suspended mandate.
         reason: Why the suspension is lifted (1 to 500 characters).
-        principal_signature: Base64url Ed25519 signature of the resume payload.
+        principal_signature: Base64url Ed25519 signature of the resume payload (required).
         signed_at: The signed_at placed in the payload (ISO 8601 with timezone).
 
     Returns:
         JSON string with keys: status ("resumed"), mandate_id, principal_id, reason,
-        resumed_at, principal_signature ({key_id, signed_at} or null), chain_hash.
+        resumed_at, principal_signature ({key_id, signed_at}), chain_hash.
         On error: {"error": "...", "code": "..."} with code mandate_not_found,
         mandate_already_revoked, mandate_not_suspended, invalid_input or a principal
         signature code.
@@ -476,54 +478,47 @@ async def resume_mandate(
         if mandate is None:
             return _error("mandate_not_found", f"no mandate '{canonical_id}'")
 
+        # Always signed: a key holder reaches the same tools as the principal (both use
+        # the principal profile), so only the principal's own key can lift a suspension.
         key_row = await get_principal_key(db, mandate["principal_id"])
-        signature: dict[str, str] | None = None
         if principal_signature is None and signed_at is None:
-            if key_row is not None:
-                raise PrincipalSignatureError(
-                    "principal_signature_required",
-                    "this principal has a registered key: the resumption must carry its "
-                    "signature",
-                )
-            if settings.require_principal_signature:
-                raise PrincipalSignatureError(
-                    "principal_signature_required",
-                    "this registry requires every resumption to be signed by the principal",
-                )
-        else:
-            if principal_signature is None or signed_at is None:
-                raise PrincipalSignatureError(
-                    "principal_signature_incomplete",
-                    "principal_signature and signed_at must be given together",
-                )
-            signature_raw = parse_signature(principal_signature)
-            _check_freshness(signed_at, now)
-            if key_row is None:
-                raise PrincipalSignatureError(
-                    "principal_key_not_registered",
-                    "no public key is registered for this principal (register_principal_key)",
-                )
-            payload = suspension_payload(
-                action="resume",
-                mandate_id=canonical_id,
-                principal_id=mandate["principal_id"],
-                reason=req.reason,
-                key_id=key_row["key_id"],
-                signed_at=signed_at,
+            raise PrincipalSignatureError(
+                "principal_signature_required",
+                "a suspension is lifted only with the principal's signature",
             )
-            if not verify(parse_public_key(key_row["public_key"]), payload, signature_raw):
-                raise PrincipalSignatureError(
-                    "principal_signature_invalid",
-                    "the signature does not match this resumption and the principal's "
-                    "registered key",
-                )
-            signature = {
-                "key_id": key_row["key_id"],
-                "public_key": key_row["public_key"],
-                "signature": b64url_encode(signature_raw),
-                "signed_at": signed_at,
-                "payload": payload.decode("utf-8"),
-            }
+        if principal_signature is None or signed_at is None:
+            raise PrincipalSignatureError(
+                "principal_signature_incomplete",
+                "principal_signature and signed_at must be given together",
+            )
+        signature_raw = parse_signature(principal_signature)
+        _check_freshness(signed_at, now)
+        if key_row is None:
+            raise PrincipalSignatureError(
+                "principal_key_not_registered",
+                "no public key is registered for this principal (register_principal_key)",
+            )
+        payload = suspension_payload(
+            action="resume",
+            mandate_id=canonical_id,
+            principal_id=mandate["principal_id"],
+            reason=req.reason,
+            key_id=key_row["key_id"],
+            signed_at=signed_at,
+        )
+        if not verify(parse_public_key(key_row["public_key"]), payload, signature_raw):
+            raise PrincipalSignatureError(
+                "principal_signature_invalid",
+                "the signature does not match this resumption and the principal's "
+                "registered key",
+            )
+        signature = {
+            "key_id": key_row["key_id"],
+            "public_key": key_row["public_key"],
+            "signature": b64url_encode(signature_raw),
+            "signed_at": signed_at,
+            "payload": payload.decode("utf-8"),
+        }
 
         await db.execute("BEGIN IMMEDIATE")
         if await get_revocation(db, canonical_id) is not None:

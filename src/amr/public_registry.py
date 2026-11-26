@@ -305,8 +305,10 @@ def evaluate(
 ) -> dict[str, Any]:
     """Status of a mandate now, from the snapshot: the mandate itself, then its chain.
 
-    ``active`` only if the mandate is recorded active, not revoked, not expired, and
-    every mandate above it is too (a sub-mandate is only as valid as its parents).
+    ``active`` only if the mandate is recorded active (a suspension in force reads as
+    recorded ``suspended``: reason ``mandate_suspended``, ``parent_mandate_suspended``
+    below), not revoked, not expired, and every mandate above it is too (a sub-mandate
+    is only as valid as its parents).
     """
     mandate = index.get(mandate_id)
     if mandate is None:

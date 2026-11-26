@@ -70,7 +70,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
-from amr.crypto.principal import PrincipalSignatureError, b64url_encode, parse_public_key
+from amr.crypto.principal import (
+    PrincipalSignatureError,
+    b64url_encode,
+    is_small_order,
+    parse_public_key,
+)
 from amr.delegation import MAX_DELEGATION_DEPTH
 
 ACTION_TYPE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*", re.ASCII)
@@ -290,9 +295,12 @@ class Perimeter(BaseModel):
         keys = set()
         for key in value:
             try:
-                keys.add(b64url_encode(parse_public_key(key)))
+                raw = parse_public_key(key)
             except PrincipalSignatureError as exc:
                 raise ValueError(f"suspension key: {exc.message}") from exc
+            if is_small_order(raw):
+                raise ValueError("suspension key: a small-order point is not a key")
+            keys.add(b64url_encode(raw))
         return tuple(sorted(keys))
 
     @field_validator(

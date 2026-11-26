@@ -62,7 +62,7 @@ async def _suspension_status(
     Integrity is None when the mandate was never suspended, else True only if the
     records alternate (suspend, resume, ...), each chain_hash recomputes, each
     suspension is signed by a key the mandate designates, each resumption is signed by
-    the principal's registered key (or unsigned while it had none), and every
+    the principal's registered key, and every
     "suspended" and "resumed" event has its record (none deleted).
     """
     rows = [dict(row) for row in await get_suspensions(db, mandate_row["id"])]
@@ -126,10 +126,8 @@ async def _suspension_status(
                     row, mandate_row["principal_id"], key_row["public_key"]
                 )
             )
-        elif key_row is not None and _aware(key_row["registered_at"]) <= _aware(
-            row["recorded_at"]
-        ):
-            # The principal had a key when it resumed, so the resumption was signed.
+        else:
+            # resume_mandate always signs: an unsigned resumption was not written by it.
             valid = False
     current = None
     if rows and rows[-1]["action"] == "suspend":
@@ -557,6 +555,7 @@ async def get_proof(
           - delegation_chain: dict with broken (bool: true when a mandate above this
             sub-mandate is revoked, expired, not active or missing, so the mandate is
             not in force whatever its own status), reason (parent_mandate_revoked,
+            parent_mandate_suspended,
             parent_mandate_expired, parent_mandate_<status>, parent_mandate_not_found,
             delegation_chain_too_deep, or null) and refused_by (the mandate that broke
             the chain, or null); always unbroken for a root mandate

@@ -106,7 +106,8 @@ async def log_action(
         token_jti when a token covers the action.
         On error (invalid mandate): {"error": "..."}; when a mandate above a
         sub-mandate breaks the chain, also "reason" (parent_mandate_revoked,
-        parent_mandate_expired, parent_mandate_<status>, parent_mandate_not_found or
+        parent_mandate_suspended, parent_mandate_expired, parent_mandate_<status>,
+        parent_mandate_not_found or
         delegation_chain_too_deep) and "refused_by" (the mandate that broke it, or null).
         A refused token gives "error" and "reason": action_token_required, malformed,
         wrong_algorithm, key_mismatch, bad_signature, wrong_issuer, token_expired,

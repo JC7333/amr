@@ -85,6 +85,7 @@ def _integrity(proof: dict[str, Any]) -> dict[str, Any]:
         "actions_chain_valid": chain["actions_chain_valid"],
         "principal_signature_valid": chain["principal_signature_valid"],
         "revocation_signature_valid": chain.get("revocation_signature_valid"),
+        "suspensions_valid": chain.get("suspensions_valid"),
         "contests_intact": chain.get("contests_intact"),
         "contested_actions": len(proof.get("action_contests", [])),
         "principal_key_id": signature["key_id"] if signature else None,
