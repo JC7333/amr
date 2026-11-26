@@ -1,7 +1,7 @@
 """Delegation chain checks shared by mandate creation, verification and token issuance.
 
 A sub-mandate is only as valid as every mandate above it: if any ancestor is missing,
-not active, revoked, or expired, the whole branch below it is cut.
+not active, revoked, suspended, or expired, the whole branch below it is cut.
 """
 
 from dataclasses import dataclass
@@ -38,6 +38,20 @@ async def is_revoked(db: aiosqlite.Connection, mandate_id: str) -> bool:
     return await cursor.fetchone() is not None
 
 
+async def is_suspended(db: aiosqlite.Connection, mandate_id: str) -> bool:
+    """True if the mandate's latest suspension record is a suspension (suspend_mandate).
+
+    mandate_suspensions is append-only: suspend and resume rows alternate, the last one
+    written says whether the suspension is in force.
+    """
+    cursor = await db.execute(
+        "SELECT action FROM mandate_suspensions WHERE mandate_id = ? ORDER BY id DESC LIMIT 1",
+        (mandate_id,),
+    )
+    row = await cursor.fetchone()
+    return row is not None and row["action"] == "suspend"
+
+
 async def load_ancestors(
     db: aiosqlite.Connection, parent_id: str | None, now: datetime
 ) -> tuple[list[aiosqlite.Row], ChainRefusal | None]:
@@ -45,7 +59,8 @@ async def load_ancestors(
 
     Returns the ancestors read so far and, if the chain is broken, the refusal:
     ``parent_mandate_not_found``, ``parent_mandate_<status>``, ``parent_mandate_revoked``,
-    ``parent_mandate_expired`` or ``delegation_chain_too_deep``.
+    ``parent_mandate_suspended``, ``parent_mandate_expired`` or
+    ``delegation_chain_too_deep``.
     """
     ancestors: list[aiosqlite.Row] = []
     while parent_id:
@@ -67,6 +82,8 @@ async def load_ancestors(
             return ancestors, ChainRefusal(f"parent_mandate_{row['status']}", row["id"])
         if await is_revoked(db, row["id"]):
             return ancestors, ChainRefusal("parent_mandate_revoked", row["id"])
+        if await is_suspended(db, row["id"]):
+            return ancestors, ChainRefusal("parent_mandate_suspended", row["id"])
         if is_expired(row["expires_at"], now):
             return ancestors, ChainRefusal("parent_mandate_expired", row["id"])
         ancestors.append(row)

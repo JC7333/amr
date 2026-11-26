@@ -225,6 +225,25 @@ CREATE TABLE IF NOT EXISTS registry_timestamps (
     chain_hash          TEXT NOT NULL
 );
 
+-- Suspensions (suspend_mandate, resume_mandate): append-only and chained. A suspend row
+-- pauses the mandate, a resume row lifts the pause; the latest row is in force. A
+-- suspension is signed by a key the mandate designates (perimeter suspension_keys).
+CREATE TABLE IF NOT EXISTS mandate_suspensions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    mandate_id      TEXT NOT NULL REFERENCES mandates(id),
+    action          TEXT NOT NULL CHECK (action IN ('suspend', 'resume')),
+    reason          TEXT NOT NULL,
+    recorded_at     TEXT NOT NULL,
+    key_id          TEXT,
+    public_key      TEXT,
+    signature       TEXT UNIQUE,
+    signed_at       TEXT,
+    signed_payload  TEXT,
+    chain_hash      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mandate_suspensions_mandate
+    ON mandate_suspensions(mandate_id, id);
 CREATE INDEX IF NOT EXISTS idx_action_receipts_mandate ON action_receipts(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_token_validations_mandate ON token_validations(mandate_id);
 CREATE INDEX IF NOT EXISTS idx_action_log_tokens_mandate ON action_log_tokens(mandate_id);
@@ -410,6 +429,12 @@ async def init_db(db_path: Path | str | None = None) -> None:
             "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
             (14,),
         )
+        # Schema v15: mandate_suspensions, created by the script above (suspend_mandate,
+        # resume_mandate). Existing rows and hashes are not modified.
+        await db.execute(
+            "INSERT OR IGNORE INTO schema_version (version) VALUES (?)",
+            (15,),
+        )
         await db.commit()
 
 
@@ -485,6 +510,30 @@ async def get_last_revocation_hash(db: aiosqlite.Connection) -> str:
     """Return the chain_hash of the last recorded revocation, or "" if none."""
     cursor = await db.execute(
         "SELECT chain_hash FROM mandate_revocations ORDER BY rowid DESC LIMIT 1"
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return ""
+    return row["chain_hash"]
+
+
+async def get_suspensions(
+    db: aiosqlite.Connection, mandate_id: str
+) -> list[aiosqlite.Row]:
+    """Return every suspension record of a mandate, oldest first."""
+    cursor = await db.execute(
+        "SELECT id, mandate_id, action, reason, recorded_at, key_id, public_key, signature, "
+        "signed_at, signed_payload, chain_hash "
+        "FROM mandate_suspensions WHERE mandate_id = ? ORDER BY id ASC",
+        (mandate_id,),
+    )
+    return list(await cursor.fetchall())
+
+
+async def get_last_suspension_hash(db: aiosqlite.Connection) -> str:
+    """Return the chain_hash of the last suspension record, or \"\" if none."""
+    cursor = await db.execute(
+        "SELECT chain_hash FROM mandate_suspensions ORDER BY id DESC LIMIT 1"
     )
     row = await cursor.fetchone()
     if row is None:

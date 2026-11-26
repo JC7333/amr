@@ -24,7 +24,7 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 AGENTS = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 ALL = {tool.__name__ for tool in TOOLS}
 
-# What only the principal may do: grant, sign, revoke, contest.
+# What only the principal may do: grant, sign, suspend, revoke, contest.
 PRINCIPAL_ONLY = {
     "register_principal_key",
     "prepare_mandate_signature",
@@ -32,6 +32,9 @@ PRINCIPAL_ONLY = {
     "attach_signed_mandate_pdf",
     "revoke_mandate",
     "prepare_revocation_signature",
+    "suspend_mandate",
+    "resume_mandate",
+    "prepare_suspension_signature",
     "contest_action",
     "prepare_contest_signature",
     "prepare_registry_timestamp",
@@ -58,7 +61,7 @@ def test_every_profile_names_only_real_tools() -> None:
 
 def test_full_profile_is_every_tool() -> None:
     assert _names("full") == ALL
-    assert len(ALL) == 22
+    assert len(ALL) == 25
 
 
 def test_agent_profile_cannot_grant_sign_or_revoke() -> None:

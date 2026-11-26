@@ -7,7 +7,8 @@ may trigger it, and how fast it takes effect.
 
 `revoke_mandate(mandate_id, reason, principal_signature=None, signed_at=None)` records
 a revocation. It is final: there is no "unrevoke". To grant the agent authority again,
-create a new mandate.
+create a new mandate. For a pause the principal can lift, see `suspend_mandate`
+(`docs/suspension-spec.md`).
 
 Nothing is updated in place. The registry appends:
 

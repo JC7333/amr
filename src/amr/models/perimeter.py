@@ -52,6 +52,13 @@ validator the agent declares; it does not authenticate that person: the receiver
 compares the sealed values with what it knows (who is signed in, which text it
 receives). A sub-mandate inherits the requirement and cannot lift it. Perimeters
 without it keep their exact canonical form.
+
+Suspension keys (``suspension_keys``) are the Ed25519 public keys the principal
+designates, when it grants the mandate, to pause it at once (suspend_mandate): a
+security officer, an on-call person. Each key can only suspend; lifting a suspension
+is the principal's (resume_mandate). They are the mandate's own and are not inherited
+by a sub-mandate: suspending a mandate already cuts every sub-mandate below it.
+Perimeters without them keep their exact canonical form.
 """
 
 import hashlib
@@ -63,6 +70,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
+from amr.crypto.principal import PrincipalSignatureError, b64url_encode, parse_public_key
 from amr.delegation import MAX_DELEGATION_DEPTH
 
 ACTION_TYPE_RE = re.compile(r"[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*", re.ASCII)
@@ -77,6 +85,7 @@ VALIDATED_BY_KEY = "validated_by"
 VALIDATED_CONTENT_KEY = "validated_content_sha256"
 MAX_VALIDATOR_LENGTH = 200
 SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}", re.ASCII)
+MAX_SUSPENSION_KEYS = 5
 # Control, format (zero-width, bidi), line and paragraph separator characters.
 _UNSHOWN_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
@@ -273,6 +282,18 @@ class Perimeter(BaseModel):
     period_days: int | None = Field(default=None, ge=1, le=MAX_PERIOD_DAYS, strict=True)
     risk_classes: tuple[RiskClass, ...] = Field(default=(), max_length=MAX_RISK_CLASSES)
     validation_actions: tuple[str, ...] = Field(default=(), max_length=MAX_PATTERNS)
+    suspension_keys: tuple[str, ...] = Field(default=(), max_length=MAX_SUSPENSION_KEYS)
+
+    @field_validator("suspension_keys")
+    @classmethod
+    def _normalize_suspension_keys(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        keys = set()
+        for key in value:
+            try:
+                keys.add(b64url_encode(parse_public_key(key)))
+            except PrincipalSignatureError as exc:
+                raise ValueError(f"suspension key: {exc.message}") from exc
+        return tuple(sorted(keys))
 
     @field_validator(
         "allowed_actions", "forbidden_actions", "amount_actions", "validation_actions"
@@ -354,7 +375,8 @@ class Perimeter(BaseModel):
         """Canonical dict, stable across runs (used in hashes, storage and proofs).
 
         ``max_delegation_depth`` and the cumulative ceiling keys appear only when set, and
-        ``risk_classes`` and ``validation_actions`` only when there is at least one, so a
+        ``risk_classes``, ``validation_actions`` and ``suspension_keys`` only when there is at
+        least one, so a
         perimeter without them keeps the exact form (and hashes) it had before they existed.
         """
         canonical: dict[str, Any] = {
@@ -374,6 +396,8 @@ class Perimeter(BaseModel):
             canonical["risk_classes"] = [rc.canonical() for rc in self.risk_classes]
         if self.validation_actions:
             canonical["validation_actions"] = list(self.validation_actions)
+        if self.suspension_keys:
+            canonical["suspension_keys"] = list(self.suspension_keys)
         return canonical
 
     def to_json(self) -> str:
@@ -494,6 +518,9 @@ class Perimeter(BaseModel):
                 validation_actions=tuple(
                     set(self.validation_actions) | set(parent.validation_actions)
                 ),
+                # The child's own keys: the parent's holders suspend the parent, which
+                # already cuts this branch.
+                suspension_keys=self.suspension_keys,
             )
         except ValueError as exc:
             raise PerimeterError("perimeter_invalid", str(exc)) from exc

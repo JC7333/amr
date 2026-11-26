@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from amr.config import settings
 from amr.crypto.signing import get_key_id, load_public_key
 from amr.db.engine import get_issued_token
-from amr.delegation import is_expired, is_revoked, load_ancestors
+from amr.delegation import is_expired, is_revoked, is_suspended, load_ancestors
 from amr.models.token import CheckTokenRequest
 
 ALGORITHM = "EdDSA"
@@ -213,6 +213,10 @@ async def check_action_token(
             )
         if await is_revoked(db, row["id"]):
             return _result(False, "mandate_status_revoked", now, jti=jti, mandate_id=mandate_id)
+        if await is_suspended(db, row["id"]):
+            return _result(
+                False, "mandate_status_suspended", now, jti=jti, mandate_id=mandate_id
+            )
         if is_expired(row["expires_at"], now):
             return _result(False, "mandate_expired", now, jti=jti, mandate_id=mandate_id)
 

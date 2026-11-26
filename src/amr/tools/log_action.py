@@ -16,7 +16,7 @@ from amr.db.engine import (
     get_last_action_hash,
     init_db,
 )
-from amr.delegation import is_revoked, load_ancestors
+from amr.delegation import is_revoked, is_suspended, load_ancestors
 from amr.tools.check_action_token import _decode
 
 # A JWS of an action token is a few hundred characters; anything far larger is refused
@@ -174,6 +174,14 @@ async def log_action(
                 {
                     "error": f"Mandate '{mandate_id}' is not active (status: revoked)",
                     "code": "mandate_status_revoked",
+                }
+            )
+
+        if await is_suspended(db, mandate_row["id"]):
+            return json.dumps(
+                {
+                    "error": f"Mandate '{mandate_id}' is not active (status: suspended)",
+                    "code": "mandate_status_suspended",
                 }
             )
 

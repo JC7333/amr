@@ -72,7 +72,7 @@ in the `env` block of each client, all pointing at the same `AMR_DB_PATH`:
 
 | `AMR_TOOL_PROFILE` | Who runs it | Tools |
 |---|---|---|
-| `principal` | the person or body that grants mandates | create, sign, revoke, contest, prove, have the registry dated (`create_mandate`, `register_principal_key`, `revoke_mandate`, `contest_action`, `get_proof`, `export_insurer_dossier`, `record_registry_timestamp`, ...) |
+| `principal` | the person or body that grants mandates | create, sign, suspend, revoke, contest, prove, have the registry dated (`create_mandate`, `register_principal_key`, `suspend_mandate`, `resume_mandate`, `revoke_mandate`, `contest_action`, `get_proof`, `export_insurer_dossier`, `record_registry_timestamp`, ...) |
 | `agent` | the agent that acts under a mandate | `verify_mandate`, `issue_action_token`, `log_action`, `issue_mandate_attestation`, `get_registry_public_key`; `create_mandate` for sub-mandates under its own mandate only |
 | `receiver` | a third party the agent acts upon | `check_action_token`, `record_action_receipt`, `get_registry_public_key` |
 | `full` (default) | tests and single-user setups | every tool |
@@ -112,6 +112,9 @@ With `agent`, `create_mandate` refuses a mandate without `parent_mandate_id`
    `authorized: false` in every case). Tokens and attestations already issued stay
    valid until they expire, except for a receiver that re-checks the token with
    `check_action_token`.
+   To pause rather than end, `suspend_mandate`: a key the principal designated in the
+   mandate (`suspension_keys`) stops it at once, and only the principal lifts the pause
+   (`resume_mandate`).
 7. `get_proof(mandate_id)`: the full audit bundle (mandate, actions, integrity).
    If the agent already did something it should not have, `contest_action(mandate_id,
    action_id, reason, response_days)` records that the act is disputed, and
@@ -511,8 +514,8 @@ calls need the user's approval (with mcp SDK 1.7 or later; an older SDK cannot s
 
 | Class | Tools |
 |---|---|
-| read-only (records no mandate, action, token, contest or key and sends nothing; like every tool, may create the empty database on first use) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_contest_signature`, `list_action_contests`, `prepare_registry_timestamp` |
-| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `record_action_receipt`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `contest_action`, `record_registry_timestamp` |
+| read-only (records no mandate, action, token, contest or key and sends nothing; like every tool, may create the empty database on first use) | `verify_mandate`, `get_proof`, `check_action_token`, `prepare_mandate_signature`, `prepare_mandate_pdf`, `export_insurer_dossier`, `prepare_revocation_signature`, `prepare_suspension_signature`, `prepare_contest_signature`, `list_action_contests`, `prepare_registry_timestamp` |
+| appends to the registry | `create_mandate`, `log_action`, `issue_action_token`, `record_action_receipt`, `attach_signed_mandate_pdf`, `issue_mandate_attestation`, `suspend_mandate`, `resume_mandate`, `contest_action`, `record_registry_timestamp` |
 | writes, may reach the network (opt-in) | `register_principal_key` (appends the key; reads the `did:web` domain with `AMR_DID_WEB_RESOLVE=1`), `report_issue` (files a GitHub issue with `AMR_ISSUE_TOKEN`, otherwise writes nothing) |
 | destructive (final) | `revoke_mandate` |
 | idempotent write | `get_registry_public_key` (creates the registry signing key on its first call, then only reads it) |
@@ -866,6 +869,45 @@ The caller's `lifetime_override_seconds` can only shorten it. Breaking change fo
 for a token longer than the default: they now get the default. After a revocation, the
 window in which an already issued token still works is therefore at most that lifetime,
 whatever the depth of the chain. See `docs/revocation-spec.md`.
+
+---
+
+### `suspend_mandate` and `resume_mandate`
+
+A pause, not an end. When it grants the mandate, the principal can list in
+`create_mandate` up to five Ed25519 public keys allowed to suspend it
+(`suspension_keys`, base64url): a security officer, an on-call person. Any one of them
+suspends the mandate alone, at once, with its signature; it cannot lift the suspension.
+Only the principal lifts it, with `resume_mandate` (signed when it has a registered key,
+the same policy as `revoke_mandate`). The keys are part of the perimeter, so they are
+sealed in the mandate's hash and covered by the principal's signature; a mandate
+without them keeps its exact form and hash, and cannot be suspended (its principal can
+still revoke it). They need a structured perimeter (`allowed_actions`) and are not
+inherited by sub-mandates: suspending a mandate already cuts every sub-mandate below it.
+
+`suspend_mandate(mandate_id, reason, public_key, signature, signed_at)`: the holder
+builds the bytes with `prepare_suspension_signature(mandate_id, "suspend", reason,
+public_key)`, signs them with its key, and passes the signature.
+`resume_mandate(mandate_id, reason, principal_signature=None, signed_at=None)`: the
+principal builds its bytes with `prepare_suspension_signature(mandate_id, "resume",
+reason)`.
+
+**Effect, while suspended:** `issue_action_token`, `issue_mandate_attestation` and
+`check_action_token` refuse the mandate (`mandate_status_suspended`) and every
+sub-mandate below it (`parent_mandate_suspended`); `log_action` records nothing;
+`verify_mandate` does not return it (asked by `mandate_id`: `authorized: false`,
+`Mandate suspended`); no sub-mandate can be created under it. `get_proof` shows
+`mandate.status = "suspended"`, `mandate.suspension`, the full history in
+`suspensions` and `chain_integrity.suspensions_valid`; the insurer dossier shows it
+not in force (`mandate_suspended`); the public registry export shows
+`recorded_status: "suspended"`. As after a revocation, tokens and attestations
+already issued stay valid until their `exp` for a receiver that does not re-check.
+A revoked mandate cannot be suspended or resumed: revocation stays final.
+
+Errors: `suspension_not_designated`, `suspension_key_not_designated`,
+`suspension_signature_invalid`, `suspension_signature_replayed`,
+`mandate_already_suspended`, `mandate_not_suspended`, `mandate_already_revoked`, and
+the principal signature codes of `revoke_mandate`. See `docs/suspension-spec.md`.
 
 ---
 
@@ -1363,6 +1405,7 @@ src/amr/
 │   ├── registry_timestamp.py   # outside RFC 3161 timestamps of the registry (no network)
 │   ├── issue_mandate_attestation.py   # attestation + registry public key
 │   ├── revoke_mandate.py
+│   ├── suspend_mandate.py   # reversible pause by a designated key; principal resumes
 │   ├── contest_action.py   # contested acts and their response deadline (reminder)
 │   ├── report_issue.py   # network call, opt-in (AMR_ISSUE_TOKEN)
 │   └── export_insurer_dossier.py

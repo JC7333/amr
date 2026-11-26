@@ -24,7 +24,7 @@ from amr.db.engine import (
     record_token_amount,
     record_token_validation,
 )
-from amr.delegation import is_revoked, load_ancestors
+from amr.delegation import is_revoked, is_suspended, load_ancestors
 from amr.models.perimeter import (
     VALIDATED_BY_KEY,
     VALIDATED_CONTENT_KEY,
@@ -196,6 +196,13 @@ async def issue_action_token(
             return json.dumps({
                 "denied": True,
                 "reason": "mandate_status_revoked",
+                "mandate_id": str(req.mandate_id),
+            })
+
+        if await is_suspended(db, row["id"]):
+            return json.dumps({
+                "denied": True,
+                "reason": "mandate_status_suspended",
                 "mandate_id": str(req.mandate_id),
             })
 

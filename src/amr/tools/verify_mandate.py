@@ -8,7 +8,7 @@ import aiosqlite
 
 from amr.config import settings
 from amr.db.engine import get_db, init_db
-from amr.delegation import is_expired, is_revoked, load_ancestors
+from amr.delegation import is_expired, is_revoked, is_suspended, load_ancestors
 from amr.models.organ_decision import recorded_organ_decision
 
 
@@ -63,6 +63,8 @@ async def _check_named_mandate(
         return None, f"Mandate '{mandate_id}' not found for agent '{agent_id}'"
     if await is_revoked(db, row["id"]):
         return row, "Mandate revoked"
+    if await is_suspended(db, row["id"]):
+        return row, "Mandate suspended"
     if row["status"] != "active":
         return row, f"Mandate is {row['status']}"
     try:
@@ -82,14 +84,14 @@ async def verify_mandate(
 ) -> str:
     """Verify whether an AI agent has a currently active and valid mandate to perform an action.
 
-    Without mandate_id, looks up the most recent active, non-expired, non-revoked
-    mandate for the given agent: if one mandate was revoked and another is still in
+    Without mandate_id, looks up the most recent active, non-expired, non-revoked,
+    non-suspended mandate for the given agent: if one mandate was revoked and another is still in
     force, the answer is authorized, for the other one. Pass mandate_id to check one
-    named mandate: the answer is then about that mandate only (revoked, expired or
+    named mandate: the answer is then about that mandate only (revoked, suspended, expired or
     held by another agent means authorized=false, even if the agent holds another
     active mandate).
-    For a sub-mandate, every mandate above it must also be active, unrevoked
-    and unexpired.
+    For a sub-mandate, every mandate above it must also be active, unrevoked,
+    unsuspended and unexpired.
     Does NOT check the action against the scope: it returns the free-text scope and,
     when the mandate has one, its structured perimeter. To enforce the perimeter,
     request a token with issue_action_token, which refuses out-of-scope actions.
@@ -143,6 +145,10 @@ async def verify_mandate(
                   AND NOT EXISTS (
                       SELECT 1 FROM mandate_revocations r WHERE r.mandate_id = mandates.id
                   )
+                  AND COALESCE((
+                      SELECT s.action FROM mandate_suspensions s
+                      WHERE s.mandate_id = mandates.id ORDER BY s.id DESC LIMIT 1
+                  ), 'resume') <> 'suspend'
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
