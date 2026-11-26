@@ -121,8 +121,8 @@ def test_registry_lists_the_template(insurance: MandateTemplate) -> None:
 
 def test_other_templates_are_unchanged_by_the_new_one() -> None:
     sante = get_template(AGENT_SANTE_RGPD_ID)
-    assert sante.version == "1.2.0"
-    assert sante.digest() == "f150977f08f9f3c8f4e9a8e88ed86c42e53649c2157aa028896836a7f00a2391"
+    assert sante.version == "1.3.0"
+    assert sante.digest() == "85347f10129a75fb1285b3564b78c4c2a8974d368bb9a5f1c8a6333fd72e5b42"
     rh = get_template(AGENT_RH_RECRUTEMENT_ID)
     assert rh.version == "1.0.0"
     assert rh.digest() == "de7e4fd23121d039957fbdb757ca230fa8355ba5024649a6f885868971a1b215"

@@ -92,6 +92,8 @@ def test_health_template_forbids_what_the_card_says(sante: MandateTemplate) -> N
         "prescription.renew",
         "prescription",
         "diagnosis.record",
+        "triage",
+        "triage.urgency",
         "patient_record.write",
         "patient_record.export",
         "patient_record.delete",
@@ -153,6 +155,43 @@ def test_every_action_has_a_meaning(sante: MandateTemplate) -> None:
 def test_legal_references_are_marked_to_verify(sante: MandateTemplate) -> None:
     assert sante.legal_references
     assert all(ref.status == "to_verify" for ref in sante.legal_references)
+
+
+HEALTH_REFERENCES = (
+    "Regulation (EU) 2016/679 (GDPR), Art. 9(1), 9(2)(h) and 9(3)",
+    "Regulation (EU) 2016/679 (GDPR), Art. 28",
+    "Regulation (EU) 2016/679 (GDPR), Art. 35 and recital 91",
+    "Regulation (EU) 2024/1689 (AI Act), Art. 4, as replaced by Regulation (EU) 2026/1744",
+    "Regulation (EU) 2024/1689 (AI Act), Art. 6, Annex I (point 11) and Annex III (point 5); "
+    "Regulation (EU) 2017/745, Art. 2(1)",
+    "Regulation (EU) 2024/1689 (AI Act), Art. 14 and Art. 26",
+    "Code de la santé publique (FR), Art. L1110-4",
+    "Code de la santé publique (FR), Art. L1111-8",
+)
+
+
+def test_legal_references_are_exact(sante: MandateTemplate) -> None:
+    assert tuple(ref.reference for ref in sante.legal_references) == HEALTH_REFERENCES
+
+
+def test_ai_act_high_risk_duties_are_conditional(sante: MandateTemplate) -> None:
+    # Within this template the agent is likely not high-risk: Art. 14 and Art. 26 are
+    # cited only as conditional, with their dates as amended by Regulation (EU) 2026/1744.
+    topics = {ref.reference: ref.topic for ref in sante.legal_references}
+    high_risk = topics["Regulation (EU) 2024/1689 (AI Act), Art. 14 and Art. 26"]
+    assert high_risk.startswith("Only if the agent is high-risk")
+    assert "2 December 2027" in high_risk
+    assert "2 August 2028" in high_risk
+    literacy = topics[HEALTH_REFERENCES[3]]
+    assert "2 February 2025" in literacy
+
+
+def test_triage_by_urgency_is_forbidden(sante: MandateTemplate) -> None:
+    # Emergency triage is a high-risk use (AI Act Annex III, point 5(d)) and a medical
+    # judgment: the template keeps it out of the agent's reach.
+    assert "triage" in sante.perimeter.forbidden_actions
+    assert sante.actions["triage"].startswith("Forbidden:")
+    assert not any(a.startswith("triage") for a in sante.perimeter.allowed_actions)
 
 
 # --- Template model rules ----------------------------------------------------------
@@ -223,8 +262,8 @@ def test_template_is_immutable(sante: MandateTemplate) -> None:
 
 def test_health_template_digest_is_pinned(sante: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
-    assert sante.version == "1.2.0"
-    assert sante.digest() == ("f150977f08f9f3c8f4e9a8e88ed86c42e53649c2157aa028896836a7f00a2391")
+    assert sante.version == "1.3.0"
+    assert sante.digest() == ("85347f10129a75fb1285b3564b78c4c2a8974d368bb9a5f1c8a6333fd72e5b42")
 
 
 def test_legal_reference_status_is_restricted() -> None:
@@ -252,7 +291,7 @@ def test_create_mandate_kwargs(sante: MandateTemplate) -> None:
     assert kwargs["amount_actions"] == ["supplies.order"]
     assert kwargs["metadata"] == {
         "template_id": "agent-sante-rgpd",
-        "template_version": "1.2.0",
+        "template_version": "1.3.0",
         "template_digest": sante.digest(),
         "template_status": "provisional",
     }
@@ -273,7 +312,7 @@ def test_principal_metadata_is_merged_and_template_keys_are_reserved(
     assert kwargs["metadata"] == {
         "client_ref": "CAB-001",
         "template_id": "agent-sante-rgpd",
-        "template_version": "1.2.0",
+        "template_version": "1.3.0",
         "template_digest": sante.digest(),
         "template_status": "provisional",
     }
@@ -312,6 +351,8 @@ async def test_end_to_end_allowed_actions_get_tokens(sante: MandateTemplate) -> 
     [
         ("prescription.create", "forbidden:prescription"),
         ("diagnosis.record", "forbidden:diagnosis"),
+        ("triage", "forbidden:triage"),
+        ("triage.urgency", "forbidden:triage"),
         ("patient_record.export", "forbidden:patient_record.export"),
         ("patient_message.send", "forbidden:patient_message.send"),
         ("letter.send", "forbidden:letter.send"),
