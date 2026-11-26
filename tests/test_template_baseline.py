@@ -69,7 +69,7 @@ def test_every_registered_template_says_who_holds_it() -> None:
 def test_health_template_is_a_provisional_baseline_with_no_reviewer(
     sante: MandateTemplate,
 ) -> None:
-    assert sante.version == "1.2.0"
+    assert sante.version == "1.3.0"
     assert sante.stewardship is not None
     assert sante.stewardship.status == "provisional"
     assert sante.stewardship.reviewers == ()
