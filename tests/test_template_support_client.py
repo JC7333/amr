@@ -125,7 +125,7 @@ def test_registry_lists_exactly_the_five_templates(support: MandateTemplate) -> 
 
 def test_other_templates_are_unchanged_by_the_new_one() -> None:
     pins = {
-        AGENT_SANTE_RGPD_ID: "85347f10129a75fb1285b3564b78c4c2a8974d368bb9a5f1c8a6333fd72e5b42",
+        AGENT_SANTE_RGPD_ID: "135a91f28d14e2228518e74166f6cc44e36098a3cbded251b0b6b66268ec02bd",
         AGENT_RH_RECRUTEMENT_ID: "de7e4fd23121d039957fbdb757ca230fa8355ba5024649a6f885868971a1b215",
         AGENT_CREDIT_ID: "3a6d5d5df9ac2a7016a16544c1dd72cf2d6a7bcb6626bb3b82b1a573fda335a4",
         AGENT_ASSURANCE_SANTE_VIE_ID: (

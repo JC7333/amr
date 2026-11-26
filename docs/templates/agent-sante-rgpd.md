@@ -113,8 +113,8 @@ a body leaves the decision out; the mandate and its hash are then unchanged.
   refused by `create_mandate`, after the principal has signed.
 - `triage` is forbidden as an action type. AMR does not see the order in which the agent
   handles requests: the system that receives the tokens must not let the agent rank
-  patients by urgency through another action. Emergency triage is high-risk under AI Act
-  Annex III, point 5(d).
+  patients by urgency through another action. Emergency triage is listed as high-risk in
+  AI Act Annex III, point 5(d).
 - Templates are a Python API for now: no MCP tool lists them yet.
 
 > **Legal references are pointers, marked `to_verify`.** They have not been reviewed
@@ -123,20 +123,22 @@ a body leaves the decision out; the mandate and its hash are then unchanged.
 ## Legal references and their sources
 
 Checked against the texts in force on 26 November 2026. Within this template the agent is
-likely not a high-risk AI system: it has no medical purpose (no diagnosis, no
-prescription) and does no emergency triage. The AI Act duty that applies now is Art. 4;
-Art. 14 and Art. 26 apply only if the agent is high-risk.
+likely not a high-risk AI system: the template gives it none of the medical purposes of
+MDR Art. 2(1) and forbids triage, though the classification depends on the intended
+purpose its provider sets. For the practice as deployer, the main AI Act duty that applies
+now is Art. 4; the Art. 5 prohibitions also apply, and Art. 50 duties fall mainly on the
+provider. Art. 14 and Art. 26 apply only if the agent is high-risk.
 
 | Reference | What it says, for this agent | Source |
 |---|---|---|
-| GDPR Art. 9(1), 9(2)(h), 9(3) | Health data may be processed for diagnosis and care only by or under the responsibility of a professional bound by secrecy. | [EUR-Lex, CELEX 32016R0679](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679) |
-| GDPR Art. 28 | The provider that runs the agent is a processor: a written contract is required. | [EUR-Lex, CELEX 32016R0679](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679) |
-| GDPR Art. 35 and recital 91 | No impact assessment required for a practitioner working alone (recital 91); a facility must check whether it needs one. | [EUR-Lex, CELEX 32016R0679](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679) |
-| AI Act Art. 4 | AI literacy measures for staff. Applies since 2 February 2025 (Art. 113, point (a)); wording replaced by Regulation (EU) 2026/1744, in force since 27 July 2026. | [EUR-Lex, CELEX 32024R1689](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689), [CELEX 32026R1744](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026R1744) |
-| AI Act Art. 6, Annex I (point 11), Annex III (point 5); MDR Art. 2(1) | How to check the agent is not high-risk. Software is a medical device only with a medical purpose; Annex III, point 5(d) covers emergency triage. | [EUR-Lex, CELEX 32024R1689](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689), [CELEX 32017R0745](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32017R0745) |
+| GDPR Art. 9(1), 9(2)(h), 9(3) | Health data may be processed for care and the management of health services by or under the responsibility of a professional bound by secrecy: here, the practitioner. | [EUR-Lex, CELEX 32016R0679](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679) |
+| GDPR Art. 28 | When the provider that runs the agent processes patient data only for the practice or facility, it is a processor: a written contract is required. | [EUR-Lex, CELEX 32016R0679](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679) |
+| GDPR Art. 35 and recital 91 | A practitioner working alone does not process health data on a large scale (recital 91), so Art. 35(3)(b) does not apply. Whether an AI agent on health data still needs an impact assessment under Art. 35(1) and the CNIL list must be checked. | [EUR-Lex, CELEX 32016R0679](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679) |
+| AI Act Art. 4 | Measures to support the AI literacy of staff; no specific level is required. Applies since 2 February 2025 (Art. 113, point (a)); wording replaced by Regulation (EU) 2026/1744, in force since 27 July 2026. | [EUR-Lex, CELEX 32024R1689](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32024R1689), [CELEX 32026R1744](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026R1744) |
+| AI Act Art. 6, Annex I (point 11), Annex III (point 5), as amended; MDR Art. 2(1) | How to check the agent is not high-risk. Software is a medical device only with a medical purpose set by its provider; Art. 6(1a), added in 2026, says tools used only for service efficiency, automation or convenience are not safety components; Annex III, point 5(d) lists emergency triage. | [EUR-Lex, consolidated text of 27 July 2026](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02024R1689-20260727), [CELEX 32017R0745](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32017R0745) |
 | AI Act Art. 14 and Art. 26 | Only if high-risk: oversight designed in by the provider (Art. 14), deployer duties (Art. 26). From 2 December 2027 (Annex III) or 2 August 2028 (Annex I), Art. 113 as amended by Regulation (EU) 2026/1744. Neither article was amended. | [EUR-Lex, consolidated text of 27 July 2026](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02024R1689-20260727) |
-| Code de la santé publique, L1110-4 | Medical secrecy binds everyone working with the practice; sharing only between professionals caring for the patient, only what is strictly necessary. Version in force since 4 August 2021. | [Legifrance](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043895798) |
-| Code de la santé publique, L1111-8 | Storing health data on behalf of the practice requires the HDS certificate; version in force since 1 July 2025 (law n° 2024-449). Concerns the platform that runs the agent; AMR needs no patient data. | [Legifrance](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049577902) |
+| Code de la santé publique, L1110-4 | Medical secrecy binds everyone working with the practice; sharing between professionals caring for the patient, only what is strictly necessary, and outside the care team only with the patient's consent. Version in force since 4 August 2021. | [Legifrance](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043895798) |
+| Code de la santé publique, L1111-8 | Storing health data on behalf of the practice requires the HDS certificate (version in force since 1 July 2025, law n° 2024-449). It may concern the platform that runs the agent; AMR needs no patient data. | [Legifrance](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000049577902) |
 
 Open point: whether a model that only processes a patient record for a moment, without
 keeping it, "hosts" health data under L1111-8 has not been checked (Art. R1111-8-8).
@@ -208,27 +210,27 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     {
       "reference": "Regulation (EU) 2016/679 (GDPR), Art. 9(1), 9(2)(h) and 9(3)",
       "status": "to_verify",
-      "topic": "Health data may be processed for diagnosis and care only by or under the responsibility of a professional bound by secrecy: the agent acts under the practitioner's responsibility."
+      "topic": "Under 9(2)(h) and 9(3), health data may be processed for care and the management of health services by or under the responsibility of a professional bound by secrecy: here, the practitioner."
     },
     {
       "reference": "Regulation (EU) 2016/679 (GDPR), Art. 28",
       "status": "to_verify",
-      "topic": "The provider that runs the agent processes patient data for the practice or facility: a written processor contract is required."
+      "topic": "When the provider that runs the agent processes patient data only for the practice or facility, it is a processor: a written contract is required."
     },
     {
       "reference": "Regulation (EU) 2016/679 (GDPR), Art. 35 and recital 91",
       "status": "to_verify",
-      "topic": "Data protection impact assessment: not required for patient data handled by a practitioner working alone (recital 91); a facility must check whether it has to carry one out."
+      "topic": "Recital 91: a practitioner working alone does not process health data on a large scale, so Art. 35(3)(b) does not apply. Whether an AI agent on health data still needs an impact assessment under Art. 35(1) and the CNIL list must be checked."
     },
     {
       "reference": "Regulation (EU) 2024/1689 (AI Act), Art. 4, as replaced by Regulation (EU) 2026/1744",
       "status": "to_verify",
-      "topic": "AI literacy: every deployer takes measures for the AI literacy of its staff. Applies since 2 February 2025; current wording since 27 July 2026."
+      "topic": "AI literacy: every deployer takes measures to support the AI literacy of its staff; no specific level is required. Applies since 2 February 2025; current wording since 27 July 2026."
     },
     {
-      "reference": "Regulation (EU) 2024/1689 (AI Act), Art. 6, Annex I (point 11) and Annex III (point 5); Regulation (EU) 2017/745, Art. 2(1)",
+      "reference": "Regulation (EU) 2024/1689 (AI Act), Art. 6, Annex I (point 11) and Annex III (point 5), as amended by Regulation (EU) 2026/1744; Regulation (EU) 2017/745, Art. 2(1)",
       "status": "to_verify",
-      "topic": "Check that the agent is not high-risk. Within this template it likely is not: no medical purpose (no diagnosis, no prescription) and no emergency triage (Annex III, point 5(d))."
+      "topic": "Check that the agent is not high-risk. The template gives it none of the medical purposes of MDR Art. 2(1) and forbids triage (Annex III, point 5(d)); the classification depends on the intended purpose its provider sets."
     },
     {
       "reference": "Regulation (EU) 2024/1689 (AI Act), Art. 14 and Art. 26",
@@ -238,12 +240,12 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     {
       "reference": "Code de la santé publique (FR), Art. L1110-4",
       "status": "to_verify",
-      "topic": "Medical secrecy binds everyone working with the practice; information is shared only between professionals caring for the patient, and only what is strictly necessary. Version in force since 4 August 2021."
+      "topic": "Medical secrecy binds everyone working with the practice; information is shared between professionals caring for the patient, only what is strictly necessary, and outside the care team only with the patient's consent. Version in force since 4 August 2021."
     },
     {
       "reference": "Code de la santé publique (FR), Art. L1111-8",
       "status": "to_verify",
-      "topic": "Whoever stores health data on behalf of the practice must hold the HDS certificate; storage rules in force since 1 July 2025. It concerns the platform that runs the agent; AMR needs no patient data."
+      "topic": "Whoever stores health data on behalf of the practice must hold the HDS certificate (version in force since 1 July 2025). It may concern the platform that runs the agent; AMR needs no patient data."
     }
   ],
   "notes": [
@@ -254,7 +256,8 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
     "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is letter.send or patient_message.send).",
     "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
     "When a body authorized the agent, record its decision (organ_decision) with the persons or roles it designates. AMR records what the principal declares: it does not check that the decision exists or that the people named are who they say.",
-    "triage is forbidden as an action type. AMR does not see the order in which the agent handles requests: the system that receives the tokens must not let the agent rank patients by urgency through another action (emergency triage is high-risk under AI Act Annex III, point 5(d)).",
+    "triage is forbidden as an action type. AMR does not see the order in which the agent handles requests: the system that receives the tokens must not let the agent rank patients by urgency through another action (emergency triage is listed as high-risk in AI Act Annex III, point 5(d)).",
+    "Whether a model that only processes a patient record for a moment, without keeping it, hosts health data under Code de la santé publique L1111-8 has not been checked (Art. R1111-8-8).",
     "Minimum threshold per risk class: an order of supplies cannot be undone, so its token lives at most 30 seconds and carries amr_registry_check. A mandate may shorten the window or widen the class, never lengthen it or drop the check."
   ],
   "organ_decision": "optional",

@@ -334,7 +334,8 @@ that says in plain words what each action type means. The first one,
 `agent-sante-rgpd`, covers an assistant agent in a medical practice: it may read the
 record, handle the schedule, draft letters and patient messages for a human to send,
 and order supplies under a ceiling; it may never prescribe, diagnose, rank patients by
-urgency, change or export the record, contact a patient itself, or create a sub-agent. The second one,
+urgency, change or export the record, contact a patient itself, or create a
+sub-agent. The second one,
 `agent-rh-recrutement`, covers an agent assisting a recruiter: it may read the
 applications, draft a job posting, propose a shortlist to a human recruiter, propose
 and book interview slots and draft candidate messages; it may never reject or select a candidate,

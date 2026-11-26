@@ -162,8 +162,8 @@ HEALTH_REFERENCES = (
     "Regulation (EU) 2016/679 (GDPR), Art. 28",
     "Regulation (EU) 2016/679 (GDPR), Art. 35 and recital 91",
     "Regulation (EU) 2024/1689 (AI Act), Art. 4, as replaced by Regulation (EU) 2026/1744",
-    "Regulation (EU) 2024/1689 (AI Act), Art. 6, Annex I (point 11) and Annex III (point 5); "
-    "Regulation (EU) 2017/745, Art. 2(1)",
+    "Regulation (EU) 2024/1689 (AI Act), Art. 6, Annex I (point 11) and Annex III (point 5), "
+    "as amended by Regulation (EU) 2026/1744; Regulation (EU) 2017/745, Art. 2(1)",
     "Regulation (EU) 2024/1689 (AI Act), Art. 14 and Art. 26",
     "Code de la santé publique (FR), Art. L1110-4",
     "Code de la santé publique (FR), Art. L1111-8",
@@ -263,7 +263,7 @@ def test_template_is_immutable(sante: MandateTemplate) -> None:
 def test_health_template_digest_is_pinned(sante: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
     assert sante.version == "1.3.0"
-    assert sante.digest() == ("85347f10129a75fb1285b3564b78c4c2a8974d368bb9a5f1c8a6333fd72e5b42")
+    assert sante.digest() == ("135a91f28d14e2228518e74166f6cc44e36098a3cbded251b0b6b66268ec02bd")
 
 
 def test_legal_reference_status_is_restricted() -> None:

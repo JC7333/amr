@@ -23,8 +23,11 @@ The legal references are pointers for the principal, all marked ``to_verify``: t
 not legal advice and have not been reviewed by counsel. Their wording was checked against
 the texts in force on 26 November 2026 (EUR-Lex, Legifrance): Regulation (EU) 2024/1689 as
 amended by Regulation (EU) 2026/1744. Within this template the agent is likely not a
-high-risk AI system (no medical purpose, no emergency triage), so the AI Act duties that
-apply now are those of Art. 4; Art. 14 and Art. 26 apply only if the agent is high-risk.
+high-risk AI system: the template gives it none of the medical purposes of MDR Art. 2(1)
+and forbids triage, though the classification depends on the intended purpose its provider
+sets. For the practice as deployer, the main AI Act duty that applies now is Art. 4; the
+Art. 5 prohibitions also apply, and Art. 50 duties fall mainly on the provider. Art. 14
+and Art. 26 apply only if the agent is high-risk.
 """
 
 from amr.models.perimeter import Perimeter, RiskClass
@@ -98,33 +101,36 @@ AGENT_SANTE_RGPD = MandateTemplate(
     legal_references=(
         LegalReference(
             reference="Regulation (EU) 2016/679 (GDPR), Art. 9(1), 9(2)(h) and 9(3)",
-            topic="Health data may be processed for diagnosis and care only by or under the "
-            "responsibility of a professional bound by secrecy: the agent acts under the "
-            "practitioner's responsibility.",
+            topic="Under 9(2)(h) and 9(3), health data may be processed for care and the "
+            "management of health services by or under the responsibility of a professional "
+            "bound by secrecy: here, the practitioner.",
         ),
         LegalReference(
             reference="Regulation (EU) 2016/679 (GDPR), Art. 28",
-            topic="The provider that runs the agent processes patient data for the practice "
-            "or facility: a written processor contract is required.",
+            topic="When the provider that runs the agent processes patient data only for the "
+            "practice or facility, it is a processor: a written contract is required.",
         ),
         LegalReference(
             reference="Regulation (EU) 2016/679 (GDPR), Art. 35 and recital 91",
-            topic="Data protection impact assessment: not required for patient data handled "
-            "by a practitioner working alone (recital 91); a facility must check whether it "
-            "has to carry one out.",
+            topic="Recital 91: a practitioner working alone does not process health data on a "
+            "large scale, so Art. 35(3)(b) does not apply. Whether an AI agent on health data "
+            "still needs an impact assessment under Art. 35(1) and the CNIL list must be "
+            "checked.",
         ),
         LegalReference(
             reference="Regulation (EU) 2024/1689 (AI Act), Art. 4, as replaced by "
             "Regulation (EU) 2026/1744",
-            topic="AI literacy: every deployer takes measures for the AI literacy of its "
-            "staff. Applies since 2 February 2025; current wording since 27 July 2026.",
+            topic="AI literacy: every deployer takes measures to support the AI literacy of "
+            "its staff; no specific level is required. Applies since 2 February 2025; current "
+            "wording since 27 July 2026.",
         ),
         LegalReference(
             reference="Regulation (EU) 2024/1689 (AI Act), Art. 6, Annex I (point 11) and "
-            "Annex III (point 5); Regulation (EU) 2017/745, Art. 2(1)",
-            topic="Check that the agent is not high-risk. Within this template it likely is "
-            "not: no medical purpose (no diagnosis, no prescription) and no emergency "
-            "triage (Annex III, point 5(d)).",
+            "Annex III (point 5), as amended by Regulation (EU) 2026/1744; "
+            "Regulation (EU) 2017/745, Art. 2(1)",
+            topic="Check that the agent is not high-risk. The template gives it none of the "
+            "medical purposes of MDR Art. 2(1) and forbids triage (Annex III, point 5(d)); the "
+            "classification depends on the intended purpose its provider sets.",
         ),
         LegalReference(
             reference="Regulation (EU) 2024/1689 (AI Act), Art. 14 and Art. 26",
@@ -135,13 +141,14 @@ AGENT_SANTE_RGPD = MandateTemplate(
         LegalReference(
             reference="Code de la santé publique (FR), Art. L1110-4",
             topic="Medical secrecy binds everyone working with the practice; information is "
-            "shared only between professionals caring for the patient, and only what is "
-            "strictly necessary. Version in force since 4 August 2021.",
+            "shared between professionals caring for the patient, only what is strictly "
+            "necessary, and outside the care team only with the patient's consent. Version in "
+            "force since 4 August 2021.",
         ),
         LegalReference(
             reference="Code de la santé publique (FR), Art. L1111-8",
             topic="Whoever stores health data on behalf of the practice must hold the HDS "
-            "certificate; storage rules in force since 1 July 2025. It concerns the platform "
+            "certificate (version in force since 1 July 2025). It may concern the platform "
             "that runs the agent; AMR needs no patient data.",
         ),
     ),
@@ -162,8 +169,11 @@ AGENT_SANTE_RGPD = MandateTemplate(
         "not check that the decision exists or that the people named are who they say.",
         "triage is forbidden as an action type. AMR does not see the order in which the "
         "agent handles requests: the system that receives the tokens must not let the agent "
-        "rank patients by urgency through another action (emergency triage is high-risk "
-        "under AI Act Annex III, point 5(d)).",
+        "rank patients by urgency through another action (emergency triage is listed as "
+        "high-risk in AI Act Annex III, point 5(d)).",
+        "Whether a model that only processes a patient record for a moment, without keeping "
+        "it, hosts health data under Code de la santé publique L1111-8 has not been checked "
+        "(Art. R1111-8-8).",
         "Minimum threshold per risk class: an order of supplies cannot be undone, so its "
         "token lives at most 30 seconds and carries amr_registry_check. A mandate may "
         "shorten the window or widen the class, never lengthen it or drop the check.",
