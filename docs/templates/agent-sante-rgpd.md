@@ -92,8 +92,15 @@ a body leaves the decision out; the mandate and its hash are then unchanged.
 
 - An order token lives at most 30 seconds and carries `amr_registry_check`: the system
   that receives the order must call `check_action_token` before acting.
-- The ceiling applies to each order. AMR keeps no running total: the principal or the
-  ordering system must cap the total spent.
+- The ceiling applies to each order. There is no cumulative ceiling per period in this
+  template: several orders can add up. A principal who needs a total cap adds
+  `period_max_amount` and `period_days` to the arguments before calling `create_mandate`
+  (`kwargs.update(period_max_amount="300", period_days=30)`). The token issuer then sums
+  every token issued in the window under this mandate and its sub-mandates that declares
+  an amount in its currency, used or not, and refuses one that would exceed it. The cap
+  binds this mandate only: a new mandate starts again at zero. The mandate still carries
+  the template's `template_digest`, a label: its sealed perimeter is the template's plus
+  the cap, which can only tighten it.
 - `appointment.book` must not notify the patient: a confirmation sent to the patient is
   a patient message, which this template forbids.
 - The agent names the action type it asks a token for. The system that receives the
@@ -251,7 +258,7 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   "notes": [
     "Legal references are pointers to check, not legal advice.",
     "The 100 EUR ceiling is a starting value: the principal may set a lower one.",
-    "The ceiling applies to each order; AMR keeps no running total, so the principal or the ordering system must cap the total spent.",
+    "The ceiling applies to each order. There is no cumulative ceiling per period in this template: several orders can add up, so a principal who needs a total cap adds period_max_amount and period_days to the create_mandate arguments.",
     "appointment.book must not notify the patient: a confirmation sent to the patient is a patient message, which this template forbids.",
     "The agent names the action type it asks a token for: the system that receives the token must map each real operation to the right type (a draft that is actually sent is letter.send or patient_message.send).",
     "Delegation is off for mandates under this one. The agent must not have access to create_mandate itself, or it could register a new root mandate for a sub-agent.",
@@ -309,6 +316,6 @@ The JSON below is `template.to_json(indent=2)`; a test checks that it matches th
   "summary": "Assist a medical practice or facility: read the patient record, handle the practice schedule, draft letters and patient messages for human validation, order supplies under a ceiling. Never prescribe, diagnose, triage by urgency, change or export the record, contact a patient directly, or create a sub-agent.",
   "template_id": "agent-sante-rgpd",
   "title": "Healthcare practice assistant agent (GDPR health data)",
-  "version": "1.3.0"
+  "version": "1.3.1"
 }
 ```

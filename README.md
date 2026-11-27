@@ -385,7 +385,7 @@ Each template published here is a provisional sector baseline. Its `stewardship`
 says so (status `provisional` until a body of the sector takes it over, who holds it,
 the practitioner reviewers recorded: none so far); the block is part of the template
 digest and its status is copied into the mandate metadata as `template_status`. The
-template's risk classes are minimum thresholds (for `agent-sante-rgpd`, version 1.3.0:
+template's risk classes are minimum thresholds (for `agent-sante-rgpd`, version 1.3.1:
 an order token lives at most 30 seconds and asks for a registry re-check;
 `agent-rh-recrutement` 1.0.0, `agent-credit` 1.0.0 and `agent-assurance-sante-vie` 1.0.0 set
 none, since none of their allowed actions is irreversible; `agent-support-client` 1.0.0 sets
