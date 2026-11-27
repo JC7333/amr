@@ -262,8 +262,8 @@ def test_template_is_immutable(sante: MandateTemplate) -> None:
 
 def test_health_template_digest_is_pinned(sante: MandateTemplate) -> None:
     # Any change to the template content must come with a new version and a new pin.
-    assert sante.version == "1.3.0"
-    assert sante.digest() == ("135a91f28d14e2228518e74166f6cc44e36098a3cbded251b0b6b66268ec02bd")
+    assert sante.version == "1.3.1"
+    assert sante.digest() == ("601cb8f9a3d6661c8ccb47d884a85d8ba3e80a1348e0821f25719844f2fab61d")
 
 
 def test_legal_reference_status_is_restricted() -> None:
@@ -291,7 +291,7 @@ def test_create_mandate_kwargs(sante: MandateTemplate) -> None:
     assert kwargs["amount_actions"] == ["supplies.order"]
     assert kwargs["metadata"] == {
         "template_id": "agent-sante-rgpd",
-        "template_version": "1.3.0",
+        "template_version": "1.3.1",
         "template_digest": sante.digest(),
         "template_status": "provisional",
     }
@@ -312,7 +312,7 @@ def test_principal_metadata_is_merged_and_template_keys_are_reserved(
     assert kwargs["metadata"] == {
         "client_ref": "CAB-001",
         "template_id": "agent-sante-rgpd",
-        "template_version": "1.3.0",
+        "template_version": "1.3.1",
         "template_digest": sante.digest(),
         "template_status": "provisional",
     }
@@ -376,6 +376,56 @@ async def test_end_to_end_ceiling_is_enforced(sante: MandateTemplate) -> None:
         mandate["mandate_id"], "supplies.order", {"amount": "50.01", "currency": "EUR"}
     )
     assert result["detail"] == "amount_above_limit:50 EUR"
+
+
+def test_template_sets_no_cumulative_ceiling(sante: MandateTemplate) -> None:
+    assert sante.perimeter.period_max_amount is None
+    assert sante.perimeter.period_days is None
+    kwargs = sante.create_mandate_kwargs()
+    assert "period_max_amount" not in kwargs
+    assert "period_days" not in kwargs
+
+
+async def test_end_to_end_cumulative_cap_added_by_the_principal(
+    sante: MandateTemplate,
+) -> None:
+    # The notes say the principal can add a total cap: it must hold at token issuance.
+    kwargs = sante.create_mandate_kwargs()
+    kwargs.update(period_max_amount="150", period_days=30)
+    mandate = json.loads(
+        await create_mandate(
+            principal_id=PRINCIPAL,
+            agent_id=AGENT,
+            scope=sante.summary,
+            legal_basis_regulation="Delegation of authority",
+            legal_basis_article="Section 2",
+            duration_hours=sante.default_duration_hours,
+            **kwargs,
+        )
+    )
+    assert mandate["status"] == "created", mandate
+    order = {"amount": "100", "currency": "EUR"}
+    first = await _token(mandate["mandate_id"], "supplies.order", {**order, "ref": "a"})
+    assert "token" in first, first
+    second = await _token(mandate["mandate_id"], "supplies.order", {**order, "ref": "b"})
+    assert second.get("denied") is True, second
+    assert second["detail"].startswith("period_amount_above_limit:150 EUR/30d"), second
+    small = {"amount": "50", "currency": "EUR", "ref": "c"}
+    third = await _token(mandate["mandate_id"], "supplies.order", small)
+    assert "token" in third, third
+
+
+def test_notes_and_doc_do_not_deny_the_cumulative_ceiling(sante: MandateTemplate) -> None:
+    # AMR has a cumulative ceiling per period: no text may say it keeps no total.
+    doc = " ".join(DOC.read_text(encoding="utf-8").split())
+    notes = " ".join(sante.notes)
+    for text in (doc, notes):
+        assert "running total" not in text
+        assert "There is no cumulative ceiling per period in this template" in text
+        assert "period_max_amount" in text
+        assert "period_days" in text
+    assert 'kwargs.update(period_max_amount="300", period_days=30)' in doc
+    assert "refuses one that would exceed it" in doc
 
 
 async def test_end_to_end_no_sub_agent(sante: MandateTemplate) -> None:

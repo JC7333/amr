@@ -35,7 +35,7 @@ from amr.templates.base import LegalReference, MandateTemplate, Stewardship
 
 AGENT_SANTE_RGPD = MandateTemplate(
     template_id="agent-sante-rgpd",
-    version="1.3.0",
+    version="1.3.1",
     title="Healthcare practice assistant agent (GDPR health data)",
     sector="health",
     summary=(
@@ -155,8 +155,9 @@ AGENT_SANTE_RGPD = MandateTemplate(
     notes=(
         "Legal references are pointers to check, not legal advice.",
         "The 100 EUR ceiling is a starting value: the principal may set a lower one.",
-        "The ceiling applies to each order; AMR keeps no running total, so the principal "
-        "or the ordering system must cap the total spent.",
+        "The ceiling applies to each order. There is no cumulative ceiling per period in "
+        "this template: several orders can add up, so a principal who needs a total cap "
+        "adds period_max_amount and period_days to the create_mandate arguments.",
         "appointment.book must not notify the patient: a confirmation sent to the "
         "patient is a patient message, which this template forbids.",
         "The agent names the action type it asks a token for: the system that receives "
