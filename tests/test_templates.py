@@ -425,7 +425,8 @@ def test_notes_and_doc_do_not_deny_the_cumulative_ceiling(sante: MandateTemplate
         assert "period_max_amount" in text
         assert "period_days" in text
     assert 'kwargs.update(period_max_amount="300", period_days=30)' in doc
-    assert "refuses one that would exceed it" in doc
+    assert "an amount in its currency, used or not, and refuses one that would exceed it" in doc
+    assert "a new mandate starts again at zero" in doc
 
 
 async def test_end_to_end_no_sub_agent(sante: MandateTemplate) -> None:

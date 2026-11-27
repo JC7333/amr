@@ -95,8 +95,12 @@ a body leaves the decision out; the mandate and its hash are then unchanged.
 - The ceiling applies to each order. There is no cumulative ceiling per period in this
   template: several orders can add up. A principal who needs a total cap adds
   `period_max_amount` and `period_days` to the arguments before calling `create_mandate`
-  (`kwargs.update(period_max_amount="300", period_days=30)`); the token issuer then sums
-  the order tokens issued in the window and refuses one that would exceed it.
+  (`kwargs.update(period_max_amount="300", period_days=30)`). The token issuer then sums
+  every token issued in the window under this mandate and its sub-mandates that declares
+  an amount in its currency, used or not, and refuses one that would exceed it. The cap
+  binds this mandate only: a new mandate starts again at zero. The mandate still carries
+  the template's `template_digest`, a label: its sealed perimeter is the template's plus
+  the cap, which can only tighten it.
 - `appointment.book` must not notify the patient: a confirmation sent to the patient is
   a patient message, which this template forbids.
 - The agent names the action type it asks a token for. The system that receives the
