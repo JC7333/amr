@@ -256,6 +256,7 @@ async def prepare_mandate_signature(
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
     validation_actions: list[str] | None = None,
+    suspension_keys: list[str] | None = None,
 ) -> str:
     """Return the exact bytes a principal must sign to grant this mandate.
 
@@ -292,6 +293,7 @@ async def prepare_mandate_signature(
                 risk_classes,
                 max_delegation_depth,
                 validation_actions,
+                suspension_keys,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))

@@ -135,7 +135,10 @@ async def _read_mandates(db_path: Path) -> list[PublicMandate]:
             """
                 SELECT m.id, m.principal_id, m.agent_id, m.status, m.created_at,
                        m.expires_at, m.parent_mandate_id, m.chain_hash, m.perimeter_json,
-                       m.principal_signature, m.principal_key_id, r.revoked_at
+                       m.principal_signature, m.principal_key_id, r.revoked_at,
+                       (SELECT s.action FROM mandate_suspensions AS s
+                        WHERE s.mandate_id = m.id ORDER BY s.id DESC LIMIT 1)
+                           AS suspension_action
                 FROM mandates AS m
                 LEFT JOIN mandate_revocations AS r ON r.mandate_id = m.id
                 ORDER BY m.created_at, m.id
@@ -164,7 +167,13 @@ async def _read_mandates(db_path: Path) -> list[PublicMandate]:
                 created_at=row["created_at"],
                 expires_at=row["expires_at"],
                 parent_mandate_id=row["parent_mandate_id"],
-                recorded_status=row["status"],
+                # A suspension in force (suspend_mandate) shows as status "suspended",
+                # the value a stored status would have, so readers need no new field.
+                recorded_status=(
+                    "suspended"
+                    if row["status"] == "active" and row["suspension_action"] == "suspend"
+                    else row["status"]
+                ),
                 revoked_at=row["revoked_at"],
                 chain_hash=row["chain_hash"],
             )
@@ -296,8 +305,10 @@ def evaluate(
 ) -> dict[str, Any]:
     """Status of a mandate now, from the snapshot: the mandate itself, then its chain.
 
-    ``active`` only if the mandate is recorded active, not revoked, not expired, and
-    every mandate above it is too (a sub-mandate is only as valid as its parents).
+    ``active`` only if the mandate is recorded active (a suspension in force reads as
+    recorded ``suspended``: reason ``mandate_suspended``, ``parent_mandate_suspended``
+    below), not revoked, not expired, and every mandate above it is too (a sub-mandate
+    is only as valid as its parents).
     """
     mandate = index.get(mandate_id)
     if mandate is None:

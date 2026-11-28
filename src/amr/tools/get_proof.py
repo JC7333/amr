@@ -25,6 +25,7 @@ from amr.db.engine import (
     get_principal_key,
     get_principal_key_domain_proof,
     get_revocation,
+    get_suspensions,
     init_db,
 )
 from amr.delegation import load_ancestors
@@ -41,11 +42,103 @@ from amr.tools.contest_action import (
 from amr.tools.record_action_receipt import mandate_receipts, registry_receipts_chain_valid
 from amr.tools.registry_timestamp import mandate_timestamps
 from amr.tools.revoke_mandate import revocation_signature_valid
+from amr.tools.suspend_mandate import (
+    designated_keys,
+    suspension_record_hash,
+    suspension_signature_valid,
+)
 
 
 def _aware(moment: str) -> datetime:
     parsed = datetime.fromisoformat(moment)
     return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+async def _suspension_status(
+    db: aiosqlite.Connection, mandate_row: Any, key_row: Any
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], bool | None]:
+    """The suspension in force (or None), every suspension record, and their integrity.
+
+    Integrity is None when the mandate was never suspended, else True only if the
+    records alternate (suspend, resume, ...), each chain_hash recomputes, each
+    suspension is signed by a key the mandate designates, each resumption is signed by
+    the principal's registered key, and every
+    "suspended" and "resumed" event has its record (none deleted).
+    """
+    rows = [dict(row) for row in await get_suspensions(db, mandate_row["id"])]
+    cursor = await db.execute(
+        "SELECT event_type, COUNT(*) AS n FROM mandate_events "
+        "WHERE mandate_id = ? AND event_type IN (?, ?) GROUP BY event_type",
+        (mandate_row["id"], "suspended", "resumed"),
+    )
+    events = {row["event_type"]: row["n"] for row in await cursor.fetchall()}
+    history = [
+        {
+            "action": row["action"],
+            "reason": row["reason"],
+            "recorded_at": row["recorded_at"],
+            "signature": (
+                {
+                    "signature": row["signature"],
+                    "signed_at": row["signed_at"],
+                    "key_id": row["key_id"],
+                    "public_key": row["public_key"],
+                    "payload": row["signed_payload"],
+                    "algorithm": "Ed25519",
+                }
+                if row["signature"] is not None
+                else None
+            ),
+            "chain_hash": row["chain_hash"],
+        }
+        for row in rows
+    ]
+    if not rows and not events:
+        return None, history, None
+    try:
+        keys = designated_keys(mandate_row["perimeter_json"])
+    except ValueError:
+        keys = ()
+    valid = events.get("suspended", 0) == sum(r["action"] == "suspend" for r in rows)
+    valid = valid and events.get("resumed", 0) == sum(r["action"] == "resume" for r in rows)
+    for index, row in enumerate(rows):
+        expected_action = "suspend" if index % 2 == 0 else "resume"
+        cursor = await db.execute(
+            "SELECT chain_hash FROM mandate_suspensions WHERE id < ? ORDER BY id DESC LIMIT 1",
+            (row["id"],),
+        )
+        previous = await cursor.fetchone()
+        recomputed = suspension_record_hash(
+            row, mandate_row["chain_hash"], previous["chain_hash"] if previous else ""
+        )
+        if row["action"] != expected_action or recomputed != row["chain_hash"]:
+            valid = False
+        elif row["action"] == "suspend":
+            valid = valid and row["public_key"] in keys and suspension_signature_valid(
+                row, mandate_row["principal_id"], row["public_key"]
+            )
+        elif row["signature"] is not None:
+            valid = valid and (
+                key_row is not None
+                and key_row["key_id"] == row["key_id"]
+                and _key_row_valid(key_row)
+                and suspension_signature_valid(
+                    row, mandate_row["principal_id"], key_row["public_key"]
+                )
+            )
+        else:
+            # resume_mandate always signs: an unsigned resumption was not written by it.
+            valid = False
+    current = None
+    if rows and rows[-1]["action"] == "suspend":
+        last = history[-1]
+        current = {
+            "suspended_at": last["recorded_at"],
+            "reason": last["reason"],
+            "key_id": rows[-1]["key_id"],
+            "chain_hash": last["chain_hash"],
+        }
+    return current, history, valid
 
 
 def _key_row_valid(key_row: Any) -> bool:
@@ -453,10 +546,16 @@ async def get_proof(
             algorithm} or null), organ_decision (the decision of the body that
             authorized the agent, or null), status ("revoked" once revoke_mandate ran,
             whatever the stored status, which stays in stored_status) and revocation
-            ({revoked_at, reason, principal_signature, chain_hash} or null)
+            ({revoked_at, reason, principal_signature, chain_hash} or null); status is
+            "suspended" while a suspension is in force (suspend_mandate), with
+            suspension ({suspended_at, reason, key_id, chain_hash} or null)
+          - suspensions: every suspension and resumption of the mandate, oldest first
+            (action, reason, recorded_at, signature, chain_hash); chain_integrity
+            gains suspensions_valid (null when never suspended)
           - delegation_chain: dict with broken (bool: true when a mandate above this
             sub-mandate is revoked, expired, not active or missing, so the mandate is
             not in force whatever its own status), reason (parent_mandate_revoked,
+            parent_mandate_suspended,
             parent_mandate_expired, parent_mandate_<status>, parent_mandate_not_found,
             delegation_chain_too_deep, or null) and refused_by (the mandate that broke
             the chain, or null); always unbroken for a root mandate
@@ -649,6 +748,14 @@ async def get_proof(
             if await cursor.fetchone() is not None:
                 revocation_valid = False
 
+        # A suspension in force (suspend_mandate) shows in the status, unless revoked.
+        suspension, suspensions, suspensions_valid = await _suspension_status(
+            db, mandate_row, key_row
+        )
+        mandate_dict["suspension"] = suspension
+        if suspension is not None and revocation_row is None and mandate_row["status"] == "active":
+            mandate_dict["status"] = "suspended"
+
         # The chain above a sub-mandate: its own status does not show a cut parent.
         generated_at = datetime.now(UTC)
         _, refusal = await load_ancestors(db, mandate_row["parent_mandate_id"], generated_at)
@@ -810,10 +917,12 @@ async def get_proof(
             **({"validated_actions": validated_actions} if validated_actions else {}),
             "action_trail": action_trail,
             "registry_timestamps": timestamps,
+            "suspensions": suspensions,
             "chain_integrity": {
                 "actions_chain_valid": actions_chain_valid,
                 "principal_signature_valid": principal_signature_valid,
                 "revocation_signature_valid": revocation_valid,
+                "suspensions_valid": suspensions_valid,
                 "contests_intact": contests_intact,
                 "pdf_signatures_intact": pdf_signatures_intact,
                 "total_actions": len(actions),

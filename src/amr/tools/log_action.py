@@ -16,7 +16,7 @@ from amr.db.engine import (
     get_last_action_hash,
     init_db,
 )
-from amr.delegation import is_revoked, load_ancestors
+from amr.delegation import is_revoked, is_suspended, load_ancestors
 from amr.tools.check_action_token import _decode
 
 # A JWS of an action token is a few hundred characters; anything far larger is refused
@@ -106,7 +106,8 @@ async def log_action(
         token_jti when a token covers the action.
         On error (invalid mandate): {"error": "..."}; when a mandate above a
         sub-mandate breaks the chain, also "reason" (parent_mandate_revoked,
-        parent_mandate_expired, parent_mandate_<status>, parent_mandate_not_found or
+        parent_mandate_suspended, parent_mandate_expired, parent_mandate_<status>,
+        parent_mandate_not_found or
         delegation_chain_too_deep) and "refused_by" (the mandate that broke it, or null).
         A refused token gives "error" and "reason": action_token_required, malformed,
         wrong_algorithm, key_mismatch, bad_signature, wrong_issuer, token_expired,
@@ -174,6 +175,14 @@ async def log_action(
                 {
                     "error": f"Mandate '{mandate_id}' is not active (status: revoked)",
                     "code": "mandate_status_revoked",
+                }
+            )
+
+        if await is_suspended(db, mandate_row["id"]):
+            return json.dumps(
+                {
+                    "error": f"Mandate '{mandate_id}' is not active (status: suspended)",
+                    "code": "mandate_status_suspended",
                 }
             )
 

@@ -44,7 +44,7 @@ Each mandate carries only these fields (anything else makes the snapshot invalid
 | `perimeter`, `perimeter_digest` | structured perimeter (action types, ceilings, delegation, risk classes) |
 | `created_at`, `expires_at` | dates |
 | `parent_mandate_id` | parent, for a sub-mandate |
-| `recorded_status` | `mandates.status` |
+| `recorded_status` | `mandates.status`; `suspended` while a suspension is in force (`suspend_mandate`, see `docs/suspension-spec.md`) |
 | `revoked_at` | date of the `revoke_mandate` row, or null |
 | `chain_hash` | the mandate's SHA-256 chain hash, unchanged |
 

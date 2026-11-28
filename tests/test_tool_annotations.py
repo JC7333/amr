@@ -33,6 +33,7 @@ from amr.tools.prepare_mandate_pdf import prepare_mandate_pdf
 from amr.tools.principal_keys import prepare_mandate_signature
 from amr.tools.registry_timestamp import prepare_registry_timestamp
 from amr.tools.revoke_mandate import prepare_revocation_signature
+from amr.tools.suspend_mandate import prepare_suspension_signature
 from amr.tools.verify_mandate import verify_mandate
 from amr.tools_list import tools_list
 
@@ -57,6 +58,9 @@ EXPECTED: dict[str, tuple] = {
     "export_insurer_dossier": READ,
     "revoke_mandate": (False, True, False, False),
     "prepare_revocation_signature": READ,
+    "suspend_mandate": APPEND,
+    "resume_mandate": APPEND,
+    "prepare_suspension_signature": READ,
     "contest_action": APPEND,
     "prepare_contest_signature": READ,
     "list_action_contests": READ,
@@ -192,6 +196,9 @@ async def test_read_only_tools_change_nothing(temp_db: Path, isolated_signing_ke
         "prepare_mandate_pdf": prepare_mandate_pdf(**BASE),
         "export_insurer_dossier": export_insurer_dossier(mandate_id),
         "prepare_revocation_signature": prepare_revocation_signature(mandate_id, "test"),
+        "prepare_suspension_signature": prepare_suspension_signature(
+            mandate_id, "suspend", "test", "A" * 43
+        ),
         "prepare_contest_signature": prepare_contest_signature(mandate_id, action_id, "test", 7),
         "list_action_contests": list_action_contests(mandate_id=mandate_id),
         "prepare_registry_timestamp": prepare_registry_timestamp(),

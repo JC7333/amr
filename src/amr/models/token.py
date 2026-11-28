@@ -72,7 +72,8 @@ class TokenDenyResult(BaseModel):
 
     reason is a machine-readable code (e.g. "mandate_not_found",
     "mandate_expired", "replay_detected_active_token_exists",
-    "action_type_required", "action_out_of_scope", "parent_mandate_revoked").
+    "action_type_required", "action_out_of_scope", "parent_mandate_revoked",
+    "mandate_status_suspended", "parent_mandate_suspended").
     """
 
     denied: bool = True

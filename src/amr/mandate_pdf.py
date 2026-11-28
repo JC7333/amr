@@ -169,6 +169,14 @@ def _summary(content: dict[str, Any]) -> list[tuple[str, str]]:
                 " and the hash of the content validated)",
             )
         )
+    if perimeter.get("suspension_keys"):
+        rows.append(
+            (
+                "May suspend this mandate",
+                f"{len(perimeter['suspension_keys'])} designated key(s), listed in the exact"
+                " content below; only the principal lifts a suspension",
+            )
+        )
     return rows
 
 

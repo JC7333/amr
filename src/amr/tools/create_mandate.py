@@ -42,6 +42,7 @@ def _build_perimeter(
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
     validation_actions: list[str] | None = None,
+    suspension_keys: list[str] | None = None,
 ) -> Perimeter | None:
     """Build the structured perimeter, or None for a legacy free-text mandate.
 
@@ -58,6 +59,7 @@ def _build_perimeter(
         and risk_classes is None
         and max_delegation_depth is None
         and validation_actions is None
+        and suspension_keys is None
         and not delegation_allowed
     ):
         return None
@@ -78,6 +80,7 @@ def _build_perimeter(
         period_days=period_days,
         risk_classes=tuple(risk_classes or ()),  # type: ignore[arg-type]
         validation_actions=tuple(validation_actions or ()),
+        suspension_keys=tuple(suspension_keys or ()),
     )
 
 
@@ -267,6 +270,7 @@ async def create_mandate(
     risk_classes: list[dict[str, Any]] | None = None,
     max_delegation_depth: int | None = None,
     validation_actions: list[str] | None = None,
+    suspension_keys: list[str] | None = None,
 ) -> str:
     """Create and register a new mandate: the written authorization a
     principal (a person or a body) gives for an AI agent to act on its behalf.
@@ -370,6 +374,13 @@ async def create_mandate(
                             does not authenticate that person: the receiver compares the
                             sealed values with what it knows. Sub-mandates inherit it.
                             Example: ["note.send", "prescription.*"]
+        suspension_keys: Optional Ed25519 public keys (base64url, at most 5) of the
+                         people the principal designates to suspend this mandate at
+                         once with suspend_mandate (a security officer, an on-call
+                         person). Each key can only suspend; only the principal lifts
+                         a suspension (resume_mandate, signed with its registered
+                         key). Needs allowed_actions. Not
+                         inherited by sub-mandates (suspending this mandate cuts them).
 
     Returns:
         JSON string with keys: status, mandate_id, principal_id, agent_id,
@@ -400,6 +411,7 @@ async def create_mandate(
                 risk_classes,
                 max_delegation_depth,
                 validation_actions,
+                suspension_keys,
             )
         except ValidationError as exc:
             return _error("perimeter_invalid", str(exc))

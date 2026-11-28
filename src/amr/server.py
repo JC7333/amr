@@ -3,7 +3,7 @@
 Run with: uv run amr
 
 AMR_TOOL_PROFILE chooses which tools this server exposes (default "full", every tool):
-"principal" for the person or body that grants and revokes mandates, "agent" for the
+"principal" for the person or body that grants, suspends and revokes mandates, "agent" for the
 agent that acts under one, "receiver" for a third party that checks the agent's tokens
 and leaves its receipt.
 An agent should never be given the principal's tools: an agent that can create, sign or
@@ -51,6 +51,11 @@ from amr.tools.registry_timestamp import (
 )
 from amr.tools.report_issue import report_issue
 from amr.tools.revoke_mandate import prepare_revocation_signature, revoke_mandate
+from amr.tools.suspend_mandate import (
+    prepare_suspension_signature,
+    resume_mandate,
+    suspend_mandate,
+)
 from amr.tools.verify_mandate import verify_mandate
 
 # Every tool of the server, in the order a client lists them.
@@ -71,6 +76,9 @@ TOOLS = (
     export_insurer_dossier,
     revoke_mandate,
     prepare_revocation_signature,
+    suspend_mandate,
+    resume_mandate,
+    prepare_suspension_signature,
     contest_action,
     prepare_contest_signature,
     list_action_contests,
@@ -97,6 +105,9 @@ TOOL_PROFILES: dict[str, frozenset[str]] = {
             "export_insurer_dossier",
             "revoke_mandate",
             "prepare_revocation_signature",
+            "suspend_mandate",
+            "resume_mandate",
+            "prepare_suspension_signature",
             "contest_action",
             "prepare_contest_signature",
             "list_action_contests",
@@ -166,6 +177,10 @@ _TOOL_HINTS: dict[str, dict[str, bool]] = {
     "export_insurer_dossier": _READ_ONLY,
     "revoke_mandate": {**_APPENDS, "destructiveHint": True},
     "prepare_revocation_signature": _READ_ONLY,
+    # Reversible: resume_mandate lifts a suspension.
+    "suspend_mandate": _APPENDS,
+    "resume_mandate": _APPENDS,
+    "prepare_suspension_signature": _READ_ONLY,
     "contest_action": _APPENDS,
     "prepare_contest_signature": _READ_ONLY,
     "list_action_contests": _READ_ONLY,
